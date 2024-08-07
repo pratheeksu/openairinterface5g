@@ -157,10 +157,12 @@ static void trigger_regular_bsr(NR_UE_MAC_INST_t *mac, NR_LogicalChannelIdentity
   // if the BSR is triggered for a logical channel for which logicalChannelSR-DelayTimerApplied with value true
   // start or restart the logicalChannelSR-DelayTimer
   // else stop the logicalChannelSR-DelayTimer
-  if (sr_DelayTimerApplied)
-    nr_timer_start(&mac->scheduling_info.sr_DelayTimer);
-  else
-    nr_timer_stop(&mac->scheduling_info.sr_DelayTimer);
+  if (mac->scheduling_info.sr_DelayTimer) {
+    if (sr_DelayTimerApplied)
+      nr_timer_start(mac->scheduling_info.sr_DelayTimer);
+    else
+      nr_timer_stop(mac->scheduling_info.sr_DelayTimer);
+  }
 }
 
 void handle_time_alignment_timer_expired(NR_UE_MAC_INST_t *mac)
@@ -229,7 +231,8 @@ void update_mac_ul_timers(NR_UE_MAC_INST_t *mac)
     nr_ra_contention_resolution_failed(mac);
   for (int j = 0; j < NR_MAX_SR_ID; j++)
     nr_timer_tick(&mac->scheduling_info.sr_info[j].prohibitTimer);
-  nr_timer_tick(&mac->scheduling_info.sr_DelayTimer);
+  if (mac->scheduling_info.sr_DelayTimer)
+    nr_timer_tick(mac->scheduling_info.sr_DelayTimer);
   bool retxBSR_expired = nr_timer_tick(&mac->scheduling_info.retxBSR_Timer);
   if (retxBSR_expired) {
     LOG_D(NR_MAC, "retxBSR timer expired\n");
@@ -1239,7 +1242,8 @@ static void nr_update_sr(NR_UE_MAC_INST_t *mac, bool BSRsent)
   }
 
   // if a Regular BSR has been triggered and logicalChannelSR-DelayTimer is not running
-  if (BSRsent || nr_timer_is_active(&sched_info->sr_DelayTimer))
+  bool delay_SR = sched_info->sr_DelayTimer ? nr_timer_is_active(sched_info->sr_DelayTimer) : false;
+  if (BSRsent || delay_SR)
     return;
 
   // if there is no UL-SCH resource available for a new transmission (ie we are at this point)

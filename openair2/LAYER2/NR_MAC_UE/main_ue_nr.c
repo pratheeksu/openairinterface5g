@@ -73,9 +73,6 @@ void nr_ue_init_mac(NR_UE_MAC_INST_t *mac)
   initNotifiedFIFO(&mac->input_nf);
   reset_mac_inst(mac);
 
-  // need to inizialize because might not been setup (optional timer)
-  nr_timer_stop(&mac->scheduling_info.sr_DelayTimer);
-
   memset(&mac->ssb_measurements, 0, sizeof(mac->ssb_measurements));
   for (int i = 0; i < MAX_NB_SSB; i++) {
     mac->ssb_measurements[i].ssb_rsrp_dBm = INT_MIN;
@@ -186,7 +183,9 @@ void reset_mac_inst(NR_UE_MAC_INST_t *nr_mac)
   if (nr_mac->data_inactivity_timer)
     nr_timer_stop(nr_mac->data_inactivity_timer);
   nr_timer_stop(&nr_mac->time_alignment_timer);
-  nr_timer_stop(&nr_mac->scheduling_info.sr_DelayTimer);
+  nr_timer_stop(&nr_mac->ra.contention_resolution_timer);
+  if (nr_mac->scheduling_info.sr_DelayTimer)
+    nr_timer_stop(nr_mac->scheduling_info.sr_DelayTimer);
   nr_timer_stop(&nr_mac->scheduling_info.retxBSR_Timer);
   nr_timer_stop(&nr_mac->ra.response_window_timer);
   nr_timer_stop(&nr_mac->ra.RA_backoff_timer);
