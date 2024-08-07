@@ -2238,6 +2238,7 @@ static void configure_maccellgroup(NR_UE_MAC_INST_t *mac, const NR_MAC_CellGroup
 {
   NR_UE_SCHEDULING_INFO *si = &mac->scheduling_info;
   int scs = mac->current_UL_BWP->scs;
+  int slots_per_subframe = mac->frame_structure.numb_slots_frame / 10;
   if (mcg->drx_Config)
     LOG_E(NR_MAC, "DRX not implemented! Configuration not handled!\n");
   if (mcg->schedulingRequestConfig) {
@@ -2275,7 +2276,6 @@ static void configure_maccellgroup(NR_UE_MAC_INST_t *mac, const NR_MAC_CellGroup
       }
     }
   }
-  int slots_per_subframe = mac->frame_structure.numb_slots_frame / 10;
   if (mcg->bsr_Config) {
     uint32_t periodic_sf = nr_get_sf_periodicBSRTimer(mcg->bsr_Config->periodicBSR_Timer);
     uint32_t target = periodic_sf < UINT_MAX ? periodic_sf * slots_per_subframe : periodic_sf;
@@ -2321,8 +2321,7 @@ static void configure_maccellgroup(NR_UE_MAC_INST_t *mac, const NR_MAC_CellGroup
   }
   if (mcg->phr_Config) {
     nr_phr_info_t *phr_info = &si->phr_info;
-    phr_info->is_configured = mcg->phr_Config->choice.setup != NULL;
-    if (phr_info->is_configured) {
+    if (mcg->phr_Config->present == NR_SetupRelease_PHR_Config_PR_setup) {
       struct NR_PHR_Config *config = mcg->phr_Config->choice.setup;
       AssertFatal(config->multiplePHR == 0, "mulitplePHR not supported");
       phr_info->PathlossChange_db = config->phr_Tx_PowerFactorChange;
@@ -2334,6 +2333,8 @@ static void configure_maccellgroup(NR_UE_MAC_INST_t *mac, const NR_MAC_CellGroup
       nr_timer_setup(&phr_info->prohibitPHR_Timer, prohibit_timer_sf * slots_per_subframe, 1);
       phr_info->phr_reporting = (1 << phr_cause_phr_config);
     }
+    if (mcg->phr_Config->present == NR_SetupRelease_PHR_Config_PR_release)
+      set_default_phr(mac, slots_per_subframe);
   }
 
   if (mcg->ext1 && mcg->ext1->dataInactivityTimer) {
