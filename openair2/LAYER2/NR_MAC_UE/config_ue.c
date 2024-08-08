@@ -34,7 +34,6 @@
 
 #include "mac_defs.h"
 #include "NR_MAC_UE/mac_proto.h"
-#include "NR_MAC-CellGroupConfig.h"
 #include "LAYER2/NR_MAC_COMMON/nr_mac_common.h"
 #include "common/utils/nr/nr_common.h"
 #include "executables/softmodem-common.h"
@@ -1803,7 +1802,8 @@ void nr_rrc_mac_config_req_reset(module_id_t module_id, NR_UE_MAC_reset_cause_t 
     case GO_TO_IDLE:
       reset_ra(mac, true);
       nr_ue_init_mac(mac);
-      release_mac_configuration(mac, cause);
+      release_mac_config(mac);
+      release_mac_asn_structures(mac, cause);  // TODO verify if we actually need to do this
       nr_ue_mac_default_configs(mac);
       // new sync but no target cell id -> -1
       nr_ue_send_synch_request(mac, module_id, 0, &sync_req);
@@ -1813,12 +1813,13 @@ void nr_rrc_mac_config_req_reset(module_id_t module_id, NR_UE_MAC_reset_cause_t 
       reset_ra(mac, true);
       reset_mac_inst(mac);
       nr_ue_reset_sync_state(mac, false);
-      release_mac_configuration(mac, cause);
+      release_mac_asn_structures(mac, cause);
       mac->state = UE_DETACHING;
       break;
     case T300_EXPIRY:
       reset_ra(mac, false);
       reset_mac_inst(mac);
+      release_mac_config(mac);
       mac->state = UE_PERFORMING_RA; // still in sync but need to restart RA
       break;
     case REJECT:
@@ -1830,7 +1831,7 @@ void nr_rrc_mac_config_req_reset(module_id_t module_id, NR_UE_MAC_reset_cause_t 
       reset_mac_inst(mac);
       nr_ue_mac_default_configs(mac);
       nr_ue_reset_sync_state(mac, true);
-      release_mac_configuration(mac, cause);
+      release_mac_asn_structures(mac, cause);
       // suspend all RBs except SRB0
       for (int j = 0; j < mac->lc_ordered_list.count; j++) {
         nr_lcordered_info_t *lc = mac->lc_ordered_list.array[j];
@@ -1846,8 +1847,8 @@ void nr_rrc_mac_config_req_reset(module_id_t module_id, NR_UE_MAC_reset_cause_t 
       nr_ue_send_synch_request(mac, module_id, 0, &sync_req);
       break;
     case RRC_SETUP_REESTAB_RESUME:
-      release_mac_configuration(mac, cause);
       nr_ue_mac_default_configs(mac);
+      release_mac_asn_structures(mac, cause);
       break;
     case UL_SYNC_LOST_T430_EXPIRED:
       // TS 38.331 Section 5.2.2.6, TS 38.321 Section 5.2a
