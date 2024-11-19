@@ -1705,7 +1705,54 @@ static void process_Event_Based_Measurement_Report(gNB_RRC_INST *rrc,
 
   switch (event_triggered->eventId.present) {
     case NR_EventTriggerConfig__eventId_PR_eventA2:
-      LOG_I(NR_RRC, "HO LOG: Event A2 (Serving becomes worse than threshold)\n");
+      LOG_W(NR_RRC, "HO LOG: Event A2 (Serving becomes worse than threshold)\n");
+      const NR_MeasResults_t *measResults = &measurementReport->criticalExtensions.choice.measurementReport->measResults;
+
+      for (int serving_cell_idx = 0; serving_cell_idx < measResults->measResultServingMOList.list.count; serving_cell_idx++) {
+        const NR_MeasResultServMO_t *meas_result_serv_MO = measResults->measResultServingMOList.list.array[serving_cell_idx];
+        scell_pci = *(meas_result_serv_MO->measResultServingCell.physCellId);
+        if (meas_result_serv_MO->measResultServingCell.measResult.cellResults.resultsSSB_Cell) {
+          servingCellRSRP = *(meas_result_serv_MO->measResultServingCell.measResult.cellResults.resultsSSB_Cell->rsrp) - 157;
+        } else {
+          servingCellRSRP = *(meas_result_serv_MO->measResultServingCell.measResult.cellResults.resultsCSI_RS_Cell->rsrp) - 157;
+        }
+        LOG_I(NR_RRC, "Serving Cell %d RSRP: %d\n", scell_pci, servingCellRSRP);
+      }
+
+      // Resolve source cell by PCI from UE's serving cells
+      const nr_rrc_cell_container_t *source_cell = NULL;
+      FOR_EACH_SEQ_ARR (ue_serving_cell_t *, scell, &ue->serving_cells) {
+        nr_rrc_cell_container_t *cell_by_id = get_cell_by_cell_id(&rrc->cells, scell->nci);
+        if (cell_by_id != NULL && cell_by_id->info.pci == scell_pci) {
+          source_cell = cell_by_id;
+          break;
+        }
+      }
+      if (source_cell == NULL) {
+        LOG_W(NR_RRC,
+              "UE %d: received measurement report but source cell with PCI %d not found in UE's serving cells, skipping\n",
+              ue->rrc_ue_id,
+              scell_pci);
+        break;
+      }
+
+      // TODO: Implement a criterion to select the neighboring cell
+      nr_neighbour_cell_t *target_neighbour = NULL;
+      const neighbour_cell_configuration_t *neighbour_config = get_neighbour_cell_config(rrc, source_cell->info.cell_id);
+      const seq_arr_t *neighbour_cells = neighbour_config ? &neighbour_config->neighbour_cells : NULL;
+      FOR_EACH_SEQ_ARR (nr_neighbour_cell_t *, neighbour, neighbour_cells) {
+        if (scell_pci != neighbour->physicalCellId)
+          target_neighbour = neighbour;
+      }
+      if (!target_neighbour) {
+        LOG_E(NR_RRC, "No neighboring cells found!\n");
+        break;
+      }
+
+      const nr_rrc_cell_container_t *target_cell = get_cell_by_cell_id(&rrc->cells, target_neighbour->nrcell_id);
+
+      nr_rrc_trigger_f1_ho(rrc, ue, source_cell, target_cell);
+
       break;
 
     case NR_EventTriggerConfig__eventId_PR_eventA3: {
