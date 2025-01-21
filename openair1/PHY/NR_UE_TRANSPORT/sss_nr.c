@@ -226,6 +226,7 @@ bool rx_sss_nr(const NR_DL_FRAME_PARMS *frame_parms,
   /* Computation of signal with shift phase is based on below formula */
   /* cosinus cos(x + y) = cos(x)cos(y) - sin(x)sin(y) */
   /* sinus   sin(x + y) = sin(x)cos(y) + cos(x)sin(y) */
+#define SSS_METRIC_FLOOR_NR   (7000)
 
   int Nid1_start = 0;
   int Nid1_end = N_ID_1_NUMBER;
