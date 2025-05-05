@@ -294,13 +294,13 @@ static NR_ControlResourceSet_t *get_coreset_config(int bwp_id, int curr_bwp, uin
   // The ID space is used across the BWPs of a Serving Cell as per 38.331
   coreset->controlResourceSetId = bwp_id + 1;
 
-  coreset->tci_StatesPDCCH_ToAddList=calloc(1,sizeof(*coreset->tci_StatesPDCCH_ToAddList));
-  NR_TCI_StateId_t *tci[64];
-  for (int i=0;i<64;i++) {
-    if ((ssb_bitmap>>(63-i))&0x01){
-      tci[i]=calloc(1,sizeof(*tci[i]));
-      *tci[i] = i;
-      asn1cSeqAdd(&coreset->tci_StatesPDCCH_ToAddList->list,tci[i]);
+  coreset->tci_StatesPDCCH_ToAddList = calloc(1,sizeof(*coreset->tci_StatesPDCCH_ToAddList));
+  int num_ssb = 0;
+  for (int i = 0; i < 64; i++) {
+    if ((ssb_bitmap >> (63 - i)) & 0x01) {
+      NR_TCI_StateId_t *tci = calloc(1, sizeof(*tci));
+      *tci = num_ssb++;
+      asn1cSeqAdd(&coreset->tci_StatesPDCCH_ToAddList->list, tci);
     }
   }
   coreset->tci_StatesPDCCH_ToReleaseList = NULL;
