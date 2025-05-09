@@ -351,7 +351,7 @@ nfapi_nr_dl_tti_pdsch_pdu_rel15_t *prepare_pdsch_pdu(nfapi_nr_dl_tti_request_pdu
                                                      int nl_tbslbrm,
                                                      int pdu_index);
 int nr_write_ce_dlsch_pdu(module_id_t module_idP,
-                          const NR_UE_sched_ctrl_t *ue_sched_ctl,
+                          NR_UE_sched_ctrl_t *ue_sched_ctl,
                           unsigned char *mac_pdu,
                           unsigned char drx_cmd,
                           unsigned char *ue_cont_res_id);

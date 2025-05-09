@@ -3625,6 +3625,14 @@ void nr_mac_release_ue(gNB_MAC_INST *mac, int rnti)
   mac_remove_nr_ue(mac, rnti);
 }
 
+static void beam_switching_procedure(NR_UE_info_t *UE)
+{
+  NR_UE_sched_ctrl_t *sched_ctrl = &UE->UE_sched_ctrl;
+  int new_beam_index = sched_ctrl->UE_mac_ce_ctrl.tci_state_ind.tciStateId;
+  LOG_I(NR_MAC, "[UE %x] Switching to beam with ID %d (from %d)\n", UE->rnti, new_beam_index, UE->UE_beam_index);
+  UE->UE_beam_index = new_beam_index;
+}
+
 void nr_mac_update_timers(module_id_t module_id, frame_t frame, slot_t slot)
 {
   gNB_MAC_INST *mac = RC.nrmac[module_id];
@@ -3662,6 +3670,10 @@ void nr_mac_update_timers(module_id_t module_id, frame_t frame, slot_t slot)
       nr_timer_stop(&sched_ctrl->transm_timeout);
       LOG_W(NR_MAC, "UE %04x UL failure after transmission timeout\n", UE->rnti);
       nr_mac_trigger_ul_failure(sched_ctrl, UE->current_DL_BWP.scs);
+    }
+    if (nr_timer_tick(&sched_ctrl->tci_beam_switch)) {
+      nr_timer_stop(&sched_ctrl->tci_beam_switch);
+      beam_switching_procedure(UE);
     }
   }
 }
@@ -3775,14 +3787,26 @@ void beam_selection_procedures(gNB_MAC_INST *mac, NR_UE_info_t *UE)
   // do not perform beam procedures if there is no beam information
   if (mac->beam_info.beam_mode == NO_BEAM_MODE)
     return;
-  RSRP_report_t *rsrp_report = &UE->UE_sched_ctrl.CSI_report.ssb_rsrp_report;
+  NR_UE_sched_ctrl_t *sched_ctrl = &UE->UE_sched_ctrl;
+  tciStateInd_t *tci = &sched_ctrl->UE_mac_ce_ctrl.tci_state_ind;
+  RSRP_report_t *rsrp_report = &sched_ctrl->CSI_report.ssb_rsrp_report;
   // simple beam switching algorithm -> we select beam with highest RSRP from CSI report
   int new_bf_index = get_fapi_beamforming_index(mac, rsrp_report->resource_id[0]);
-  if (UE->UE_beam_index == new_bf_index)
+  if (UE->UE_beam_index == new_bf_index) {
+    if (tci->is_scheduled) {
+      LOG_I(NR_MAC, "[UE %x] Stopping procedure to switch beam, old beam reported as best again\n", UE->rnti);
+      tci->is_scheduled = false;
+    }
     return; // no beam change needed
+  }
 
-  LOG_I(NR_MAC, "[UE %x] Switching to beam with ID %d (SSB number %d)\n", UE->rnti, new_bf_index, rsrp_report->resource_id[0]);
-  UE->UE_beam_index = new_bf_index;
+  LOG_I(NR_MAC, "[UE %x] Starting procedure to switch beam\n", UE->rnti);
+  // Start procedure to switch beam via
+  // TCI State Indication for UE-specific PDCCH
+
+  tci->is_scheduled = true;
+  tci->coresetId = sched_ctrl->coreset->controlResourceSetId;
+  tci->tciStateId = new_bf_index; // assumption: this correspond to the TCI index
 }
 
 void send_initial_ul_rrc_message(int rnti, const uint8_t *sdu, sdu_size_t sdu_len, void *data)

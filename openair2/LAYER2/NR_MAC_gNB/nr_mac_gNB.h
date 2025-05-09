@@ -346,13 +346,11 @@ typedef struct csi_rs_im {
   uint8_t tci_state_id [ MAX_CSI_RESOURCE_SET ];
 } csi_rs_im_t;
 
-typedef struct pdcchStateInd {
+typedef struct tciStateInd {
   bool is_scheduled;
-  uint8_t servingCellId;
-  uint8_t coresetId;
-  uint8_t tciStateId;
-  bool tci_present_inDCI;
-} pdcchStateInd_t;
+  uint32_t coresetId;
+  uint32_t tciStateId;
+} tciStateInd_t;
 
 typedef struct pucchSpatialRelation {
   bool is_scheduled;
@@ -391,7 +389,7 @@ typedef struct pdschTciStatesActDeact {
 typedef struct UE_info {
   sp_zp_csirs_t sp_zp_csi_rs;
   csi_rs_im_t csi_im;
-  pdcchStateInd_t pdcch_state_ind;
+  tciStateInd_t tci_state_ind;
   pucchSpatialRelation_t pucch_spatial_relation;
   SPCSIReportingpucch_t SP_CSI_reporting_pucch;
   aperiodicCSI_triggerStateSelection_t aperi_CSI_trigger;
@@ -507,7 +505,7 @@ typedef struct NR_UE_harq {
   /* Transport block to be sent using this HARQ process */
   byte_array_t transportBlock;
   uint32_t tb_size;  // size of currently stored TB
-
+  bool start_tci_timer;
   /// sched_pdsch keeps information on MCS etc used for the initial transmission
   NR_sched_pdsch_t sched_pdsch;
 } NR_UE_harq_t;
@@ -688,6 +686,7 @@ typedef struct {
 
   /// Timer for RRC processing procedures and transmission activity
   NR_timer_t transm_interrupt;
+  NR_timer_t tci_beam_switch;
 
   /// Timer for timeout before UE is set to UL failure (e.g.,
   /// "TransmissionActionIndicator" handling

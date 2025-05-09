@@ -406,6 +406,8 @@ static void handle_dl_harq(NR_UE_info_t * UE,
     finish_nr_dl_harq(sched_ctrl, harq_pid);
   } else if (harq->round >= harq_round_max - 1) {
     abort_nr_dl_harq(UE, harq_pid);
+    // Need to schedule again beam switching TCI
+    sched_ctrl->UE_mac_ce_ctrl.tci_state_ind.is_scheduled = true;
     LOG_D(NR_MAC, "retransmission error for UE %04x (total %"PRIu64")\n", UE->rnti, UE->mac_stats.dl.errors);
   } else {
     LOG_D(PHY,"NACK for: pid %d, ue %04x\n",harq_pid, UE->rnti);
@@ -930,6 +932,13 @@ void handle_nr_uci_pucch_0_1(module_id_t mod_id, frame_t frame, slot_t slot, con
       LOG_D(NR_MAC,"%4d.%2d bit %d pid %d ack/nack %d\n",frame, slot, harq_bit,pid,harq_value);
       nr_mac_update_pdcch_closed_loop_adjust(sched_ctrl, harq_confidence != 0);
       bool success = harq_value == 0 && harq_confidence == 0;
+      // TCI state switch occurs at the first slot that is after slot n_+ T_HARQ + 3N_sf_slot (8.10.3 of 38.133)
+      if (success && harq->start_tci_timer) {
+        int slots = 3 * nrmac->frame_structure.numb_slots_frame / 10;
+        nr_timer_setup(&sched_ctrl->tci_beam_switch, slots, 1);
+        nr_timer_start(&sched_ctrl->tci_beam_switch);
+        harq->start_tci_timer = false;
+      }
       handle_dl_harq(UE, pid, success, nrmac->dl_bler.harq_round_max);
       if (is_ra) {
         bool ue_rejected = nr_check_Msg4_MsgB_Ack(mod_id, frame, slot, UE, success);
@@ -1009,7 +1018,15 @@ void handle_nr_uci_pucch_2_3_4(module_id_t mod_id, frame_t frame, slot_t slot, c
       const int8_t pid = sched_ctrl->feedback_dl_harq.head;
       remove_front_nr_list(&sched_ctrl->feedback_dl_harq);
       LOG_D(NR_MAC,"%4d.%2d bit %d pid %d ack/nack %d\n",frame, slot, harq_bit, pid, acknack);
-      handle_dl_harq(UE, pid, uci_234->harq.harq_crc != 1 && acknack, nrmac->dl_bler.harq_round_max);
+      // TCI state switch occurs at the first slot that is after slot n_+ T_HARQ + 3N_sf_slot (8.10.3 of 38.133)
+      bool success = uci_234->harq.harq_crc != 1 && acknack;
+      if (success && harq->start_tci_timer) {
+        int slots = 3 * nrmac->frame_structure.numb_slots_frame / 10;
+        nr_timer_setup(&sched_ctrl->tci_beam_switch, slots, 1);
+        nr_timer_start(&sched_ctrl->tci_beam_switch);
+        harq->start_tci_timer = false;
+      }
+      handle_dl_harq(UE, pid, success, nrmac->dl_bler.harq_round_max);
     }
     free(uci_234->harq.harq_payload);
   }

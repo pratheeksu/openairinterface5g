@@ -74,7 +74,7 @@ int get_dl_tda(const gNB_MAC_INST *nrmac, int slot)
 // Compute and write all MAC CEs and subheaders, and return number of written
 // bytes
 int nr_write_ce_dlsch_pdu(module_id_t module_idP,
-                          const NR_UE_sched_ctrl_t *ue_sched_ctl,
+                          NR_UE_sched_ctrl_t *ue_sched_ctl,
                           unsigned char *mac_pdu,
                           unsigned char drx_cmd,
                           unsigned char *ue_cont_res_id)
@@ -151,7 +151,7 @@ int nr_write_ce_dlsch_pdu(module_id_t module_idP,
   }
 
   //TS 38.321 Sec 6.1.3.15 TCI State indication for UE Specific PDCCH MAC CE SubPDU generation
-  if (ue_sched_ctl->UE_mac_ce_ctrl.pdcch_state_ind.is_scheduled) {
+  if (ue_sched_ctl->UE_mac_ce_ctrl.tci_state_ind.is_scheduled) {
     //filling subheader
     mac_pdu_ptr->R = 0;
     mac_pdu_ptr->LCID = DL_SCH_LCID_TCI_STATE_IND_UE_SPEC_PDCCH;
@@ -159,16 +159,20 @@ int nr_write_ce_dlsch_pdu(module_id_t module_idP,
     //Creating the instance of CE structure
     NR_TCI_PDCCH  nr_UESpec_TCI_StateInd_PDCCH;
     //filling the CE structre
-    nr_UESpec_TCI_StateInd_PDCCH.CoresetId1 = ((ue_sched_ctl->UE_mac_ce_ctrl.pdcch_state_ind.coresetId) & 0xF) >> 1; //extracting MSB 3 bits from LS nibble
-    nr_UESpec_TCI_StateInd_PDCCH.ServingCellId = (ue_sched_ctl->UE_mac_ce_ctrl.pdcch_state_ind.servingCellId) & 0x1F; //extracting LSB 5 Bits
-    nr_UESpec_TCI_StateInd_PDCCH.TciStateId = (ue_sched_ctl->UE_mac_ce_ctrl.pdcch_state_ind.tciStateId) & 0x7F; //extracting LSB 7 bits
-    nr_UESpec_TCI_StateInd_PDCCH.CoresetId2 = (ue_sched_ctl->UE_mac_ce_ctrl.pdcch_state_ind.coresetId) & 0x1; //extracting LSB 1 bit
-    LOG_D(NR_MAC, "NR MAC CE TCI state indication for UE Specific PDCCH = %d \n", nr_UESpec_TCI_StateInd_PDCCH.TciStateId);
+    //extracting MSB 3 bits from LS nibble
+    nr_UESpec_TCI_StateInd_PDCCH.CoresetId1 = ((ue_sched_ctl->UE_mac_ce_ctrl.tci_state_ind.coresetId) & 0xF) >> 1;
+    nr_UESpec_TCI_StateInd_PDCCH.ServingCellId = 0; // TODO do we store this information somewhere?
+    //extracting LSB 7 bits
+    nr_UESpec_TCI_StateInd_PDCCH.TciStateId = (ue_sched_ctl->UE_mac_ce_ctrl.tci_state_ind.tciStateId) & 0x7F;
+    //extracting LSB 1 bit
+    nr_UESpec_TCI_StateInd_PDCCH.CoresetId2 = (ue_sched_ctl->UE_mac_ce_ctrl.tci_state_ind.coresetId) & 0x1;
+    LOG_I(NR_MAC, "NR MAC CE TCI state indication for UE Specific PDCCH = %d \n", nr_UESpec_TCI_StateInd_PDCCH.TciStateId);
     mac_ce_size = sizeof(NR_TCI_PDCCH);
     // Copying  bytes for MAC CEs to the mac pdu pointer
     memcpy((void *) mac_pdu_ptr, (void *)&nr_UESpec_TCI_StateInd_PDCCH, mac_ce_size);
     //incrementing the PDU pointer
     mac_pdu_ptr += (unsigned char) mac_ce_size;
+    ue_sched_ctl->UE_mac_ce_ctrl.tci_state_ind.is_scheduled = false;
   }
 
   //TS 38.321 Sec 6.1.3.16, SP CSI reporting on PUCCH Activation/Deactivation MAC CE
@@ -1266,10 +1270,11 @@ void nr_schedule_ue_spec(module_id_t module_id,
       gNB_mac->mac_stats.used_prb_aggregate += sched_pdsch->rbSize;
     } else { /* initial transmission */
       LOG_D(NR_MAC, "Initial HARQ transmission in %d.%d\n", frame, slot);
+      // Flag HARQ process to start TCI timer at ACK
+      harq->start_tci_timer = sched_ctrl->UE_mac_ce_ctrl.tci_state_ind.is_scheduled;
       uint8_t *buf = allocate_transportBlock_buffer(&harq->transportBlock, TBS);
       /* first, write all CEs that might be there */
-      int written = nr_write_ce_dlsch_pdu(module_id,
-                                          sched_ctrl,
+      int written = nr_write_ce_dlsch_pdu(module_id, sched_ctrl,
                                           (unsigned char *)buf,
                                           255, // no drx
                                           NULL); // contention res id
