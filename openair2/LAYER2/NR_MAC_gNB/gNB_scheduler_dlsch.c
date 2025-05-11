@@ -678,8 +678,10 @@ static void pf_dl(module_id_t module_id,
         continue;
       }
 
-      /* Check DL buffer and skip this UE if no bytes and no TA necessary */
-      if (sched_ctrl->num_total_bytes == 0 && frame != (sched_ctrl->ta_frame + 100) % 1024)
+      /* Check DL buffer and skip this UE if no bytes, no TA necessary and no beam switch needed*/
+      if (sched_ctrl->num_total_bytes == 0
+          && frame != (sched_ctrl->ta_frame + 100) % 1024
+          && !sched_ctrl->UE_mac_ce_ctrl.tci_state_ind.is_scheduled)
         continue;
 
       /* Calculate coeff */
