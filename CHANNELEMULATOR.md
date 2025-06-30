@@ -16,7 +16,7 @@ For full system architecture details, please refer to: [https://arxiv.org/abs/25
 
 As a sample scenario, this repository includes the Shibuya Scramble Crossing CIR dataset used in the paper, placed under `oai_cir/cir/output/binary/`.
 
-## Supported Environment
+# Supported Environment
 
 |||
 |-|-|
@@ -28,9 +28,9 @@ As a sample scenario, this repository includes the Shibuya Scramble Crossing CIR
 |COTS UE                | Quectel RM500Q-GL                         |
 |||
 
-## Prerequisites (after setting up base OAI environment)
+# Prerequisites (after setting up base OAI environment)
 
-### 1. Install AOCL-BLAS
+## 1. Install AOCL-BLAS
 
 ```bash
 # Install dependencies
@@ -46,14 +46,14 @@ sudo make install
 sudo ldconfig
 ```
 
-### 2. Configure pkg-config
+## 2. Configure pkg-config
 
 ```bash
 # Copy the pkg-config file
 sudo cp /usr/local/share/pkgconfig/blis-mt.pc /usr/local/share/pkgconfig/cblis.pc
 ```
 
-### 3. Configure AOCL-BLAS multithreading
+## 3. Configure AOCL-BLAS multithreading
 
 ```bash
 echo "export BLIS_NUM_THREADS=6" >> ~/.bashrc
@@ -101,9 +101,9 @@ Each $i_{{\rm sort},n}$ is the original delay index (int32) before sorting.
 
 ---
 
-## Build and Run Emulator
+# Build and Run Emulator
 
-### Option 1: gNB with USRP
+## Option 1: gNB with USRP
 Build gNB with USRP mode.
 ```bash
 cd ~/oai_cir/cmake_targets/
@@ -118,7 +118,7 @@ cd ~/oai_cir/cmake_targets/ran_build/build
   --sa --non-stop -E
 ```
 
-### Option 2: RF Simulator with gNB and nrUE
+## Option 2: RF Simulator with gNB and nrUE
 Build gNB and nrUE with RF simulation mode.
 ```bash
 cd ~/oai_cir/cmake_targets/
@@ -139,4 +139,18 @@ cd ~/oai_cir/cmake_targets/ran_build/build
 sudo ./nr-uesoftmodem \
   -C 4019160000 -r 106 --numerology 1 --ssb 144 \
   --rfsim --non-stop --band 77 --rfsimulator.serveraddr 127.0.0.1
+```
+
+# Citation
+If you use this implementation, please cite it as:
+```bibtex
+@misc{OWDT,
+    title = {Open Wireless Digital Twin: End-to-End 5G Mobility Emulation in O-RAN Framework},
+    author = {Tetsuya Iye and Masaya Sakamoto and Shohei Takaya and Eisaku Sato and Yuki Susukida and Yu Nagaoka and Kazuki Maruta and Jin Nakazato},
+    year = {2025},
+    eprint={2503.12177},
+    archivePrefix={arXiv},
+    primaryClass={cs.NI},
+    url={https://arxiv.org/abs/2503.12177v2}, 
+}
 ```
