@@ -60,6 +60,7 @@ history:
  *  [System Requirements for Using OAI Stack](./doc/system_requirements.md)
  *  [How to build](./doc/BUILD.md)
  *  [How to run the modems](./doc/RUNMODEM.md)
+ *  [How to test channel emulation mode](CHANNELEMULATOR.md)
 
 Not all information is available in a central place, and information for
 specific sub-systems might be available in the corresponding sub-directories.
