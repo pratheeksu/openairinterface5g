@@ -5,6 +5,8 @@
 
 #define _GNU_SOURCE             /* See feature_test_macros(7) */
 
+#define DEVELOP_CIR
+
 #include "common/config/config_userapi.h"
 #include "common/utils/load_module_shlib.h"
 #ifdef SMBV
@@ -69,6 +71,11 @@ unsigned short config_frames[4] = {2,9,11,13};
 #include "x2ap_eNB.h"
 #include "openair1/SCHED_NR/sched_nr.h"
 #include "openair2/SDAP/nr_sdap/nr_sdap.h"
+#ifdef DEVELOP_CIR
+static char cir_conf_file[] = "../../../cir_conf.txt";
+static const char cir_file_template[] = "../../../cir/output/binary/delayamplist";
+static const char delayindexlist_template[] = "../../../cir/output/binary/delayindexlist";
+#endif
 
 pthread_cond_t nfapi_sync_cond;
 pthread_mutex_t nfapi_sync_mutex;
@@ -491,6 +498,127 @@ static void initialize_agent(ngran_node_t node_type, e2_agent_args_t oai_args)
 
 void init_eNB_afterRU(void);
 configmodule_interface_t *uniqCfg = NULL;
+
+#ifdef DEVELOP_CIR
+void *refresh_cir_variables(void *param) {
+  RU_t *ru = (RU_t *)param;
+  static int refresh_status;
+  FILE *fptr;
+  cf_t path_loss_dB = (cf_t){0.0, 0.0};
+  float amp_gain_dB = 0.0;
+  cf_t noise_power_dB = (cf_t){0.0, 0.0};
+  int channel_length = 1;
+  int CIR_NUM_OF_FILES = 1;
+  int l, a_tx, a_rx;
+  int nb_tx = ru->nb_tx;
+  int nb_rx = ru->nb_rx;
+  static int fi = 0;  // File index for periodically reading CIR binary files
+  char str[256];
+  char cir_file_path[256];
+  char delayindexlist_path[256];
+  int last_processed_frame = -1;
+
+  while (1) {
+    if (ru->proc.frame_rx % 10 == 0 && last_processed_frame != ru->proc.frame_rx) {
+      last_processed_frame = ru->proc.frame_rx;
+      fptr = fopen(cir_conf_file, "r");
+      if (fptr) {
+        // pathLoss_dB
+        fgets(str, sizeof(str), fptr);
+        sscanf(str, "%f", &path_loss_dB.r);
+        // amp_gain_dB
+        fgets(str, sizeof(str), fptr);
+        sscanf(str, "%f", &amp_gain_dB);
+        // noise_per_sample
+        fgets(str, sizeof(str), fptr);
+        sscanf(str, "%f", &noise_power_dB.r);
+        // num of taps
+        fgets(str, sizeof(str), fptr);
+        sscanf(str, "%d", &channel_length);
+        // num of CIR files
+        fgets(str, sizeof(str), fptr);
+        sscanf(str, "%d", &CIR_NUM_OF_FILES);
+        fclose(fptr);
+      } else {
+        printf("error: cir_conf.txt\n");
+        fflush(stdout);
+      }
+
+      // write params
+      pthread_mutex_lock(&ru->proc.mutex_mimo);
+      ru->pathLossLinear.r = pow(10, (path_loss_dB.r + amp_gain_dB) / 20.0);
+      ru->pathLossLinear.i = 0.0;
+      ru->noise_per_sample.r = pow(10, noise_power_dB.r / 20.0) * 256; // TODO: check formula
+      ru->noise_per_sample.i = 0.0; // TODO: check formula
+      ru->channel_length = channel_length;
+      pthread_mutex_unlock(&ru->proc.mutex_mimo);
+
+      // read cir data
+      cf_t cir_buffer[channel_length * ru->nb_tx * ru->nb_rx];
+      sprintf(cir_file_path, "%s%04d.b", cir_file_template, fi);
+      fptr = fopen(cir_file_path, "rb");
+      if (fptr) {
+        fread(cir_buffer, sizeof(cir_buffer), 1, fptr);
+        fclose(fptr);
+        pthread_mutex_lock(&ru->proc.mutex_mimo);
+        for (l = 0; l < channel_length; l++) {
+          for (a_tx = 0; a_tx < ru->nb_tx; a_tx++) {
+            for (a_rx = 0; a_rx < ru->nb_rx; a_rx++) {
+                ru->cirMIMO_simulmatrix[a_rx*channel_length*nb_tx + l*nb_rx + a_tx].r = cir_buffer[l*nb_tx*nb_rx + nb_rx*a_tx + a_rx].r;
+                ru->cirMIMO_simulmatrix[a_rx*channel_length*nb_tx + l*nb_rx + a_tx].i = cir_buffer[l*nb_tx*nb_rx + nb_rx*a_tx + a_rx].i;
+            }
+          }
+        }
+        pthread_mutex_unlock(&ru->proc.mutex_mimo);
+      }
+
+      // read delay index list
+      int delayindexlist_tmp[channel_length];
+      sprintf(delayindexlist_path, "%s%04d.b", delayindexlist_template, fi);
+      fptr = fopen(delayindexlist_path, "rb");
+      if (fptr) {
+        fread(delayindexlist_tmp, sizeof(delayindexlist_tmp), 1, fptr);
+        fclose(fptr);
+        pthread_mutex_lock(&ru->proc.mutex_mimo);
+        for (int l = 0; l < channel_length; l++) {
+          ru->delayindexlist[l] = delayindexlist_tmp[l];
+        }
+        pthread_mutex_unlock(&ru->proc.mutex_mimo);
+      }
+
+      // update fi
+      fi = (fi + 1 + CIR_NUM_OF_FILES) % CIR_NUM_OF_FILES;
+    }
+    usleep(1000);
+  }
+  refresh_status = 0;
+  return &refresh_status;
+}
+
+void *refresh_noise(void *param)
+{
+  RU_t *ru = (RU_t *)param;
+  uint32_t counter = 0;
+  int a, c;
+  static int refresh_status;
+  NR_DL_FRAME_PARMS *fp = ru->nr_frame_parms;
+  int siglen = get_samples_per_slot(0, fp);
+  while (1) {
+    for (a = 0; a < ru->nb_tx; a++) {
+      c = counter % siglen;
+      pthread_mutex_lock(&ru->proc.mutex_noise);
+      ru->noise_array[a][c].r = (float)gaussZiggurat(0.0, 1.0);
+      ru->noise_array[a][c].i = (float)gaussZiggurat(0.0, 1.0);
+      pthread_mutex_unlock(&ru->proc.mutex_noise);
+    }
+    counter = (counter + 1) % UINT32_MAX;
+    usleep(1000);
+  }
+  refresh_status = 0;
+  return &refresh_status;
+}
+#endif // DEVELOP_CIR
+
 int main( int argc, char **argv ) {
   int ru_id, CC_id = 0;
   start_background_system();
@@ -693,6 +821,14 @@ int main( int argc, char **argv ) {
     sync_var=0;
     pthread_cond_broadcast(&sync_cond);
     pthread_mutex_unlock(&sync_mutex);
+
+    #ifdef DEVELOP_CIR
+    // create thread: refresh mimo matrix, noise
+    for (int i = 0; i < RC.nb_RU; i++) {
+      threadCreate(&RC.ru[i]->proc.pthread_mimo, refresh_cir_variables, (void *)RC.ru[i], "refresh_cir_variables", -1, OAI_PRIORITY_RT_LOW);
+      threadCreate(&RC.ru[i]->proc.pthread_mimo, refresh_noise, (void *)RC.ru[i], "refresh_noise", -1, OAI_PRIORITY_RT_LOW);
+    }
+    #endif // DEVELOP_CIR
   }
 
   // wait for end of program
