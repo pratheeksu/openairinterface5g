@@ -1067,8 +1067,16 @@ add_dependencies(PHY_COMMON dfts)
 add_library(PHY ${PHY_SRC})
 target_link_libraries(PHY PRIVATE asn1_lte_rrc_hdrs asn1_nr_rrc_hdrs)
 
+pkg_check_modules(blis REQUIRED blis)
+
 add_library(PHY_UE ${PHY_SRC_UE})
 target_link_libraries(PHY_UE PRIVATE asn1_lte_rrc_hdrs asn1_nr_rrc_hdrs UTIL)
+
+# RHEL needs also cblis, but Ubuntu does not have it. So `cblis_LIBRARIES` will
+# be empty for Ubuntu, a no-op
+pkg_check_modules(cblis cblis)
+target_link_libraries(PHY_UE PRIVATE ${blis_LIBRARIES} ${cblis_LIBRARIES} ${lapacke_LIBRARIES})
+target_include_directories(PHY_UE PRIVATE ${blis_INCLUDE_DIRS} ${lapacke_INCLUDE_DIRS})
 
 add_library(PHY_NR_COMMON ${PHY_NR_SRC_COMMON})
 target_link_libraries(PHY_NR_COMMON PUBLIC UTIL)
@@ -1755,6 +1763,7 @@ target_link_libraries(lte-softmodem PRIVATE
 target_link_libraries(lte-softmodem PRIVATE pthread m CONFIG_LIB rt)
 target_link_libraries(lte-softmodem PRIVATE ${T_LIB})
 target_link_libraries(lte-softmodem PRIVATE asn1_nr_rrc_hdrs asn1_lte_rrc_hdrs)
+target_link_libraries(lte-softmodem PRIVATE ${blis_LIBRARIES} ${cblis_LIBRARIES} ${lapacke_LIBRARIES} ${lapack_LIBRARIES})
 
 if(E2_AGENT)
   target_link_libraries(lte-softmodem PUBLIC e2_agent e2_agent_arg e2_ran_func_du_cucp_cuup)
@@ -1809,6 +1818,7 @@ target_link_libraries(lte-uesoftmodem PRIVATE
 target_link_libraries(lte-uesoftmodem PRIVATE pthread m CONFIG_LIB rt)
 target_link_libraries(lte-uesoftmodem PRIVATE ${T_LIB})
 target_link_libraries(lte-uesoftmodem PRIVATE asn1_nr_rrc_hdrs asn1_lte_rrc_hdrs)
+target_link_libraries(lte-uesoftmodem PRIVATE ${blis_LIBRARIES} ${cblis_LIBRARIES} ${lapacke_LIBRARIES} ${lapack_LIBRARIES})
 
 # force the generation of ASN.1 so that we don't need to wait during the build
 target_link_libraries(lte-uesoftmodem PRIVATE
@@ -1860,6 +1870,7 @@ target_link_libraries(nr-softmodem PRIVATE pthread m CONFIG_LIB rt)
 target_link_libraries(nr-softmodem PRIVATE ${T_LIB})
 target_link_libraries(nr-softmodem PRIVATE asn1_nr_rrc_hdrs asn1_lte_rrc_hdrs)
 target_link_libraries(nr-softmodem PRIVATE asn1_nr_rrc_hdrs asn1_lte_rrc_hdrs)
+target_link_libraries(nr-softmodem PRIVATE ${blis_LIBRARIES} ${cblis_LIBRARIES} ${lapacke_LIBRARIES})
 add_boolean_option(OAI_WLS OFF "Activate OAI's WLS driver" OFF)
 if (OAI_WLS)
     target_link_libraries(nr-softmodem PUBLIC wls_integration_lib)
