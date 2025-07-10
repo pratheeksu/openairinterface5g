@@ -29,7 +29,7 @@ from cls_ci_helper import archiveArtifact
 # Helper functions used here and in other classes
 # (e.g., cls_cluster.py)
 #-----------------------------------------------------------
-IMAGES = ['oai-enb', 'oai-lte-ru', 'oai-lte-ue', 'oai-gnb', 'oai-nr-cuup', 'oai-gnb-aw2s', 'oai-nr-ue', 'oai-enb-asan', 'oai-gnb-asan', 'oai-lte-ue-asan', 'oai-nr-ue-asan', 'oai-nr-cuup-asan', 'oai-gnb-aerial', 'oai-gnb-fhi72']
+IMAGES = ['oai-enb', 'oai-lte-ru', 'oai-lte-ue', 'oai-gnb', 'oai-nr-cuup', 'oai-gnb-aw2s', 'oai-nr-ue', 'oai-enb-asan', 'oai-gnb-asan', 'oai-lte-ue-asan', 'oai-nr-ue-asan', 'oai-nr-cuup-asan', 'oai-gnb-aerial', 'oai-gnb-fhi72', 'oai-gnb-fhi72-t2']
 DEFAULT_REGISTRY = "gracehopper3-oai.sboai.cs.eurecom.fr"
 
 def CreateWorkspace(host, sourcePath, repository, commitID, targetBranch, merge):
@@ -240,7 +240,11 @@ class Containerize():
 			imageNames.append(('oai-gnb', 'gNB', 'oai-gnb', ''))
 			imageNames.append(('oai-nr-cuup', 'nr-cuup', 'oai-nr-cuup', ''))
 			imageNames.append(('oai-nr-ue', 'nrUE', 'oai-nr-ue', ''))
-		
+		result = re.search('fhi72-t2', self.imageKind)
+		if result is not None:
+			imageNames.append(('ran-build-fhi72-t2', 'build.fhi72.t2', 'ran-build-fhi72-t2', ''))
+			imageNames.append(('oai-gnb', 'gNB.fhi72.t2', 'oai-gnb-fhi72-t2', ''))
+
 		cmd.cd(lSourcePath)
 
 		baseImage = 'ran-base'
@@ -318,6 +322,10 @@ class Containerize():
 				cmd.run(f'sed -i -e "s#ran-build:latest#ran-build:{imageTag}#" docker/Dockerfile.{pattern}{dockerfileprefix}')
 			if image == 'oai-gnb-aerial':
 				cmd.run('cp -f /opt/nvidia-ipc/nvipc_src.2026.01.07.tar.gz .')
+			if image == 'ran-build-fhi72-t2':
+				cmd.run('cp -f /opt/t2-patch/AMD-T2-SDFEC_25-03-1.patch .')
+			if name == 'oai-gnb-fhi72-t2':
+				cmd.run(f'sed -i -e "s#ran-build-fhi72-t2:latest#ran-build-fhi72-t2:{imageTag}#" docker/Dockerfile.{pattern}{dockerfileprefix}')
 			logfile = f'{lSourcePath}/cmake_targets/log/{name}.docker.log'
 			option = option + f" --build-arg UBUNTU_IMAGE={DEFAULT_REGISTRY}/{ubuntuImage}"
 			ret = cmd.run(f'docker build --target {image} --tag {name}:{imageTag} --file docker/Dockerfile.{pattern}{dockerfileprefix} {option} . > {logfile} 2>&1', timeout=1200)
@@ -325,6 +333,8 @@ class Containerize():
 			log_files.append(t)
 			if image == 'oai-gnb-aerial':
 				cmd.run('rm -f nvipc_src.2026.01.07.tar.gz')
+			if image == 'ran-build-fhi72-t2':
+				cmd.run('rm -f AMD-T2-SDFEC_25-03-1.patch')
 			# check the status of the build
 			ret = cmd.run(f"docker image inspect --format=\'Size = {{{{.Size}}}} bytes\' {name}:{imageTag}")
 			if ret.returncode != 0:
