@@ -3997,6 +3997,7 @@ void nr_mac_trigger_reconfiguration(const gNB_MAC_INST *nrmac, NR_UE_info_t *UE,
                                                                UE->capability,
                                                                nrmac->common_channels[0].ServingCellConfigCommon,
                                                                UE->uid,
+                                                               current_BWP->pucch_Config,
                                                                UE->current_DL_BWP.bwp_id,
                                                                ssb_index);
   } else {

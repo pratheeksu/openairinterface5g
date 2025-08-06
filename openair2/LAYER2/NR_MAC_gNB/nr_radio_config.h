@@ -120,6 +120,7 @@ NR_CellGroupConfig_t *update_cellGroupConfig_for_beam_switch(NR_CellGroupConfig_
                                                             const NR_UE_NR_Capability_t *uecap,
                                                             const NR_ServingCellConfigCommon_t *scc,
                                                             int uid,
+                                                            const NR_PUCCH_Config_t *pucch_Config,
                                                             int bwp,
                                                             int ssb_index);
 NR_MeasurementTimingConfiguration_t *get_nr_mtc(uint8_t *buf, uint32_t len);
