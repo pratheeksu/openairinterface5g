@@ -968,6 +968,12 @@ void *ru_thread(void *param)
         break; // nothing to wait for: we have to stop
       if (ru->feprx) {
         ru->feprx(ru,proc->tti_rx);
+        if (ru->dft_in_levdB == -1) {
+          int sigenergy = 0;
+          for (int aa = 0; aa < ru->nb_rx; aa++)
+            sigenergy += signal_energy(ru->common.rxdata[aa] + get_samples_slot_timestamp(fp, proc->tti_rx), 2048);
+          ru->dft_in_levdB = dB_fixed(sigenergy) + 40;
+        }
         LOG_D(NR_PHY, "Setting %d.%d (%d) to busy\n", proc->frame_rx, proc->tti_rx, proc->tti_rx % RU_RX_SLOT_DEPTH);
         //LOG_M("rxdata.m","rxs",ru->common.rxdata[0],1228800,1,1);
         LOG_D(PHY,"RU proc: frame_rx = %d, tti_rx = %d\n", proc->frame_rx, proc->tti_rx);

@@ -646,6 +646,17 @@ int main(int argc, char **argv)
           UE->common_vars.rxdata[aa][i].i = (short)(r_im[aa][i] + sqrt(sigma2 / 2) * gaussdouble(0.0, 1.0));
         }
       }
+      int sigenergy = 0;
+
+      int start_symbol = nr_get_ssb_start_symbol(&UE->frame_parms, 0);
+      int slot = start_symbol / 14;
+
+      int off = get_samples_slot_timestamp(&UE->frame_parms, slot);
+      int slot_length = get_samples_slot_timestamp(&UE->frame_parms,slot + 1) - off;
+      for (int aarx = 0; aarx < UE->frame_parms.nb_antennas_rx; aarx++) {
+        sigenergy += signal_energy((int32_t *)(UE->common_vars.rxdata[aarx] + off), slot_length) / UE->frame_parms.nb_antennas_rx;
+      }
+      UE->dft_in_levdB = dB_fixed(sigenergy);
 
       if (n_trials==1) {
         LOG_M("rxsig0.m", "rxs0", UE->common_vars.rxdata[0], frame_parms->samples_per_frame, 1, 1);

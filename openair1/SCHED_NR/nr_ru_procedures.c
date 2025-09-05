@@ -293,7 +293,7 @@ void nr_fep(void *arg)
                      &feprx_cmd->rxdataF[l * feprx_cmd->fp->ofdm_symbol_size],
                      l,
                      slot,
-                     feprx_cmd->sample_offet);
+                     feprx_cmd->sample_offet, feprx_cmd->dft_in_levdB);
 
   completed_task_ans(feprx_cmd->ans);
 }
@@ -327,6 +327,7 @@ void nr_fep_tp(RU_t *ru, int slot)
         feprx_cmd->ans = &ans;
         feprx_cmd->fp = fp;
         feprx_cmd->slot = ru->proc.tti_rx;
+        feprx_cmd->dft_in_levdB = ru->dft_in_levdB;
         feprx_cmd->startSymbol = start_symbol;
         feprx_cmd->endSymbol = end_symbol;
         feprx_cmd->rxdata = (const c16_t *)ru->common.rxdata[aid + beam * ru->nb_rx];

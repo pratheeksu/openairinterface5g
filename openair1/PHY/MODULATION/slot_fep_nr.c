@@ -122,7 +122,8 @@ int nr_symbol_fep_ul(const NR_DL_FRAME_PARMS *fp,
                      c16_t *rxdataF,
                      unsigned char symbol,
                      unsigned char slot,
-                     int sample_offset)
+                     int sample_offset,
+                     uint32_t levdB)
 {
   dft_size_idx_t dftsize = get_dft(fp->ofdm_symbol_size);
   // This is for misalignment issues
@@ -203,6 +204,7 @@ void apply_nr_rotation_symbol_RX(const NR_DL_FRAME_PARMS *frame_parms,
   }
 }
 
+// this function is only for phy simulators
 void nr_ofdm_demod_and_rx_rotation(c16_t **rxdata,
                                    c16_t **rxdataF,
                                    const NR_DL_FRAME_PARMS *fp,
@@ -215,7 +217,7 @@ void nr_ofdm_demod_and_rx_rotation(c16_t **rxdata,
   for (int aa = 0; aa < nb_antennas; aa++) {
     for (uint8_t symbol = 0; symbol < fp->symbols_per_slot; symbol++) {
       if (was_symbol_used[symbol] == true) {
-        nr_symbol_fep_ul(fp, &rxdata[aa][0], &rxdataF[aa][slot_offsetF + symbol * fp->ofdm_symbol_size], symbol, slot, 0);
+        nr_symbol_fep_ul(fp, &rxdata[aa][0], &rxdataF[aa][slot_offsetF + symbol * fp->ofdm_symbol_size], symbol, slot, 0, 0);
         apply_nr_rotation_symbol_RX(fp,
                                     &rxdataF[aa][slot_offsetF + symbol * fp->ofdm_symbol_size],
                                     fp->symbol_rotation[linktype],
