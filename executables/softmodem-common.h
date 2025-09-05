@@ -354,7 +354,7 @@ extern int32_t uplink_frequency_offset[MAX_NUM_CCs][4];
 extern int usrp_tx_thread;
 extern int sf_ahead;
 extern int oai_exit;
-
+void ru_ctrl_func(void *param);
 void ru_tx_func(void *param);
 void configure_ru(void *, void *arg);
 void configure_rru(void *, void *arg);

@@ -188,14 +188,6 @@ void nr_feptx_prec(RU_t *ru, int frame_tx, int slot_tx)
   if (nr_slot_select(cfg,frame_tx,slot_tx) == NR_UPLINK_SLOT)
     return;
 
-  if (gNB->common_vars.analog_bf) {
-    for (int i = 0; i < ru->num_beams_period; i++) {
-      memcpy((void*) &ru->common.beam_id[i][slot_tx * fp->symbols_per_slot],
-             (void*) &gNB->common_vars.beam_id[i][slot_tx * fp->symbols_per_slot],
-             (fp->symbols_per_slot) * sizeof(int));
-    }
-  }
-
   // If there is no digital beamforming we just need to copy the data to RU
   if (ru->config.dbt_config.num_dig_beams == 0 || ru->gNB_list[0]->common_vars.analog_bf) {
     for (int b = 0; b < ru->num_beams_period; b++) {
@@ -233,12 +225,6 @@ void nr_feptx(void *arg)
 
   if (tx_idx == 0)
     start_meas(&ru->precoding_stats);
-
-  if (ru->gNB_list[0]->common_vars.analog_bf) {
-    memcpy(&ru->common.beam_id[bb][slot * fp->symbols_per_slot],
-           &ru->gNB_list[0]->common_vars.beam_id[bb][slot * fp->symbols_per_slot],
-           (fp->symbols_per_slot) * sizeof(int));
-  }
 
   // If there is no digital beamforming we just need to copy the data to RU
   if (ru->config.dbt_config.num_dig_beams == 0 || ru->gNB_list[0]->common_vars.analog_bf)

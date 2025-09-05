@@ -112,18 +112,17 @@ static void tx_func(processingData_L1tx_t *info)
   syncMsg->timestamp_tx = info->timestamp_tx;
   res->key = slot_rx;
   pushNotifiedFIFO(&gNB->resp_L1, res);
+  processingData_RU_t syncMsgRU;
+  syncMsgRU.frame_tx = frame_tx;
+  syncMsgRU.slot_tx = slot_tx;
+  syncMsgRU.ru = gNB->RU_list[0];
+  syncMsgRU.timestamp_tx = info->timestamp_tx;
+  ru_ctrl_func((void *)&syncMsgRU);
 
   int tx_slot_type = nr_slot_select(cfg, frame_tx, slot_tx);
   if (tx_slot_type == NR_DOWNLINK_SLOT || tx_slot_type == NR_MIXED_SLOT || get_softmodem_params()->continuous_tx || IS_SOFTMODEM_RFSIM) {
     start_meas(&info->gNB->phy_proc_tx);
     phy_procedures_gNB_TX(info, frame_tx, slot_tx, 1);
-
-    PHY_VARS_gNB *gNB = info->gNB;
-    processingData_RU_t syncMsgRU;
-    syncMsgRU.frame_tx = frame_tx;
-    syncMsgRU.slot_tx = slot_tx;
-    syncMsgRU.ru = gNB->RU_list[0];
-    syncMsgRU.timestamp_tx = info->timestamp_tx;
     LOG_D(PHY, "gNB: %d.%d : calling RU TX function\n", syncMsgRU.frame_tx, syncMsgRU.slot_tx);
     ru_tx_func((void *)&syncMsgRU);
     stop_meas(&info->gNB->phy_proc_tx);
