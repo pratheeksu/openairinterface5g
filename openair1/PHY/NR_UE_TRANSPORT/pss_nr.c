@@ -131,7 +131,7 @@ void generate_pss_nr_time(const NR_DL_FRAME_PARMS *fp, const int N_ID_2, int ssb
   idft((int16_t)get_idft(fp->ofdm_symbol_size),
        (int16_t *)synchroF_tmp, /* complex input but legacy type is wrong*/
        (int16_t *)pssTime, /* complex output */
-       1); /* scaling factor */
+       get_idft_scaling(fp->ofdm_symbol_size, 1)); /* scaling factor */
 
 #ifdef DBG_PSS_NR
 
@@ -621,7 +621,7 @@ void sl_generate_pss_ifft_samples(sl_nr_ue_phy_params_t *sl_ue_params, SL_NR_UE_
     idft((int16_t)get_idft(sl_fp->ofdm_symbol_size),
          (int16_t *)&pss_F[0], /* complex input */
          (int16_t *)&pss_T[0], /* complex output */
-         1); /* scaling factor */
+         get_idft_scaling(sl_fp->ofdm_symbol_size, 1)); /* scaling factor */
   }
 
 #ifdef SL_DUMP_PSBCH_TX_SAMPLES

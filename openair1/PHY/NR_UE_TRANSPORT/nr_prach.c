@@ -327,7 +327,7 @@ int32_t generate_nr_prach(PHY_VARS_NR_UE *ue, uint8_t gNB_id, int frame, uint8_t
 
     // This is after cyclic prefix
     const idft_size_idx_t idft_size = get_idft(dftlen);
-    idft(idft_size, (int16_t *)prachF, (int16_t *)prach, 1);
+    idft(idft_size, (int16_t *)prachF, (int16_t *)prach, get_idft_scaling(dftlen, 0));
   }
 
   c16_t *out = txData[0] + prach_start;

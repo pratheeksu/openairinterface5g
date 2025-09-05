@@ -39,7 +39,7 @@ static void doIdft(int size, short *in, short *out) {
       LOG_E(PHY, "Unknown N_RB_DL %d\n", size);
       return;
   }
-  idft(get_idft(len), in, out, 1);
+  idft(get_idft(len), in, out, get_idft_scaling(len, 0));
 }
 
 static void copyPrimary( c16_t *out, struct complex16 *in, int ofdmSize) {
@@ -185,8 +185,10 @@ int ru_sync_time_init(RU_t *ru) { // LTE_UE_COMMON *common_vars
       LOG_E(PHY, "Unknown N_RB_DL %d\n", ru->frame_parms->N_RB_DL);
       return -1;
   }
-  idft(get_idft(len), (int16_t *)&dmrsp[0][3 * ru->frame_parms->ofdm_symbol_size], ru->dmrssync,
-       1); /// complex output
+  idft(get_idft(len),
+       (int16_t *)&dmrsp[0][3 * ru->frame_parms->ofdm_symbol_size],
+       ru->dmrssync,
+       get_idft_scaling(len, 0)); /// complex output
   return(0);
 }
 

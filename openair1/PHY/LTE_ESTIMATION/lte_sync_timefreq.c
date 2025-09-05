@@ -50,9 +50,7 @@ void lte_sync_timefreq(PHY_VARS_UE *ue,int band,unsigned int DL_freq)
     while (1) {
 
       //compute frequency-domain representation of 6144-sample chunk
-      dft(DFT_6144,(int16_t *)rxp,
-              sp,1);
-
+      dft(DFT_6144, (int16_t *)rxp, sp, get_dft_scaling(6144, 0));
 
       /*
       printf("i %d: sp %p\n",i,sp);
@@ -196,7 +194,7 @@ void lte_sync_timefreq(PHY_VARS_UE *ue,int band,unsigned int DL_freq)
         }
 
         // ifft, accumulate energy over two half-frames
-        idft(IDFT_256,(int16_t*)autocorr0,(int16_t*)tmp_t,1);
+        idft(IDFT_256, (int16_t *)autocorr0, (int16_t *)tmp_t, get_idft_scaling(256, 1));
         /*
               if (i==12288) {
           sprintf(fname,"corr256F_%d.m",abs(f));
@@ -214,12 +212,12 @@ void lte_sync_timefreq(PHY_VARS_UE *ue,int band,unsigned int DL_freq)
         for (re=0; re<(256/4); re++)
           autocorr0_t[re] = simde_mm_add_epi32(autocorr0_t[re], simde_mm_madd_epi16(tmp_t[re], tmp_t[re]));
 
-        idft(IDFT_256,(int16_t*)autocorr1,(int16_t*)tmp_t,1);
+        idft(IDFT_256, (int16_t *)autocorr1, (int16_t *)tmp_t, get_idft_scaling(256, 1));
 
         for (re=0; re<(256/4); re++)
           autocorr1_t[re] = simde_mm_add_epi32(autocorr1_t[re], simde_mm_madd_epi16(tmp_t[re], tmp_t[re]));
 
-        idft(IDFT_256,(int16_t*)autocorr2,(int16_t*)tmp_t,1);
+        idft(IDFT_256, (int16_t *)autocorr2, (int16_t *)tmp_t, get_idft_scaling(256, 1));
 
         for (re=0; re<(256/4); re++)
           autocorr2_t[re] = simde_mm_add_epi32(autocorr2_t[re], simde_mm_madd_epi16(tmp_t[re], tmp_t[re]));
