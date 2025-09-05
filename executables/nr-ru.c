@@ -971,6 +971,7 @@ void ru_tx_func(void *param)
   RU_t *ru = info->ru;
   int frame_tx = info->frame_tx;
   int slot_tx = info->slot_tx;
+  LOG_D(PHY,"ru_tx_func: frame = %d, slot = %d\n", frame_tx, slot_tx);
 
   // do TX front-end processing if needed (precoding and/or IDFTs)
   if (ru->feptx_prec)
