@@ -117,6 +117,14 @@ oc-cn5g-00104:
   Undeploy: "! scripts/oc-cn5g-undeploy.sh /opt/oai-cn5g-fed-develop-00104 oaicicd-core-for-nvidia-aerial"
   LogCollect: "! scripts/oc-cn5g-logcollect.sh /opt/oai-cn5g-fed-develop-00104 oaicicd-core-for-nvidia-aerial %%log_dir%%"
 
+oc-cn5g-20897-stonechat:
+  Host: stonechat
+  NetworkScript: echo "inet 172.21.6.105"
+  RunIperf3Server: False
+  Deploy: "! scripts/oc-cn5g-deploy.sh /opt/oai-cn5g-fed-develop-2025-jan oaicicd-core-for-fhi72"
+  Undeploy: "! scripts/oc-cn5g-undeploy.sh /opt/oai-cn5g-fed-develop-2025-jan oaicicd-core-for-fhi72"
+  LogCollect: "! scripts/oc-cn5g-logcollect.sh /opt/oai-cn5g-fed-develop-2025-jan oaicicd-core-for-fhi72  %%log_dir%%"
+
 matix-cn5g:
   Host: matix
   NetworkScript: docker exec prod-trf-gen ip a show dev eth0
