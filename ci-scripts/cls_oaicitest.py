@@ -276,6 +276,33 @@ def Deploy_Physim(ctx, HTML, node, workdir, script, options):
 		logging.error('\u001B[1m Physical Simulator Fail\u001B[0m')
 	return test_status
 
+def DeployWithScript(HTML, node, script, options, tag):
+	logging.debug(f'Deploy with script {script} on node: {node}')
+	opt = options.replace('%%image_tag%%', tag)
+	with cls_cmd.getConnection(node) as c:
+		ret = c.exec_script(script, 600, opt)
+	logging.debug(f'"{script}" finished with code {ret.returncode}, output:\n{ret.stdout}')
+	param = f"on node {node}"
+	HTML.CreateHtmlTestRowQueue(f'on node {node}', 'OK' if ret.returncode == 0 else 'KO', [f'{ret.stdout}'])
+	return ret.returncode == 0
+
+def UndeployWithScript(HTML, ctx, node, script, options):
+	logging.debug(f'Undeploy with script {script} on node: {node}')
+	remote_dir = '/tmp/undeploy'
+	opt = options.replace('%%log_dir%%', remote_dir)
+	with cls_cmd.getConnection(node) as c:
+		ret = c.exec_script(script, 600, opt)
+		logging.debug(f'"{script}" finished with code {ret.returncode}, output:\n{ret.stdout}')
+		ret_ls = c.run(f'ls -1 {remote_dir}')
+		files = ret_ls.stdout.strip().split("\n")
+		log_files = []
+		for lf in files:
+			name = archiveArtifact(c, ctx, f'{remote_dir}/{lf}')
+			log_files.append(name)
+	msg = "Log files:\n" + "\n".join([os.path.basename(lf) for lf in log_files])
+	HTML.CreateHtmlTestRowQueue(f'on node {node}', 'OK' if ret.returncode == 0 else 'KO', [f'{ret.stdout}\n\n{msg}'])
+	return ret.returncode == 0
+
 #-----------------------------------------------------------
 # OaiCiTest Class Definition
 #-----------------------------------------------------------
