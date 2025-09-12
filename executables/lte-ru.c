@@ -143,7 +143,7 @@ static inline void fh_if4p5_south_out(RU_t *ru,
   LOG_D(PHY,"ENTERED fh_if4p5_south_out   Sending IF4p5 for frame %d subframe %d ru %d\n",ru->proc.frame_tx,ru->proc.tti_tx,ru->idx);
 
   if (subframe_select(ru->frame_parms, subframe)!=SF_UL) {
-    send_IF4p5(ru, frame, subframe, IF4p5_PDLFFT);
+    send_IF4p5_IF4p5_PDLFFT(ru, frame, subframe);
     ru->south_out_cnt++;
     LOG_D(PHY,"south_out_cnt %d\n",ru->south_out_cnt);
   }
@@ -2436,8 +2436,8 @@ void set_function_spec_param(RU_t *ru) {
           LOG_I(PHY,"Exiting, cannot initialize transport protocol\n");
           exit(-1);
         }
-
-        malloc_IF4p5_buffer(ru);
+        eth_state_t *eth = (eth_state_t *)(ru->ifdevice.priv);
+        malloc_IF4p5_buffer(eth->flags, ru->nb_tx, ru->nb_rx, &ru->ifbuffer);
       } else if (ru->function == eNodeB_3GPP) {
         ru->do_prach             = 0;                       // no prach processing in RU
         ru->feprx                = (get_thread_worker_conf() == WORKER_DISABLE) ? fep_full : ru_fep_full_2thread;                // RX DFTs
@@ -2530,9 +2530,8 @@ void set_function_spec_param(RU_t *ru) {
         if (t != NULL)
           ru->fh_south_out = t;
       }
-
-      malloc_IF4p5_buffer(ru);
-
+      eth_state_t *eth = (eth_state_t *)(ru->ifdevice.priv);
+      malloc_IF4p5_buffer(eth->flags, ru->nb_tx, ru->nb_rx, &ru->ifbuffer);
       break;
 
     default:

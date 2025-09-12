@@ -129,10 +129,6 @@ typedef struct {
   /// - second index: tx antenna [0..nb_antennas_tx[
   /// - third index: frequency [0..]
   int32_t **tdd_calib_coeffs;
-  /// \brief Anaglogue beam ID for each OFDM symbol (used when beamforming not done in RU)
-  /// - first index: concurrent beam
-  /// - second index: beam_id [0.. symbols_per_frame[
-  int **beam_id;
 } RU_COMMON;
 
 
@@ -170,38 +166,6 @@ typedef struct RU_prec_t_s{
   int index;
 } RU_prec_t;
 
-typedef struct {
- int aid;
- int beam;
- struct RU_t_s *ru;
- int startSymbol;
- int endSymbol;
- int slot;
- task_ans_t *ans;
-} feprx_cmd_t;
-
-typedef struct {
- int aid;
- int beam;
- struct RU_t_s *ru;
- int slot; 
- int startSymbol;
- int numSymbols;
- task_ans_t *ans;
-} feptx_cmd_t;
-
-typedef struct {
-  int frame;
-  int slot;
-  int fmt;
-  int numRA;
-  int prachStartSymbol;
-  int num_prach_ocas;
-  int num_slots;
-  int *beam;
-} RU_PRACH_list_t;
-
-#define NUMBER_OF_NR_RU_PRACH_MAX 8
 #define NUMBER_OF_NR_RU_PRACH_OCCASIONS_MAX 12
 #define RU_RX_SLOT_DEPTH 4
 typedef struct RU_proc_t_s {
@@ -419,6 +383,193 @@ typedef enum {
   WAIT_RESYNCH     = 3
 } rru_cmd_t;
 
+typedef struct {
+  /// \brief Holds the receive data in the frequency domain.
+  /// - first index: rx antenna [0..nb_antennas_rx[
+  /// - second index: ? [0..2*ofdm_symbol_size*frame_parms->symbols_per_tti[
+  int32_t **rxdata;
+  /// \brief Holds the received data in the frequency domain.
+  /// - first index: rx antenna [0..nb_antennas_rx[
+  /// - second index: ? [0..2*ofdm_symbol_size*frame_parms->symbols_per_tti[
+  int32_t **rxdataF;
+  /// \brief Holds the transmit data in the frequency domain (1 frame).
+  /// - first index: rx antenna [0..nb_antennas_rx[
+  /// - second index: ? [0..samples_per_frame[
+  int32_t **txdata;
+  /// \brief holds the transmit data after beamforming in the frequency domain (1 slot).
+  /// - first index: tx antenna [0..nb_antennas_tx[
+  /// - second index: sample [0..samples_per_slot_woCP]
+  int32_t **txdataF_BF;
+  /// \brief holds the transmit data before beamforming in the frequency domain (1 frame).
+  /// - first index: tx antenna [0..nb_antenna_ports[
+  /// - second index: sample [0..samples_per_frame_woCP]
+  /// \brief Anaglogue beam ID for each OFDM symbol (used when beamforming not done in RU)
+  /// - first index: concurrent beam
+  /// - second index: beam_id [0.. symbols_per_frame[
+  int **beam_id;
+} nr_ru_common_t;
+
+typedef struct NR_RU_proc_s {
+  int frame_tx;
+  int frame_rx;
+  int tti_tx;
+  int tti_rx;
+  openair0_timestamp timestamp_rx;
+  openair0_timestamp timestamp_tx;
+  /// unwrapped frame count
+  int frame_tx_unwrap;
+  /// frame offset for slave RUs (to correct for frame asynchronism at startup)
+  int frame_offset;
+
+  int first_rx;
+  int first_tx;
+  /// symbol mask for IF4p5 reception per subframe
+  uint32_t symbol_mask[10];
+  struct NR_RU_s *ru;
+  pthread_t pthread_FH;
+
+} NR_RU_proc_t;
+
+typedef struct {
+  int aid;
+  int beam;
+  struct NR_RU_s *ru;
+  int slot;
+  int startSymbol;
+  int numSymbols;
+  task_ans_t *ans;
+} feptx_cmd_t;
+
+typedef struct {
+  int aid;
+  int beam;
+  struct NR_RU_s *ru;
+  int startSymbol;
+  int endSymbol;
+  int slot;
+  task_ans_t *ans;
+} feprx_cmd_t;
+
+typedef struct NR_RU_s {
+  /// function
+  node_function_t function;
+  /// timing
+  node_timing_t if_timing;
+  /// Ethernet parameters for fronthaul interface
+  eth_params_t eth_params;
+  /// Pointer to configuration file
+  char *rf_config_file;
+  /// flag to indicate if the RU has a control channel
+  int has_ctrl_prt;
+
+  /// ThreadPool for RU
+  tpool_t *threadPool;
+  /// Core id of ru_thread
+  int ru_thread_core;
+
+  feptx_cmd_t feptx;
+  /// index of this ru
+  uint32_t idx;
+  int sl_ahead;
+  int nb_rx;
+  int nb_tx;
+  /// number of bands that this device can support
+  int num_bands;
+  /// band list
+  int band[MAX_BANDS_PER_RRU];
+  /// DL IF frequency in Hz
+  uint64_t if_frequency;
+  /// UL IF frequency offset to DL IF frequency in Hz
+  int if_freq_offset;
+  /// Pointer for ifdevice buffer struct
+  if_buffer_t ifbuffer;
+
+  RU_if_south_t if_south;
+  c16_t ***prach_rxsigF;
+  struct NR_DL_FRAME_PARMS *nr_frame_parms;
+  NR_RU_proc_t proc;
+  nr_ru_common_t common;
+  int num_gNB;
+  struct PHY_VARS_gNB_s *gNB_list[NUMBER_OF_gNB_MAX];
+  /// number of concurrent analog beams in period
+  int num_beams_period;
+  /// flag to indicate half-slot parallelization
+  int half_slot_parallelization;
+  /// timing offset used in TDD
+  int N_TA_offset;
+  /// SF extension used in TDD (unit: number of samples at 30.72MHz) (this is an expert option)
+  int sf_extension;
+  /// maximum PDSCH RS EPRE
+  int max_pdschReferenceSignalPower;
+  /// maximum RX gain
+  int max_rxgain;
+  /// Attenuation of RX paths on device
+  int att_rx;
+  /// Attenuation of TX paths on device
+  int att_tx;
+  /// Mapping of antenna ports to RF chain index
+  openair0_rf_map rf_map;
+  /// initial timestamp used as an offset make first real timestamp 0
+  openair0_timestamp ts_offset;
+  /// frame offset for slave RUs (to correct for frame asynchronism at startup)
+  int frame_offset;
+  prach_list_t prach_list;
+  int (*nr_start_if)(struct NR_RU_s *ru, struct PHY_VARS_gNB_s *gNB);
+
+  /// function pointer to RX front-end processing routine (DFTs/prefix removal or NULL)
+  void (*feprx)(struct NR_RU_s *ru, int subframe);
+  /// function pointer to TX front-end processing routine (IDFTs and prefix removal or NULL)
+  void (*feptx_ofdm)(struct NR_RU_s *ru, int frame_tx, int tti_tx);
+  /// function pointer to TX front-end processing routine (PRECODING)
+  void (*feptx_prec)(struct NR_RU_s *ru, int frame_tx, int tti_tx);
+  /// function pointer to asynchronous fronthaul interface
+  void (*fh_north_asynch_in)(struct NR_RU_s *ru, int *frame, int *subframe);
+  /// function pointer to synchronous RX fronthaul function (RRU)
+  void (*fh_north_out)(struct NR_RU_s *ru);
+  /// function pointer to synchronous TX fronthaul function
+  void (*fh_south_out)(struct NR_RU_s *ru, int frame_tx, int tti_tx, uint64_t timestamp_tx);
+  /// function pointer to synchronous RX fronthaul function (RRU,3GPP_eNB/3GPP_gNB)
+  void (*fh_south_in)(struct NR_RU_s *ru, int *frame, int *subframe);
+  /// function pointer to initialization function for radio interface
+  int (*start_rf)(struct NR_RU_s *ru);
+  /// function pointer to start a thread of tx write for USRP.
+  int (*start_write_thread)(struct NR_RU_s *ru);
+  /// function pointer to release function for radio interface
+  int (*stop_rf)(struct NR_RU_s *ru);
+  /// function pointer to synchronous RX fronthaul function (RRU)
+  void (*fh_north_in)(struct NR_RU_s *ru, int *frame, int *subframe);
+  /// function pointer to asynchronous fronthaul interface
+  void (*fh_south_asynch_in)(struct NR_RU_s *ru, int *frame, int *subframe);
+
+  /// RF device descriptor
+  openair0_device rfdevice;
+  /// HW configuration
+  openair0_config_t openair0_cfg;
+
+  openair0_device ifdevice;
+  /// number of logical antennas at TX beamformer input
+  int nb_log_antennas;
+
+  /// FAPI confiuration
+  nfapi_nr_config_request_scf_t config;
+  /// list of cores for RU ThreadPool
+  int tpcores[16];
+  /// number of cores for RU ThreadPool
+  int num_tpcores;
+  void *scopeData;
+
+  time_stats_t ofdm_demod_stats;
+  /// Timing statistics (TX)
+  time_stats_t ofdm_mod_stats;
+  time_stats_t ofdm_total_stats;
+  time_stats_t precoding_stats;
+  /// Timing statistics (TX Fronthaul + Compression)
+  time_stats_t tx_fhaul;
+  time_stats_t rx_fhaul;
+  time_stats_t compression;
+  time_stats_t transport;
+} NR_RU_t;
+
 typedef struct RU_t_s {
   /// ThreadPool for RU        
   tpool_t *threadPool;
@@ -478,10 +629,6 @@ typedef struct RU_t_s {
   int nb_rx;
   /// number of TX paths on device
   int nb_tx;
-  /// number of concurrent analog beams in period
-  int num_beams_period;
-  /// number of logical antennas at TX beamformer input
-  int nb_log_antennas;
   /// maximum PDSCH RS EPRE
   int max_pdschReferenceSignalPower;
   /// maximum RX gain
@@ -498,13 +645,10 @@ typedef struct RU_t_s {
   int sl_ahead;
   /// flag to indicate TX FH is embedded in TX FEP
   int txfh_in_fep;
-  /// flag to indicate half-slot parallelization
-  int half_slot_parallelization;
   /// FAPI confiuration
   nfapi_nr_config_request_scf_t  config;
   /// Frame parameters
   struct LTE_DL_FRAME_PARMS *frame_parms;
-  struct NR_DL_FRAME_PARMS *nr_frame_parms;
   ///timing offset used in TDD
   int N_TA_offset;
   /// SF extension used in TDD (unit: number of samples at 30.72MHz) (this is an expert option)
@@ -517,10 +661,8 @@ typedef struct RU_t_s {
   openair0_config_t openair0_cfg;
   /// Number of NBs using this RU
   int num_eNB;
-  int num_gNB;
   /// list of NBs using this RU
   struct PHY_VARS_eNB_s *eNB_list[NUMBER_OF_eNB_MAX];
-  struct PHY_VARS_gNB_s *gNB_list[NUMBER_OF_gNB_MAX];
   /// Mapping of antenna ports to RF chain index
   openair0_rf_map rf_map;
   /// IF device descriptor
@@ -547,7 +689,6 @@ typedef struct RU_t_s {
   int (*stop_rf)(struct RU_t_s *ru);
   /// function pointer to initialization function for radio interface
   int (*start_if)(struct RU_t_s *ru, struct PHY_VARS_eNB_s *eNB);
-  int (*nr_start_if)(struct RU_t_s *ru, struct PHY_VARS_gNB_s *gNB);
   /// function pointer to RX front-end processing routine (DFTs/prefix removal or NULL)
   void (*feprx)(struct RU_t_s *ru, int subframe);
   /// function pointer to TX front-end processing routine (IDFTs and prefix removal or NULL)
@@ -567,18 +708,13 @@ typedef struct RU_t_s {
 
   /// function pointer to NB entry routine
   void (*eNB_top)(struct PHY_VARS_eNB_s *eNB, int frame_rx, int subframe_rx, char *string, struct RU_t_s *ru);
-  void (*gNB_top)(struct PHY_VARS_gNB_s *gNB, int frame_rx, int slot_rx, char *string, struct RU_t_s *ru);
+  void (*gNB_top)(struct PHY_VARS_gNB_s *gNB, int frame_rx, int slot_rx, char *string, struct NR_RU_s *ru);
 
   /// Timing data copy statistics (TX)
-  time_stats_t txdataF_copy_stats;
-  /// Timing statistics (TX)
-  time_stats_t precoding_stats;
   /// Timing statistics
   time_stats_t ofdm_demod_stats;
   /// Timing statistics (TX)
   time_stats_t ofdm_mod_stats;
-  /// Timing statistics (TX)
-  time_stats_t ofdm_total_stats;
   /// Timing wait statistics
   time_stats_t ofdm_demod_wait_stats;
   /// Timing wakeup statistics
@@ -638,25 +774,18 @@ typedef struct RU_t_s {
   uint64_t if_frequency;
   /// UL IF frequency offset to DL IF frequency in Hz
   int if_freq_offset;
-  /// to signal end of feprx
-  notifiedFIFO_t *respfeprx;
-  /// to signal end of feptx
-  notifiedFIFO_t *respfeptx;
   /// core id for RX fhaul (IF5 ECPRI)
   int rxfh_core_id;
   /// core id for RX fhaul (IF5 ECPRI)
   int txfh_core_id;
   /// number of RU interfaces
   int num_fd;
-  /// Core id of ru_thread
-  int ru_thread_core;
   /// list of cores for RU ThreadPool
   int tpcores[16];
   /// number of cores for RU ThreadPool
   int num_tpcores;
   void* scopeData;
 } RU_t;
-
 
 typedef enum {
   RAU_tick=0,
@@ -775,6 +904,6 @@ typedef struct processingData_RU {
   int slot_tx;
   int next_slot;
   openair0_timestamp timestamp_tx;
-  RU_t *ru;
+  NR_RU_t *ru;
 } processingData_RU_t;
 #endif //__PHY_DEFS_RU__H__

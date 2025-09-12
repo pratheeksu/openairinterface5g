@@ -465,31 +465,12 @@ void gen_IF4p5_prach_header(IF4p5_header_t *prach_packet,
   prach_packet->frame_status |= (subframe&0x000f)<<22;
 }
 
-
-void malloc_IF4p5_buffer(RU_t *ru) {
+void malloc_IF4p5_buffer(int flag, int nb_tx, int nb_rx, if_buffer_t *ifbuffer)
+{
   // Keep the size large enough
-  eth_state_t *eth = (eth_state_t *) (ru->ifdevice.priv);
-  int i;
-
-  if (eth->flags == ETH_RAW_IF4p5_MODE) {
-    for (i=0; i<10; i++) {
-      ru->ifbuffer.tx[i]       = malloc(RAW_IF4p5_PRACH_SIZE_BYTES*ru->nb_tx);
-      memset((void *)ru->ifbuffer.tx[i],0,RAW_IF4p5_PRACH_SIZE_BYTES*ru->nb_tx);
-    }
-
-    ru->ifbuffer.tx_prach = malloc(RAW_IF4p5_PRACH_SIZE_BYTES*ru->nb_rx);
-    memset((void *)ru->ifbuffer.tx_prach,0,RAW_IF4p5_PRACH_SIZE_BYTES*ru->nb_rx);
-    ru->ifbuffer.rx       = malloc(RAW_IF4p5_PRACH_SIZE_BYTES*ru->nb_rx);
-    memset((void *)ru->ifbuffer.rx,0,RAW_IF4p5_PRACH_SIZE_BYTES*ru->nb_rx);
-  } else {
-    for (i=0; i<10; i++) {
-      ru->ifbuffer.tx[i]       = malloc(UDP_IF4p5_PRACH_SIZE_BYTES*ru->nb_tx);
-      memset((void *)ru->ifbuffer.tx[i],0,UDP_IF4p5_PRACH_SIZE_BYTES*ru->nb_tx);
-    }
-
-    ru->ifbuffer.tx_prach = malloc(UDP_IF4p5_PRACH_SIZE_BYTES*ru->nb_rx);
-    memset((void *)ru->ifbuffer.tx_prach,0,UDP_IF4p5_PRACH_SIZE_BYTES*ru->nb_rx);
-    ru->ifbuffer.rx       = malloc(UDP_IF4p5_PRACH_SIZE_BYTES*ru->nb_rx);
-    memset((void *)ru->ifbuffer.rx,0,UDP_IF4p5_PRACH_SIZE_BYTES*ru->nb_rx);
-  }
+  int sz = flag == ETH_RAW_IF4p5_MODE ? RAW_IF4p5_PRACH_SIZE_BYTES : UDP_IF4p5_PRACH_SIZE_BYTES;
+  for (int i = 0; i < 10; i++)
+    ifbuffer->tx[i] = calloc(1, sz * nb_tx);
+  ifbuffer->tx_prach = calloc(1, sz * nb_rx);
+  ifbuffer->rx = calloc(1, sz * nb_rx);
 }

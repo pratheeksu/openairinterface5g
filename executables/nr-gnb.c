@@ -223,7 +223,8 @@ static void rx_func(processingData_L1_t *info)
 
 }
 
-static size_t dump_L1_meas_stats(PHY_VARS_gNB *gNB, RU_t *ru, char *output, size_t outputlen) {
+static size_t dump_L1_meas_stats(PHY_VARS_gNB *gNB, NR_RU_t *ru, char *output, size_t outputlen)
+{
   const char *begin = output;
   const char *end = output + outputlen;
   output += print_meas_log(&gNB->phy_proc_tx, "L1 Tx processing", NULL, NULL, output, end - output);
@@ -255,15 +256,13 @@ static size_t dump_L1_meas_stats(PHY_VARS_gNB *gNB, RU_t *ru, char *output, size
   }
 
   if (ru->feptx_ofdm) {
-    output += print_meas_log(&ru->txdataF_copy_stats,"txdataF_copy",NULL,NULL, output, end - output);
     output += print_meas_log(&ru->ofdm_mod_stats,
                              full_slot ? "feptx_ofdm (per port)" : "feptx_ofdm (per port, half_slot)",
                              NULL,
                              NULL,
                              output,
                              end - output);
-    output += print_meas_log(&ru->ofdm_total_stats,"feptx_total",NULL,NULL, output, end - output);
-    output += print_meas_log(&ru->txdataF_copy_stats, "txdataF_copy", NULL, NULL, output, end - output);
+    output += print_meas_log(&ru->ofdm_total_stats, "feptx_total", NULL, NULL, output, end - output);
   }
 
   if (ru->fh_north_asynch_in)
@@ -280,7 +279,7 @@ static size_t dump_L1_meas_stats(PHY_VARS_gNB *gNB, RU_t *ru, char *output, size
 
 void *nrL1_stats_thread(void *param) {
   PHY_VARS_gNB     *gNB      = (PHY_VARS_gNB *)param;
-  RU_t *ru = RC.ru[0];
+  NR_RU_t *ru = RC.nrru[0];
   char output[L1STATSSTRLEN];
   memset(output,0,L1STATSSTRLEN);
   wait_sync("L1_stats_thread");

@@ -443,7 +443,7 @@ static void gNBWaterFall (OAIgraph_t *graph, scopeData_t *p, int nb_UEs) {
 }
 
 /* replaced by waterfall
-static void timeSignal (OAIgraph_t *graph, PHY_VARS_gNB *phy_vars_gnb, RU_t *phy_vars_ru, const int nb_UEs) {
+static void timeSignal (OAIgraph_t *graph, PHY_VARS_gNB *phy_vars_gnb, NR_RU_t *phy_vars_ru, const int nb_UEs) {
   // Received signal in time domain of receive antenna 0
   if (!phy_vars_ru->common.rxdata)
     return;
@@ -496,7 +496,7 @@ static void gNBfreqWaterFall (OAIgraph_t *graph, scopeData_t *p, int nb_UEs) {
 }
 
 /*
-static void frequencyResponse (OAIgraph_t *graph, PHY_VARS_gNB *phy_vars_gnb, RU_t *phy_vars_ru, int nb_UEs) {
+static void frequencyResponse (OAIgraph_t *graph, PHY_VARS_gNB *phy_vars_gnb, NR_RU_t *phy_vars_ru, int nb_UEs) {
   NR_DL_FRAME_PARMS *frame_parms=&phy_vars_gnb->frame_parms;
   genericLogPowerPerAntena(graph, frame_parms->nb_antennas_rx,
                            (const scopeSample_t **)phy_vars_ru->common.rxdataF,

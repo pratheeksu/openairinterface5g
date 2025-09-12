@@ -47,7 +47,7 @@
 
 // RU OFDM Modulator gNodeB
 // OFDM modulation core routine, generates a first_symbol to first_symbol+num_symbols on a particular slot and TX antenna port
-void nr_feptx0(RU_t *ru, int tti_tx, int first_symbol, int num_symbols, int aa)
+void nr_feptx0(NR_RU_t *ru, int tti_tx, int first_symbol, int num_symbols, int aa)
 {
   NR_DL_FRAME_PARMS *fp = ru->nr_frame_parms;
 
@@ -146,8 +146,8 @@ void nr_feptx0(RU_t *ru, int tti_tx, int first_symbol, int num_symbols, int aa)
 }
 
 // RU FEP TX OFDM modulation, single-thread
-void nr_feptx_ofdm(RU_t *ru,int frame_tx,int tti_tx) {
-     
+void nr_feptx_ofdm(NR_RU_t *ru, int frame_tx, int tti_tx)
+{
   nfapi_nr_config_request_scf_t *cfg = &ru->gNB_list[0]->gNB_config;
   NR_DL_FRAME_PARMS *fp=ru->nr_frame_parms;
   int cyclic_prefix_type = NFAPI_CP_NORMAL;
@@ -172,10 +172,9 @@ void nr_feptx_ofdm(RU_t *ru,int frame_tx,int tti_tx) {
   LOG_D(PHY,"feptx_ofdm (TXPATH): frame %d, slot %d: txp (time %p) %d dB, txp (freq) %d dB\n",
 	frame_tx,slot,txdata,dB_fixed(signal_energy((int32_t*)txdata,fp->get_samples_per_slot(
   slot,fp))),dB_fixed(signal_energy_nodc((c16_t*)ru->common.txdataF_BF[aa],2*slot_sizeF)));
-
 }
 
-void nr_feptx_prec(RU_t *ru, int frame_tx, int slot_tx)
+void nr_feptx_prec(NR_RU_t *ru, int frame_tx, int slot_tx)
 {
   PHY_VARS_gNB **gNB_list = ru->gNB_list;
   AssertFatal(ru->num_gNB == 1, "Cannot handle more than 1 gNB\n");
@@ -217,7 +216,7 @@ void nr_feptx(void *arg)
 {
   feptx_cmd_t *feptx = (feptx_cmd_t *)arg;
 
-  RU_t *ru = feptx->ru;
+  NR_RU_t *ru = feptx->ru;
   int slot = feptx->slot;
   int aa = feptx->aid;
   int bb = feptx->beam;
@@ -261,7 +260,7 @@ void nr_feptx(void *arg)
 }
 
 // RU FEP TX using thread-pool
-void nr_feptx_tp(RU_t *ru, int frame_tx, int slot)
+void nr_feptx_tp(NR_RU_t *ru, int frame_tx, int slot)
 {
   nfapi_nr_config_request_scf_t *cfg = &ru->gNB_list[0]->gNB_config;
   if (nr_slot_select(cfg, frame_tx, slot) == NR_UPLINK_SLOT)
@@ -319,7 +318,7 @@ void nr_feptx_tp(RU_t *ru, int frame_tx, int slot)
 void nr_fep(void* arg)
 {
   feprx_cmd_t *feprx_cmd = (feprx_cmd_t *)arg;
-  RU_t *ru = feprx_cmd->ru;
+  NR_RU_t *ru = feprx_cmd->ru;
   int aid = feprx_cmd->aid;
   int beam = feprx_cmd->beam;
   int slot = feprx_cmd->slot;
@@ -347,8 +346,8 @@ void nr_fep(void* arg)
 }
 
 // RU RX FEP using thread-pool
-void nr_fep_tp(RU_t *ru, int slot) {
-
+void nr_fep_tp(NR_RU_t *ru, int slot)
+{
   int nbfeprx=0;
   if (ru->idx == 0) VCD_SIGNAL_DUMPER_DUMP_FUNCTION_BY_NAME( VCD_SIGNAL_DUMPER_FUNCTIONS_PHY_PROCEDURES_RU_FEPRX, 1 );
   start_meas(&ru->ofdm_demod_stats);
@@ -396,4 +395,3 @@ void nr_fep_tp(RU_t *ru, int slot) {
   stop_meas(&ru->ofdm_demod_stats);
   if (ru->idx == 0) VCD_SIGNAL_DUMPER_DUMP_FUNCTION_BY_NAME( VCD_SIGNAL_DUMPER_FUNCTIONS_PHY_PROCEDURES_RU_FEPRX, 0 );
 }
-

@@ -37,15 +37,15 @@ void phy_procedures_gNB_TX(processingData_L1tx_t *msgTx, int frame_tx, int slot_
 int phy_procedures_gNB_uespec_RX(PHY_VARS_gNB *gNB, int frame_rx, int slot_rx, NR_UL_IND_t *UL_INFO);
 void L1_nr_prach_procedures(PHY_VARS_gNB *gNB, int frame, int slot, nfapi_nr_rach_indication_t *rach_ind);
 void nr_common_signal_procedures (PHY_VARS_gNB *gNB,int frame,int slot,nfapi_nr_dl_tti_ssb_pdu ssb_pdu);
-void nr_feptx_ofdm(RU_t *ru,int frame_tx,int tti_tx);
-void nr_feptx0(RU_t *ru,int tti_tx,int first_symbol, int num_symbols, int aa);
-void nr_feptx_prec(RU_t *ru,int frame_tx,int tti_tx);
-void nr_feptx_prec_control(RU_t *ru,int frame,int tti_tx);
-void nr_fep_tp(RU_t *ru, int slot);
-void nr_feptx_tp(RU_t *ru, int frame_tx, int slot);
-void feptx_prec(RU_t *ru,int frame_tx,int tti_tx);
-void nr_phy_init_RU(RU_t *ru);
-void nr_phy_free_RU(RU_t *ru);
+void nr_feptx_ofdm(NR_RU_t *ru, int frame_tx, int tti_tx);
+void nr_feptx0(NR_RU_t *ru, int tti_tx, int first_symbol, int num_symbols, int aa);
+void nr_feptx_prec(NR_RU_t *ru, int frame_tx, int tti_tx);
+void nr_feptx_prec_control(NR_RU_t *ru, int frame, int tti_tx);
+void nr_fep_tp(NR_RU_t *ru, int slot);
+void nr_feptx_tp(NR_RU_t *ru, int frame_tx, int slot);
+void nr_feptx_prec(NR_RU_t *ru, int frame_tx, int tti_tx);
+void nr_phy_init_RU(NR_RU_t *ru);
+void nr_phy_free_RU(NR_RU_t *ru);
 void clear_slot_beamid(PHY_VARS_gNB *gNB, int slot);
 int beam_index_allocation(bool das,
                           int fapi_beam_index,

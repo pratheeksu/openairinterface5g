@@ -202,7 +202,7 @@ void nr_gnb_measurements(PHY_VARS_gNB *gNB,
   uint32_t rx_power_tot = 0;
   unsigned short rx_power_avg_dB;
   unsigned short rx_power_tot_dB;
-  RU_t *ru = gNB->RU_list[0];
+  NR_RU_t *ru = gNB->RU_list[0];
   double rx_gain, rx_gain_offset;
   if (ru && ru->rfdevice.openair0_cfg) {
     rx_gain = ru->rfdevice.openair0_cfg->rx_gain[0];

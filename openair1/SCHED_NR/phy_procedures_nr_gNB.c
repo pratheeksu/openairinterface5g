@@ -890,7 +890,7 @@ int phy_procedures_gNB_uespec_RX(PHY_VARS_gNB *gNB, int frame_rx, int slot_rx, N
 
 #ifdef DEBUG_RXDATA
       NR_DL_FRAME_PARMS *frame_parms = &gNB->frame_parms;
-      RU_t *ru = gNB->RU_list[0];
+      NR_RU_t *ru = gNB->RU_list[0];
       int slot_offset = frame_parms->get_samples_slot_timestamp(slot_rx, frame_parms, 0);
       slot_offset -= ru->N_TA_offset;
       int32_t sample_offset = gNB->common_vars.debugBuff_sample_offset;

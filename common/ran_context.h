@@ -47,6 +47,7 @@ struct eNB_MAC_INST_s;
 struct eNB_MAC_INST_NB_IoT_s;
 struct gNB_MAC_INST_s;
 struct RU_t_s;
+struct NR_RU_s;
 
 typedef struct {
   /// RAN context config file name
@@ -101,6 +102,7 @@ typedef struct {
   struct gNB_MAC_INST_s **nrmac;
   /// RU descriptors. These describe what each radio unit is supposed to do and contain the necessary functions for fronthaul interfaces
   struct RU_t_s **ru;
+  struct NR_RU_s **nrru;
   /// Mask to indicate fronthaul setup status of RU (hard-limit to 64 RUs)
   uint64_t ru_mask;
   /// Mutex for protecting ru_mask

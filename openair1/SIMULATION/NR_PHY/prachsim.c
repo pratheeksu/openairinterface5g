@@ -76,7 +76,7 @@ char *uecap_file;
 PHY_VARS_gNB *gNB;
 PHY_VARS_NR_UE *UE;
 RAN_CONTEXT_t RC;
-RU_t *ru;
+NR_RU_t *ru;
 double cpuf;
 openair0_config_t openair0_cfg[MAX_CARDS];
 //uint8_t nfapi_mode=0;
@@ -409,13 +409,13 @@ int main(int argc, char **argv){
   RC.gNB[0] = malloc(sizeof(PHY_VARS_gNB));
   memset(RC.gNB[0],0,sizeof(PHY_VARS_gNB));
 
-  RC.ru = (RU_t**) malloc(2*sizeof(RU_t *));
-  RC.ru[0] = (RU_t*) malloc(sizeof(RU_t ));
-  memset(RC.ru[0],0,sizeof(RU_t));
+  RC.nrru = (NR_RU_t **)malloc(2 * sizeof(NR_RU_t *));
+  RC.nrru[0] = (NR_RU_t *)malloc(sizeof(NR_RU_t));
+  memset(RC.ru[0], 0, sizeof(NR_RU_t));
   RC.nb_RU = 1;
 
   gNB          = RC.gNB[0];
-  ru           = RC.ru[0];
+  ru = RC.nrru[0];
   frame_parms  = &gNB->frame_parms;
   prach_config = &gNB->gNB_config.prach_config;
   prach_pdu    = &gNB->prach_vars.list[0].pdu;

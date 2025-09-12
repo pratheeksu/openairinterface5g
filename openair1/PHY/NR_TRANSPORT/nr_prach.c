@@ -99,7 +99,8 @@ int nr_fill_prach(PHY_VARS_gNB *gNB, int SFN, int Slot, nfapi_nr_prach_pdu_t *pr
   return prach_id;
 }
 
-void init_prach_ru_list(RU_t *ru)
+
+void init_prach_ru_list(NR_RU_t *ru)
 {
   AssertFatal(ru != NULL, "ru is null\n");
   for (int i = 0; i < NUMBER_OF_NR_RU_PRACH_MAX; i++) {
@@ -157,7 +158,7 @@ void free_nr_ru_prach_entry(RU_t *ru, int prach_id)
   pthread_mutex_unlock(&ru->prach_list_mutex);
 }
 
-void rx_nr_prach_ru(RU_t *ru,
+void rx_nr_prach_ru(NR_RU_t *ru,
                     int prachFormat,
                     int numRA,
                     int beam,

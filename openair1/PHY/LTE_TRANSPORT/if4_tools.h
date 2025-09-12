@@ -70,6 +70,6 @@ void send_IF4p5(RU_t*, int, int, uint16_t);
 
 void recv_IF4p5(RU_t*, int*, int*, uint16_t*, uint32_t*);
 
-void malloc_IF4p5_buffer(RU_t*);
+void malloc_IF4p5_buffer(int flag, int nb_tx, int nb_rx, if_buffer_t *ifbuffer);
 
 #endif

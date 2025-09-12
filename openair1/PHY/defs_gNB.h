@@ -418,13 +418,13 @@ typedef struct PHY_VARS_gNB_s {
   uint8_t configured;
   gNB_L1_proc_t proc;
   int num_RU;
-  RU_t *RU_list[MAX_NUM_RU_PER_gNB];
+  NR_RU_t *RU_list[MAX_NUM_RU_PER_gNB];
   /// Ethernet parameters for northbound midhaul interface
   eth_params_t eth_params_n;
   /// Ethernet parameters for fronthaul interface
   eth_params_t eth_params;
   int rx_total_gain_dB;
-  int (*nr_start_if)(struct RU_t_s *ru, struct PHY_VARS_gNB_s *gNB);
+  int (*nr_start_if)(struct NR_RU_s *ru, struct PHY_VARS_gNB_s *gNB);
   nfapi_nr_config_request_scf_t gNB_config;
   NR_DL_FRAME_PARMS frame_parms;
   PHY_MEASUREMENTS_gNB measurements;

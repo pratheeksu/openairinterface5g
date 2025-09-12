@@ -51,17 +51,16 @@ void L1_nr_prach_procedures(PHY_VARS_gNB *gNB, int frame, int slot, nfapi_nr_rac
 {
   uint16_t max_preamble[4]={0},max_preamble_energy[4]={0},max_preamble_delay[4]={0};
 
-  RU_t *ru;
+  NR_RU_t *ru;
   int aa=0;
   int ru_aa;
 
- 
   VCD_SIGNAL_DUMPER_DUMP_FUNCTION_BY_NAME(VCD_SIGNAL_DUMPER_FUNCTIONS_PHY_ENB_PRACH_RX,1);
   rach_ind->sfn = frame;
   rach_ind->slot = slot;
   rach_ind->number_of_pdus = 0;
 
-  ru=gNB->RU_list[0];
+  NR_RU_t *ru = gNB->RU_list[0];
 
   int prach_id = find_nr_prach(gNB, frame, slot, SEARCH_EXIST);
   if (prach_id >= 0) {

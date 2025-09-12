@@ -361,7 +361,7 @@ void terminate_task(task_id_t task_id, module_id_t mod_id) {
 
 int stop_L1(module_id_t gnb_id)
 {
-  RU_t *ru = RC.ru[gnb_id];
+  NR_RU_t *ru = RC.nrru[gnb_id];
   if (!ru) {
     LOG_W(GNB_APP, "no RU configured\n");
     return -1;
@@ -402,7 +402,7 @@ int stop_L1(module_id_t gnb_id)
   /* release memory used by the RU/gNB threads (incomplete), after all
    * threads have been stopped (they partially use the same memory) */
   for (int inst = 0; inst < RC.nb_RU; inst++) {
-    nr_phy_free_RU(RC.ru[inst]);
+    nr_phy_free_RU(RC.nrru[inst]);
   }
 
   for (int inst = 0; inst < RC.nb_nr_L1_inst; inst++) {

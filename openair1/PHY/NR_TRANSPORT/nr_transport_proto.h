@@ -211,7 +211,7 @@ void rx_nr_prach(PHY_VARS_gNB *gNB,
                  uint16_t *max_preamble_energy,
                  uint16_t *max_preamble_delay);
 
-void rx_nr_prach_ru(RU_t *ru,
+void rx_nr_prach_ru(NR_RU_t *ru,
                     int prach_fmt,
                     int numRA,
                     int beam,
@@ -224,7 +224,7 @@ void rx_nr_prach_ru(RU_t *ru,
 void nr_fill_prach_ru(RU_t *ru,int SFN, int Slot, nfapi_nr_prach_pdu_t *prach_pdu, int *beam_nb);
 
 int16_t find_nr_prach(PHY_VARS_gNB *gNB,int frame,int slot, find_type_t type);
-int16_t find_nr_prach_ru(RU_t *ru,int frame,int slot, find_type_t type);
+int16_t find_nr_prach_ru(NR_RU_t *ru,int frame,int slot, find_type_t type);
 
 void nr_fill_pucch(PHY_VARS_gNB *gNB,
                    int frame,
