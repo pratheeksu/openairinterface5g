@@ -50,7 +50,6 @@
 #include "NR_BCCH-BCH-Message.h"
 #include "NR_CellGroupConfig.h"
 #include "NR_BCCH-DL-SCH-Message.h"
-#include "nr_radio_config.h"
 
 /* PHY */
 #include "time_meas.h"
@@ -73,6 +72,7 @@
 #define NR_NB_RA_PROC_MAX 4
 #define MAX_NUM_OF_SSB 64
 #define MAX_NUM_NR_PRACH_PREAMBLES 64
+#define NR_MAX_SIB_LENGTH 2976 // 3GPP TS 38.331 section 5.2.1
 
 uint8_t nr_get_rv(int rel_round);
 
@@ -765,6 +765,14 @@ typedef struct measgap_config {
   int mgl_slots;
 } measgap_config_t;
 
+typedef struct NR_UE_UL_RRC_info {
+  bool allocated;
+  int resource;
+  int offset;
+  int offset2;
+  int period;
+} NR_UE_UL_RRC_info_t;
+
 /*! \brief UE list used by gNB to order UEs/CC for scheduling*/
 typedef struct NR_UE_info {
   rnti_t rnti;
@@ -789,6 +797,8 @@ typedef struct NR_UE_info {
   long pdsch_HARQ_ACK_Codebook;
   bool is_redcap;
   bool reestablish_rlc;
+  NR_UE_UL_RRC_info_t sr_info;
+  NR_UE_UL_RRC_info_t csimeas_info;
   NR_RA_t *ra;
   // 3GPP mandates that BWPs are enumerated consecutively, but we only send one (dedicated)
   // BWP to the UE (and modify that BWP on reconfiguration); consequently, the BWP ID for a
@@ -893,6 +903,14 @@ typedef struct NR_du_stats {
   uint32_t pusch_mcs_dist[8][2][32];
 } NR_du_stats_t;
 
+typedef struct {
+  int **sr_resources;
+  int **csimeas_resources;
+  int sr_period;
+  int csimeas_period;
+  int max_num_res;
+} NR_UL_RRC_res_list_t;
+
 /*! \brief top level eNB MAC structure */
 typedef struct gNB_MAC_INST_s {
   /// Ethernet parameters for northbound midhaul interface
@@ -951,6 +969,7 @@ typedef struct gNB_MAC_INST_s {
   time_stats_t rx_ulsch_sdu;  // include rlc_data_ind
 
   NR_beam_info_t beam_info;
+  NR_UL_RRC_res_list_t ul_rrc_info;
 
   /// maximum number of slots before a UE will be scheduled ULSCH automatically
   uint32_t ulsch_max_frame_inactivity;
