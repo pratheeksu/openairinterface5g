@@ -1586,6 +1586,7 @@ static void prepare_dci_X1(const NR_UE_ServingCell_Info_t *servingCellInfo,
                            const NR_UE_DL_BWP_t *current_BWP,
                            const NR_ControlResourceSet_t *coreset,
                            dci_pdu_rel15_t *dci_pdu_rel15,
+                           int srs_request,
                            nr_dci_format_t format)
 {
   const NR_PDSCH_Config_t *pdsch_Config = current_BWP ? current_BWP->pdsch_Config : NULL;
@@ -1601,7 +1602,7 @@ static void prepare_dci_X1(const NR_UE_ServingCell_Info_t *servingCellInfo,
       if (servingCellInfo->supplementaryUplink != NULL)
         AssertFatal(1==0,"Supplementary Uplink currently not supported\n");
       // SRS request
-      dci_pdu_rel15->srs_request.val = 0;
+      dci_pdu_rel15->srs_request.val = srs_request;
       dci_pdu_rel15->ulsch_indicator = 1;
       break;
     case NR_DL_DCI_FORMAT_1_1:
@@ -1662,6 +1663,7 @@ void fill_dci_pdu_rel15(const NR_UE_ServingCell_Info_t *servingCellInfo,
                         dci_pdu_rel15_t *dci_pdu_rel15,
                         int dci_format,
                         int rnti_type,
+                        int srs_request,
                         NR_SearchSpace_t *ss,
                         NR_ControlResourceSet_t *coreset,
                         long pdsch_HARQ_ACK_Codebook,
@@ -1730,7 +1732,7 @@ void fill_dci_pdu_rel15(const NR_UE_ServingCell_Info_t *servingCellInfo,
   pdcch_dci_pdu->PayloadSizeBits = dci_size;
   AssertFatal(dci_size <= 64, "DCI sizes above 64 bits not yet supported");
   if (dci_format == NR_DL_DCI_FORMAT_1_1 || dci_format == NR_UL_DCI_FORMAT_0_1)
-    prepare_dci_X1(servingCellInfo, current_DL_BWP, coreset, dci_pdu_rel15, dci_format);
+    prepare_dci_X1(servingCellInfo, current_DL_BWP, coreset, dci_pdu_rel15, srs_request, dci_format);
 
   /// Payload generation
   switch (dci_format) {
