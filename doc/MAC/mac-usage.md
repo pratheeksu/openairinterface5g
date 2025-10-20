@@ -301,7 +301,7 @@ configuration](../RRC/rrc-usage.md) as well for SIB configuration.
   in downlink
 * `do_CSIRS` (default 0): flag whether to use channel-state information
   reference signal (CSI-RS)
-* `do_SRS` (default 0): flag whether to use sounding reference signal (SRS)
+* `do_SRS` (default `none`): string to define SRS type (options: `none`, `periodic`, or `aperiodic`)
 * `CSI_report_type` (default `ssb_rsrp`): parameter to enable different CSI reporting (options: `ssb_rsrp`, `ssb_sinr` and `cri_rsrp`)
   Default setting of CSI reporting quantity is SSB-RSRP.
 * `min_rxtxtime` (default 2): minimum feedback time for UE to respond to

@@ -1545,7 +1545,8 @@ void RCconfig_nr_macrlc(configmodule_interface_t *cfg)
   LOG_I(GNB_APP, "minTXRXTIME %d\n", config.minRXTXTIME);
   config.do_TCI = *GNBParamList.paramarray[0][GNB_DO_TCI_IDX].iptr;
   config.do_CSIRS = *GNBParamList.paramarray[0][GNB_DO_CSIRS_IDX].iptr;
-  config.do_SRS = *GNBParamList.paramarray[0][GNB_DO_SRS_IDX].iptr;
+  const char *srs_type_s = *GNBParamList.paramarray[0][GNB_DO_SRS_IDX].strptr;
+  config.do_SRS = config_get_processedint(cfg, &GNBParamList.paramarray[0][GNB_DO_SRS_IDX]);
   config.max_num_rsrp = *GNBParamList.paramarray[0][GNB_LIMIT_RSRP_REPORT_IDX].iptr;
   const char *report_type_s = *GNBParamList.paramarray[0][GNB_CONFIG_REP_IDX].strptr;
   config.report_type = config_get_processedint(cfg, &GNBParamList.paramarray[0][GNB_CONFIG_REP_IDX]);
@@ -1559,9 +1560,9 @@ void RCconfig_nr_macrlc(configmodule_interface_t *cfg)
   if (config.disable_harq)
     LOG_W(GNB_APP, "\"disable_harq\" is a REL17 feature and is incompatible with REL15 and REL16 UEs!\n");
   LOG_I(GNB_APP,
-        "CSI-RS %d, SRS %d, report type %d (%s), 256 QAM %s, delta_MCS %s, maxMIMO_Layers %d, HARQ feedback %s, num DLHARQ:%d, num ULHARQ:%d\n",
+        "CSI-RS %d, SRS %s, report type %d (%s), 256 QAM %s, delta_MCS %s, maxMIMO_Layers %d, HARQ feedback %s, num DLHARQ:%d, num ULHARQ:%d\n",
         config.do_CSIRS,
-        config.do_SRS,
+        srs_type_s,
         config.report_type,
         report_type_s,
         config.force_256qam_off ? "force off" : "may be on",

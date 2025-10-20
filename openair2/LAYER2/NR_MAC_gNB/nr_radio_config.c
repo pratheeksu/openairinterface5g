@@ -20,7 +20,6 @@
 #include "constr_TYPE.h"
 #include "executables/softmodem-common.h"
 #include "oai_asn1.h"
-#include "openair2/LAYER2/NR_MAC_gNB/nr_mac_gNB.h"
 #include "openair2/LAYER2/NR_MAC_gNB/mac_proto.h"
 #include "openair3/UTILS/conversions.h"
 #include "LAYER2/nr_rlc/nr_rlc_asn1_utils.h"
@@ -738,7 +737,7 @@ static NR_SRS_ResourceSet_t *get_srs_resourceset(const int resset_id,
                                                  const int res_id,
                                                  const long usage,
                                                  const int minRXTXTIME,
-                                                 int do_srs)
+                                                 nr_srs_type_t do_srs)
 {
   NR_SRS_ResourceSet_t *srs_resset = calloc_or_fail(1, sizeof(*srs_resset));
   srs_resset->srs_ResourceSetId = resset_id;
@@ -746,7 +745,7 @@ static NR_SRS_ResourceSet_t *get_srs_resourceset(const int resset_id,
   NR_SRS_ResourceId_t *srs_resset_id = calloc_or_fail(1, sizeof(*srs_resset_id));
   *srs_resset_id = res_id;
   asn1cSeqAdd(&srs_resset->srs_ResourceIdList->list, srs_resset_id);
-  if (do_srs) {
+  if (do_srs == PERIODIC_SRS) {
     srs_resset->resourceType.present = NR_SRS_ResourceSet__resourceType_PR_periodic;
     srs_resset->resourceType.choice.periodic = calloc_or_fail(1, sizeof(*srs_resset->resourceType.choice.periodic));
     srs_resset->resourceType.choice.periodic->associatedCSI_RS = NULL;
@@ -776,50 +775,49 @@ static NR_SRS_Resource_t *get_srs_resource(const NR_UE_NR_Capability_t *uecap,
                                            const int res_id,
                                            const long maxMIMO_Layers,
                                            const NR_SRS_Resource__transmissionComb_PR tx_comb,
-                                           int do_srs)
+                                           nr_srs_type_t do_srs)
 {
   NR_SRS_Resource_t *srs_res = calloc_or_fail(1, sizeof(*srs_res));
   srs_res->srs_ResourceId = res_id;
   srs_res->nrofSRS_Ports = NR_SRS_Resource__nrofSRS_Ports_port1;
-  if (do_srs) {
-    long nrofSRS_Ports = 1;
-    if (uecap && uecap->featureSets && uecap->featureSets->featureSetsUplink
-        && uecap->featureSets->featureSetsUplink->list.count > 0) {
-      NR_FeatureSetUplink_t *ul_feature_setup = uecap->featureSets->featureSetsUplink->list.array[0];
-      switch (ul_feature_setup->supportedSRS_Resources->maxNumberSRS_Ports_PerResource) {
-        case NR_SRS_Resources__maxNumberSRS_Ports_PerResource_n1:
-          nrofSRS_Ports = 1;
-          break;
-        case NR_SRS_Resources__maxNumberSRS_Ports_PerResource_n2:
-          nrofSRS_Ports = 2;
-          break;
-        case NR_SRS_Resources__maxNumberSRS_Ports_PerResource_n4:
-          nrofSRS_Ports = 4;
-          break;
-        default:
-          LOG_E(NR_RRC,
-                "Max Number of SRS Ports Per Resource %ld is invalid!\n",
-                ul_feature_setup->supportedSRS_Resources->maxNumberSRS_Ports_PerResource);
-      }
-      nrofSRS_Ports = min(nrofSRS_Ports, maxMIMO_Layers);
-      switch (nrofSRS_Ports) {
-        case 1:
-          srs_res->nrofSRS_Ports = NR_SRS_Resource__nrofSRS_Ports_port1;
-          break;
-        case 2:
-          srs_res->nrofSRS_Ports = NR_SRS_Resource__nrofSRS_Ports_ports2;
-          break;
-        case 4:
-          srs_res->nrofSRS_Ports = NR_SRS_Resource__nrofSRS_Ports_ports4;
-          break;
-        default:
-          LOG_E(NR_RRC,
-                "Number of SRS Ports Per Resource %ld is invalid!\n",
-                ul_feature_setup->supportedSRS_Resources->maxNumberSRS_Ports_PerResource);
-      }
+  long nrofSRS_Ports = 1;
+  if (uecap && uecap->featureSets && uecap->featureSets->featureSetsUplink
+      && uecap->featureSets->featureSetsUplink->list.count > 0) {
+    NR_FeatureSetUplink_t *ul_feature_setup = uecap->featureSets->featureSetsUplink->list.array[0];
+    switch (ul_feature_setup->supportedSRS_Resources->maxNumberSRS_Ports_PerResource) {
+      case NR_SRS_Resources__maxNumberSRS_Ports_PerResource_n1:
+        nrofSRS_Ports = 1;
+        break;
+      case NR_SRS_Resources__maxNumberSRS_Ports_PerResource_n2:
+        nrofSRS_Ports = 2;
+        break;
+      case NR_SRS_Resources__maxNumberSRS_Ports_PerResource_n4:
+        nrofSRS_Ports = 4;
+        break;
+      default:
+        LOG_E(NR_RRC,
+              "Max Number of SRS Ports Per Resource %ld is invalid!\n",
+              ul_feature_setup->supportedSRS_Resources->maxNumberSRS_Ports_PerResource);
     }
-    LOG_I(NR_RRC, "SRS configured with %d ports\n", 1 << srs_res->nrofSRS_Ports);
+    nrofSRS_Ports = min(nrofSRS_Ports, maxMIMO_Layers);
+    switch (nrofSRS_Ports) {
+      case 1:
+        srs_res->nrofSRS_Ports = NR_SRS_Resource__nrofSRS_Ports_port1;
+        break;
+      case 2:
+        srs_res->nrofSRS_Ports = NR_SRS_Resource__nrofSRS_Ports_ports2;
+        break;
+      case 4:
+        srs_res->nrofSRS_Ports = NR_SRS_Resource__nrofSRS_Ports_ports4;
+        break;
+      default:
+        LOG_E(NR_RRC,
+              "Number of SRS Ports Per Resource %ld is invalid!\n",
+              ul_feature_setup->supportedSRS_Resources->maxNumberSRS_Ports_PerResource);
+    }
   }
+  LOG_I(NR_RRC, "SRS configured with %d ports\n", 1 << srs_res->nrofSRS_Ports);
+
   srs_res->ptrs_PortIndex = NULL;
   srs_res->transmissionComb.present = tx_comb;
   switch (tx_comb) {
@@ -845,7 +843,7 @@ static NR_SRS_Resource_t *get_srs_resource(const NR_UE_NR_Capability_t *uecap,
   srs_res->freqHopping.b_hop = 0;
   srs_res->freqHopping.c_SRS = rrc_get_max_nr_csrs(curr_bwp, srs_res->freqHopping.b_SRS);
   srs_res->groupOrSequenceHopping = NR_SRS_Resource__groupOrSequenceHopping_neither;
-  if (do_srs) {
+  if (do_srs == PERIODIC_SRS) {
     srs_res->resourceType.present = NR_SRS_Resource__resourceType_PR_periodic;
     srs_res->resourceType.choice.periodic = configure_periodic_srs(uid);
   } else {
@@ -867,7 +865,7 @@ static NR_SetupRelease_SRS_Config_t *get_config_srs(const NR_UE_NR_Capability_t 
                                                     const int res_id,
                                                     const long maxMIMO_Layers,
                                                     const int minRXTXTIME,
-                                                    int do_srs)
+                                                    nr_srs_type_t do_srs)
 {
   NR_SetupRelease_SRS_Config_t *setup_release_srs_Config = calloc_or_fail(1, sizeof(*setup_release_srs_Config));
   setup_release_srs_Config->present = NR_SetupRelease_SRS_Config_PR_setup;
@@ -1084,7 +1082,7 @@ static int tda_cmp(const void *tda_a, const void *tda_b)
 /* \brief Set up a list of time domain allocations as suitable for the TDD
  * pattern. This will be used by get_num_ul_tda(), which requires a specific
  * ordering, hence we qsort() the list at the end according to tda_cmp(). */
-void nr_rrc_config_ul_tda(NR_ServingCellConfigCommon_t *scc, int min_fb_delay, int do_SRS)
+void nr_rrc_config_ul_tda(NR_ServingCellConfigCommon_t *scc, int min_fb_delay, nr_srs_type_t do_SRS)
 {
   NR_PUSCH_TimeDomainResourceAllocationList_t *tda_list =
       scc->uplinkConfigCommon->initialUplinkBWP->pusch_ConfigCommon->choice.setup->pusch_TimeDomainAllocationList;
@@ -1099,7 +1097,7 @@ void nr_rrc_config_ul_tda(NR_ServingCellConfigCommon_t *scc, int min_fb_delay, i
   asn1cSeqAdd(&tda_list->list, tda);
 
   // UL TDA index 1 in case of SRS
-  if (do_SRS) {
+  if (do_SRS != NO_SRS) {
     tda = set_TimeDomainResourceAllocation(k2, get_SLIV(0, 12));
     asn1cSeqAdd(&tda_list->list, tda);
   }
@@ -1153,7 +1151,7 @@ void nr_rrc_config_ul_tda(NR_ServingCellConfigCommon_t *scc, int min_fb_delay, i
       for (int i = k2 + 1; i <= N_ul; ++i) {
         tda = set_TimeDomainResourceAllocation(i, get_SLIV(0, 13));
         asn1cSeqAdd(&tda_list->list, tda);
-        if (do_SRS) {
+        if (do_SRS != NO_SRS) {
           tda = set_TimeDomainResourceAllocation(i, get_SLIV(0, 12));
           asn1cSeqAdd(&tda_list->list, tda);
         }
@@ -3345,9 +3343,13 @@ static NR_BWP_UplinkDedicated_t *configure_initial_ul_bwp(const NR_ServingCellCo
   set_pucch_power_config(pucch_Config);
 
   initialUplinkBWP->pusch_Config = config_pusch(configuration, scc, uecap);
-
-  // We are using do_srs = 0 here because the periodic SRS will only be enabled in update_cellGroupConfig() if do_srs == 1
-  initialUplinkBWP->srs_Config = get_config_srs(uecap, curr_bwp, id, 0, maxMIMO_Layers, configuration->minRXTXTIME, 0);
+  initialUplinkBWP->srs_Config = get_config_srs(uecap,
+                                                curr_bwp,
+                                                id,
+                                                0,
+                                                maxMIMO_Layers,
+                                                configuration->minRXTXTIME,
+                                                configuration->do_SRS);
 
   scheduling_request_config(pucch_Config, scc->uplinkConfigCommon->initialUplinkBWP->genericParameters.subcarrierSpacing);
   set_dl_DataToUL_ACK(pucch_Config, configuration->minRXTXTIME);
@@ -3959,7 +3961,7 @@ void update_cellGroupConfig(NR_CellGroupConfig_t *cellGroupConfig,
     if (!pusch_Config->maxRank)
       pusch_Config->maxRank = calloc(1, sizeof(*pusch_Config->maxRank));
     *pusch_Config->maxRank = maxMIMO_Layers;
-    if (configuration->do_SRS) {
+    if (configuration->do_SRS != NO_SRS) {
       ASN_STRUCT_FREE(asn_DEF_NR_SetupRelease_SRS_Config, ul_bwp_Dedicated->srs_Config);
       ul_bwp_Dedicated->srs_Config = get_config_srs(uecap,
                                                     curr_bwp,

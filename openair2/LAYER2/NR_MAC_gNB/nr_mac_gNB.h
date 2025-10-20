@@ -73,6 +73,7 @@
 #define NR_NB_RA_PROC_MAX 4
 #define MAX_NUM_OF_SSB 64
 #define MAX_NUM_NR_PRACH_PREAMBLES 64
+#define NR_MAX_SIB_LENGTH 2976 // 3GPP TS 38.331 section 5.2.1
 
 uint8_t nr_get_rv(int rel_round);
 
@@ -175,12 +176,18 @@ typedef struct nr_power_config {
   int failure_thres;
 } nr_power_config_t;
 
+typedef enum nr_srs_type_e {
+  NO_SRS,
+  PERIODIC_SRS,
+  APERIODIC_SRS,
+} nr_srs_type_t;
+
 typedef struct nr_mac_config_s {
   nr_pdsch_AntennaPorts_t pdsch_AntennaPorts;
   int pusch_AntennaPorts;
   int minRXTXTIME;
   int do_CSIRS;
-  int do_SRS;
+  nr_srs_type_t do_SRS;
   int do_TCI;
   int max_num_rsrp;
   bool force_256qam_off;
