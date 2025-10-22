@@ -498,16 +498,16 @@ static void nr_fill_nfapi_srs(gNB_MAC_INST *nrmac,
 
 /*******************************************************************
 *
-* NAME :         nr_schedule_srs
+* NAME :         nr_schedule_periodic_srs
 *
 * PARAMETERS :   module id
-*                frame number for possible SRS reception
+*                current frame number
+*                current slot number
 *
-* DESCRIPTION :  It informs the PHY layer that has an SRS to receive.
-*                Only for periodic scheduling yet.
+* DESCRIPTION :  It schedules SRS in a future slot and calls function to prepare FAPI PDU for L1
 *
 *********************************************************************/
-void nr_schedule_srs(int module_id, frame_t frame, int slot)
+void nr_schedule_periodic_srs(int module_id, frame_t frame, int slot)
  {
   gNB_MAC_INST *nrmac = RC.nrmac[module_id];
 
