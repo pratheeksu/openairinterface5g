@@ -270,7 +270,7 @@ void nr_scan_ssb(void *arg)
   nr_ue_ssb_scan_t *ssbInfo = (nr_ue_ssb_scan_t *)arg;
   c16_t **rxdata = ssbInfo->rxdata;
   const NR_DL_FRAME_PARMS *fp = ssbInfo->fp;
-
+  LOG_I(PHY, "sync for power %d\n", signal_energy((int32_t *)(rxdata[0]), fp->samples_per_frame));
   // Generate PSS time signal for this GSCN.
   __attribute__((aligned(32))) c16_t pssTime[NUMBER_PSS_SEQUENCE][fp->ofdm_symbol_size];
   const int pss_sequence = get_softmodem_params()->sl_mode == 0 ? NUMBER_PSS_SEQUENCE : NUMBER_PSS_SEQUENCE_SL;
@@ -290,42 +290,20 @@ void nr_scan_ssb(void *arg)
     int ssb_offset = 0;
     int freq_offset_pss = 0;
     int freq_offset_sss = 0;
-    int32_t sss_metric = 0;
-    uint8_t sss_phase = 0;
 
-    nr_ssb_search_params_t search_params = {
-        .frame_parms = fp,
-        .rxdata = rxdata,
-        .rxdata_size = fp->samples_per_frame,
-        .ssb_start_subcarrier = ssbInfo->gscnInfo.ssbFirstSC,
-        .target_nid_cell = ssbInfo->targetNidCell,
-        .exclude_nid_cell = -1, // No exclusion for initial sync
-        .apply_freq_offset = ssbInfo->foFlag,
-        .search_frame_id = frame_id,
-        .fo_flag = ssbInfo->foFlag,
-        .rxdataF = rxdataF,
-        .pssTime = pssTime,
-        .detected_nid_cell = &detected_nid_cell,
-        .ssb_offset = &ssb_offset,
-        .sss_metric = &sss_metric,
-        .freq_offset_pss = &freq_offset_pss,
-        .freq_offset_sss = &freq_offset_sss,
-        .sss_phase = &sss_phase,
-        .pss_peak = &ssbInfo->pssCorrPeakPower,
-        .pss_avg = &ssbInfo->pssCorrAvgPower,
-    };
-
-    ssbInfo->syncRes.frame_id = frame_id;
-    ssbInfo->syncRes.cell_detected = nr_search_ssb_common(&search_params);
-
-    if (!ssbInfo->syncRes.cell_detected) {
-      continue;
-    }
-
-    ssbInfo->ssbOffset = ssb_offset;
-    ssbInfo->nidCell = detected_nid_cell;
-
-#ifdef DEBUG_INITIAL_SYNCH
+    int32_t metric_tdd_ncp = 0;
+    uint8_t phase_tdd_ncp;
+    ssbInfo->syncRes.cell_detected = rx_sss_nr(fp,
+                                               nid2,
+                                               ssbInfo->targetNidCell,
+                                               freq_offset_pss,
+                                               ssbInfo->gscnInfo.ssbFirstSC,
+                                               &ssbInfo->nidCell,
+                                               &metric_tdd_ncp,
+                                               &phase_tdd_ncp,
+                                               &freq_offset_sss,
+                                               rxdataF);
+#if 1
     LOG_I(PHY,
           "TDD Normal prefix: sss detection result; %d, CellId %d metric %d, phase %d, measured offset %d\n",
           ssbInfo->syncRes.cell_detected,
