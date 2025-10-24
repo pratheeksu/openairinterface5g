@@ -602,6 +602,7 @@ bool nr_schedule_aperiodic_srs(gNB_MAC_INST *nrmac, NR_UE_info_t *UE, int sched_
           srs_resource = srs_config->srs_ResourceToAddModList->list.array[r2];
           LOG_D(NR_MAC,"Scheduling aperiodic SRS reception for %d.%d\n", sched_frame, sched_slot);
           nr_fill_nfapi_srs(nrmac, 0, UE, sched_frame, sched_slot, srs_resource_set, srs_resource);
+          nr_timer_start(&UE->UE_sched_ctrl.aperiodic_srs_trigger);
           return true;
         }
       }

@@ -3078,6 +3078,8 @@ bool add_connected_nr_ue(gNB_MAC_INST *nr_mac, NR_UE_info_t *UE)
   NR_UE_sched_ctrl_t *sched_ctrl = &UE->UE_sched_ctrl;
   sched_ctrl->dl_max_mcs = 28; /* do not limit MCS for individual UEs */
   sched_ctrl->pdcch_cl_adjust = 0;
+  nr_timer_setup(&sched_ctrl->aperiodic_srs_trigger, 160, 1); // for now aperiodic hardcoded every 160 slots
+  nr_timer_start(&sched_ctrl->aperiodic_srs_trigger);
   reset_srs_stats(UE);
 
   // Initialize bler_stats
@@ -3646,6 +3648,7 @@ void nr_mac_update_timers(module_id_t module_id)
       nr_timer_stop(&sched_ctrl->tci_beam_switch);
       beam_switching_procedure(mac, UE, sched_ctrl->UE_mac_ce_ctrl.tci_state_ind.tciStateId);
     }
+    nr_timer_tick(&sched_ctrl->aperiodic_srs_trigger);
   }
 }
 

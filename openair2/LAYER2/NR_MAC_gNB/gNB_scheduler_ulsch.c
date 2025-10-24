@@ -1851,6 +1851,7 @@ static bool allocate_ul_retransmission(gNB_MAC_INST *nrmac,
 typedef struct UEsched_s {
   float coef;
   bool sched_inactive;
+  bool sched_srs;
   NR_UE_info_t * UE;
   int selected_mcs;
 } UEsched_t;
@@ -2040,6 +2041,7 @@ static int  pf_ul(gNB_MAC_INST *nrmac,
           sched_inactive);
     UE_sched[numUE].coef = coeff_ue;
     UE_sched[numUE].sched_inactive = sched_inactive;
+    UE_sched[numUE].sched_srs = nr_timer_expired(&sched_ctrl->aperiodic_srs_trigger);
     UE_sched[numUE].UE = UE;
     UE_sched[numUE].selected_mcs = selected_mcs;
     numUE++;
