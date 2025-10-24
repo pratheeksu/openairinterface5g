@@ -312,7 +312,7 @@ void nr_ul_preprocessor_phytest(gNB_MAC_INST *nr_mac, post_process_pusch_t *pp_p
                   >> 3;
 
   /* save allocation to FAPI structures */
-  post_process_ulsch(nr_mac, pp_pusch, UE, &sched);
+  post_process_ulsch(nr_mac, pp_pusch, UE, &sched, false);
 
   /* mark the corresponding RBs as used */
   fill_pdcch_vrb_map(nr_mac,

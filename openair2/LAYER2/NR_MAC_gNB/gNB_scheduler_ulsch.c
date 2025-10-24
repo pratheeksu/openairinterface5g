@@ -1831,7 +1831,7 @@ static bool allocate_ul_retransmission(gNB_MAC_INST *nrmac,
 
   // signal new allocation
   DevAssert(new_sched.time_domain_allocation == tda);
-  post_process_ulsch(nrmac, pp_pusch, UE, &new_sched);
+  post_process_ulsch(nrmac, pp_pusch, UE, &new_sched, false);
   LOG_D(NR_MAC,
         "%4d.%2d Allocate UL retransmission RNTI %04x sched %4d.%2d (%d RBs)\n",
         frame,
@@ -1848,6 +1848,41 @@ static bool allocate_ul_retransmission(gNB_MAC_INST *nrmac,
   return true;
 }
 
+static bool verify_aperiodic_srs(gNB_MAC_INST *nrmac, int slot, NR_timer_t *aperiodic_srs, nr_dci_format_t dci_format)
+{
+  if (nrmac->radio_config.do_SRS != APERIODIC_SRS || dci_format == NR_UL_DCI_FORMAT_0_0)
+    return false;
+  const frame_structure_t *fs = &nrmac->frame_structure;
+  const int slot_period = slot % fs->numb_slots_period;
+  const tdd_bitmap_t *bm = &fs->period_cfg.tdd_slot_bitmap[slot_period];
+  // we schedule SRS only in full slots
+  if (bm->slot_type == TDD_NR_MIXED_SLOT)
+    return false;
+  // finally we check if the aperiodic SRS timer has expired
+  return nr_timer_expired(aperiodic_srs);
+}
+
+static NR_tda_info_t *get_new_tda_for_srs(gNB_MAC_INST *nrmac, const NR_tda_info_t *tda_info)
+{
+  // by current design, the next TDA would be the one for SRS with one less symbol
+  NR_tda_info_t *next = seq_arr_next(&nrmac->ul_tda, tda_info);
+  if (next == seq_arr_end(&nrmac->ul_tda))
+    return NULL;
+  AssertFatal(next->k2 == tda_info->k2,
+              "K2 in TDA information for SRS %ld doesn't match with current one %ld\n",
+              next->k2,
+              tda_info->k2);
+  AssertFatal(next->startSymbolIndex == tda_info->startSymbolIndex,
+              "startSymbolIndex in TDA information for SRS %d doesn't match with current one %d\n",
+              next->startSymbolIndex,
+              tda_info->startSymbolIndex);
+  AssertFatal(next->nrOfSymbols == tda_info->nrOfSymbols - 1,
+              "nrOfSymbols in TDA information for SRS %d should be 1 more than current one %d\n",
+              next->nrOfSymbols,
+              tda_info->nrOfSymbols);
+  return next;
+}
+
 typedef struct UEsched_s {
   float coef;
   bool sched_inactive;
@@ -1860,6 +1895,12 @@ static int comparator(const void *p, const void *q)
 {
   const UEsched_t *pp = p;
   const UEsched_t *qq = q;
+  if (pp->sched_srs && qq->sched_srs)
+    return qq->sched_inactive - pp->sched_inactive;
+  else if (pp->sched_srs)
+    return -1;
+  else if (qq->sched_srs)
+    return 1;
   if (pp->sched_inactive && qq->sched_inactive)
     return 0;
   else if (pp->sched_inactive)
@@ -1874,14 +1915,14 @@ static int comparator(const void *p, const void *q)
   return 0;
 }
 
-static int  pf_ul(gNB_MAC_INST *nrmac,
-                  post_process_pusch_t *pp_pusch,
-                  int tda,
-                  const NR_tda_info_t *tda_info,
-                  NR_UE_info_t *UE_list[],
-                  int max_num_ue,
-                  int num_beams,
-                  int n_rb_sched[num_beams])
+static int pf_ul(gNB_MAC_INST *nrmac,
+                 post_process_pusch_t *pp_pusch,
+                 int tda,
+                 const NR_tda_info_t *tda_info,
+                 NR_UE_info_t *UE_list[],
+                 int max_num_ue,
+                 int num_beams,
+                 int n_rb_sched[num_beams])
 {
   const int CC_id = 0;
   int frame = pp_pusch->frame;
@@ -2030,7 +2071,8 @@ static int  pf_ul(gNB_MAC_INST *nrmac,
                          >> 3;
     float coeff_ue = (float) tbs / UE->ul_thr_ue;
     bool sched_inactive = B == 0 && do_sched;
-    LOG_D(NR_MAC, "[UE %04x][%4d.%2d] b %d, ul_thr_ue %f, tbs %d, coeff_ue %f, sched_inactive %d\n",
+    bool sched_aperiodic_srs = verify_aperiodic_srs(nrmac, sched_slot, &sched_ctrl->aperiodic_srs_trigger, current_BWP->dci_format);
+    LOG_D(NR_MAC, "[UE %04x][%4d.%2d] b %d, ul_thr_ue %f, tbs %d, coeff_ue %f, sched_aperiodc_srs %d, sched_inactive %d\n",
           UE->rnti,
           frame,
           slot,
@@ -2038,17 +2080,20 @@ static int  pf_ul(gNB_MAC_INST *nrmac,
           UE->ul_thr_ue,
           tbs,
           coeff_ue,
+          sched_aperiodic_srs,
           sched_inactive);
     UE_sched[numUE].coef = coeff_ue;
     UE_sched[numUE].sched_inactive = sched_inactive;
-    UE_sched[numUE].sched_srs = nr_timer_expired(&sched_ctrl->aperiodic_srs_trigger);
+    UE_sched[numUE].sched_srs = sched_aperiodic_srs;
     UE_sched[numUE].UE = UE;
     UE_sched[numUE].selected_mcs = selected_mcs;
     numUE++;
   }
 
   qsort(UE_sched, numUE, sizeof(UEsched_t), comparator);
-  UEsched_t *iterator=UE_sched;
+  UEsched_t *iterator = UE_sched;
+  int new_tda = tda;
+  NR_tda_info_t const *new_tda_info = tda_info;
 
   /* Loop UE_sched to find max coeff and allocate transmission */
   while (iterator->UE != NULL) {
@@ -2092,8 +2137,7 @@ static int  pf_ul(gNB_MAC_INST *nrmac,
       LOG_D(NR_MAC, "[UE %04x][%4d.%2d] no free CCE for UL DCI\n", iterator->UE->rnti, frame, slot);
       iterator++;
       continue;
-    }
-    else
+    } else
       LOG_D(NR_MAC, "%4d.%2d free CCE for UL DCI UE %04x\n", frame, slot, iterator->UE->rnti);
 
     const int index = ul_buffer_index(sched_frame, sched_slot, slots_per_frame, nrmac->vrb_map_UL_size);
@@ -2102,7 +2146,7 @@ static int  pf_ul(gNB_MAC_INST *nrmac,
     /* find maximum amount of RBs that we can schedule starting from first free RB */
     int rbStart = 0;
     int available_rb = 0;
-    const uint16_t slbitmap = SL_to_bitmap(tda_info->startSymbolIndex, tda_info->nrOfSymbols);
+    uint16_t slbitmap = SL_to_bitmap(new_tda_info->startSymbolIndex, new_tda_info->nrOfSymbols);
     bwp_info_t bi = get_pusch_bwp_start_size(iterator->UE);
     /* if it's for inactivity, min_grant_prb is enough, otherwise check what
      * would be the maximum */
@@ -2128,6 +2172,14 @@ static int  pf_ul(gNB_MAC_INST *nrmac,
             available_rb,
             bi.bwpSize);
 
+    bool send_srs = false;
+    if (!scheduled_something && iterator->sched_srs) {
+      new_tda_info = get_new_tda_for_srs(nrmac, tda_info);
+      new_tda = tda + 1;
+      slbitmap = SL_to_bitmap(new_tda_info->startSymbolIndex, new_tda_info->nrOfSymbols);
+      send_srs = true;
+    }
+
     int nrOfLayers = get_ul_nrOfLayers(sched_ctrl, current_BWP->dci_format);
     NR_sched_pusch_t sched = {
       .frame = sched_frame,
@@ -2139,9 +2191,9 @@ static int  pf_ul(gNB_MAC_INST *nrmac,
       .ul_harq_pid = -1, // new transmission
       .nrOfLayers = nrOfLayers,
       // tpmi in post-process
-      .time_domain_allocation = tda,
-      .tda_info = *tda_info,
-      .dmrs_info = get_ul_dmrs_params(scc, current_BWP, tda_info, nrOfLayers),
+      .time_domain_allocation = new_tda,
+      .tda_info = *new_tda_info,
+      .dmrs_info = get_ul_dmrs_params(scc, current_BWP, new_tda_info, nrOfLayers),
       .bwp_info = bi,
       // phr_txpower_calc below
     };
@@ -2202,7 +2254,7 @@ static int  pf_ul(gNB_MAC_INST *nrmac,
     fill_pdcch_vrb_map(nrmac, CC_id, &sched_ctrl->sched_pdcch, CCEIndex, sched_ctrl->aggregation_level, dci_beam.idx);
 
     /* save allocation to FAPI structures */
-    post_process_ulsch(nrmac, pp_pusch, iterator->UE, &sched);
+    post_process_ulsch(nrmac, pp_pusch, iterator->UE, &sched, send_srs);
 
     n_rb_sched[beam.idx] -= sched.rbSize;
     for (int rb = bi.bwpStart + sched.rbStart; rb < bi.bwpStart + sched.rbStart + sched.rbSize; rb++)
@@ -2321,7 +2373,11 @@ nfapi_nr_pusch_pdu_t *prepare_pusch_pdu(nfapi_nr_ul_tti_request_t *future_ul_tti
   return pusch_pdu;
 }
 
-void post_process_ulsch(gNB_MAC_INST *nr_mac, post_process_pusch_t *pusch, NR_UE_info_t *UE, NR_sched_pusch_t *sched_pusch)
+void post_process_ulsch(gNB_MAC_INST *nr_mac,
+                        post_process_pusch_t *pusch,
+                        NR_UE_info_t *UE,
+                        NR_sched_pusch_t *sched_pusch,
+                        bool sched_srs)
 {
   frame_t frame = pusch->frame;
   slot_t slot = pusch->slot;
@@ -2522,11 +2578,14 @@ void post_process_ulsch(gNB_MAC_INST *nr_mac, post_process_pusch_t *pusch, NR_UE
                      &uldci_payload,
                      current_BWP->dci_format,
                      TYPE_C_RNTI_,
-                     0,
+                     sched_srs,
                      ss,
                      coreset,
                      UE->pdsch_HARQ_ACK_Codebook,
                      nr_mac->cset0_bwp_size);
+
+  if (sched_srs)
+    nr_schedule_aperiodic_srs(nr_mac, UE, sched_pusch->frame, sched_pusch->slot, sched_pusch->tda_info.k2);
 }
 
 static void nr_ulsch_preprocessor(gNB_MAC_INST *nr_mac, post_process_pusch_t *pp_pusch)
