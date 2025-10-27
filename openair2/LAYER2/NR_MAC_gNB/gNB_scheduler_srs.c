@@ -435,8 +435,10 @@ static void nr_configure_srs(gNB_MAC_INST *nrmac,
   srs_pdu->frequency_hopping = srs_resource->freqHopping.b_hop;
   srs_pdu->group_or_sequence_hopping = srs_resource->groupOrSequenceHopping;
   srs_pdu->resource_type = srs_resource->resourceType.present - 1;
-  srs_pdu->t_srs = srs_period[srs_resource->resourceType.choice.periodic->periodicityAndOffset_p.present];
-  srs_pdu->t_offset = get_nr_srs_offset(srs_resource->resourceType.choice.periodic->periodicityAndOffset_p);
+  if (srs_resource->resourceType.present == NR_SRS_Resource__resourceType_PR_periodic) {
+    srs_pdu->t_srs = srs_period[srs_resource->resourceType.choice.periodic->periodicityAndOffset_p.present];
+    srs_pdu->t_offset = get_nr_srs_offset(srs_resource->resourceType.choice.periodic->periodicityAndOffset_p);
+  }
 
   // TODO: This should be completed
   srs_pdu->srs_parameters_v4.srs_bandwidth_size = m_SRS[srs_pdu->config_index];
