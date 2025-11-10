@@ -106,7 +106,9 @@ int nr_ulsch_pre_encoding(PHY_VARS_NR_UE *ue,
                           const uint8_t slot,
                           const unsigned int *G,
                           const int nb_ulsch,
-                          const uint8_t *ULSCH_ids);
+                          const uint8_t *ULSCH_ids,
+                          uint8_t **c,
+                          uint8_t *buf);
 /** \brief This is the alternative top-level entry point for ULSCH encoding in UE.
     It handles all the HARQ processes in only one call. The routine first
     computes the segmentation information, followed by LDPC encoding algorithm of the
@@ -127,7 +129,7 @@ int nr_ulsch_encoding(PHY_VARS_NR_UE *ue,
                       unsigned int *G,
                       int nb_ulsch,
                       uint8_t *ULSCH_ids,
-                      uint16_t number_dmrs_symbols);
+                      uint16_t number_dmrs_symbols, uint8_t ** c);
 
 /*! \brief Perform PUSCH scrambling. TS 38.211 V15.4.0 subclause 6.3.1.1
   @param[in] in Pointer to input bits

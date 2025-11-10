@@ -403,9 +403,6 @@ void nr_phy_config_request(NR_PHY_Config_t *phy_config)
 
 void init_DLSCH_struct(PHY_VARS_gNB *gNB, processingData_L1tx_t *msg)
 {
-  NR_DL_FRAME_PARMS *fp = &gNB->frame_parms;
-  nfapi_nr_config_request_scf_t *cfg = &gNB->gNB_config;
-  uint16_t grid_size = cfg->carrier_config.dl_grid_size[fp->numerology_index].value;
   msg->num_pdsch_slot = 0;
 
   msg->dlsch = malloc16(gNB->max_nb_pdsch * sizeof(NR_gNB_DLSCH_t *));
@@ -413,22 +410,12 @@ void init_DLSCH_struct(PHY_VARS_gNB *gNB, processingData_L1tx_t *msg)
   for (int i = 0; i < gNB->max_nb_pdsch; i++) {
     LOG_D(PHY, "Allocating Transport Channel Buffers for DLSCH %d/%d\n", i, gNB->max_nb_pdsch);
     msg->dlsch[i] = (NR_gNB_DLSCH_t *)malloc16(num_cw * sizeof(NR_gNB_DLSCH_t));
-    for (int j = 0; j < num_cw; j++) {
-      msg->dlsch[i][j] = new_gNB_dlsch(fp, grid_size);
-    }
   }
 }
 
 void reset_DLSCH_struct(const PHY_VARS_gNB *gNB, processingData_L1tx_t *msg)
 {
-  const NR_DL_FRAME_PARMS *fp = &gNB->frame_parms;
-  const nfapi_nr_config_request_scf_t *cfg = &gNB->gNB_config;
-  const uint16_t grid_size = cfg->carrier_config.dl_grid_size[fp->numerology_index].value;
-  int num_cw = NR_MAX_NB_LAYERS > 4? 2:1;
   for (int i = 0; i < gNB->max_nb_pdsch; i++) {
-    for (int j = 0; j < num_cw; j++) {
-      free_gNB_dlsch(&msg->dlsch[i][j], grid_size, fp);
-    }
     free(msg->dlsch[i]);
   }
   free(msg->dlsch);

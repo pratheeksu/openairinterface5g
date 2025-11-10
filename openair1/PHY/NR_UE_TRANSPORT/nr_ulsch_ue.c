@@ -1101,7 +1101,9 @@ void nr_ue_ulsch_procedures(PHY_VARS_NR_UE *UE,
 
   rate_match_info_uci_t rm_info = {0};
   const uint8_t nl_qm = Nl * mod_order; // product of number of layers and modulation order
-  if(nr_ulsch_pre_encoding(UE, &phy_data->ulsch, frame, slot, G, 1, ULSCH_ids) != 0) {
+  uint8_t buf_c[nl_qm * 8448]; // to be refined
+  uint8_t *c_list[1024];
+  if (nr_ulsch_pre_encoding(UE, &phy_data->ulsch, frame, slot, G, 1, ULSCH_ids, c_list, buf_c) != 0) {
     LOG_E(PHY, "Error pre-encoding\n");
     return;
   }
@@ -1110,7 +1112,7 @@ void nr_ue_ulsch_procedures(PHY_VARS_NR_UE *UE,
     rm_info = calc_rate_match_info_uci(pusch_pdu, harq_process_ul_ue, nl_qm, &G[pusch_id]);
   }
 
-  if (nr_ulsch_encoding(UE, &phy_data->ulsch, frame, slot, G, 1, ULSCH_ids, number_dmrs_symbols) == -1) {
+  if (nr_ulsch_encoding(UE, &phy_data->ulsch, frame, slot, G, 1, ULSCH_ids, number_dmrs_symbols, c_list) == -1) {
     stop_meas_nr_ue_phy(UE, PUSCH_PROC_STATS);
     return;
   }

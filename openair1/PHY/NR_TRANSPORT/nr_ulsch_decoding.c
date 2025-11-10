@@ -200,7 +200,8 @@ int nr_ulsch_decoding(PHY_VARS_gNB *phy_vars_gNB,
                     &TB_parameters->K,
                     &TB_parameters->Z, // [hna] Z is Zc
                     &TB_parameters->F,
-                    TB_parameters->BG);
+                    TB_parameters->BG,
+                    NULL);
     harq_process->C = TB_parameters->C;
     harq_process->K = TB_parameters->K;
     harq_process->Z = TB_parameters->Z;

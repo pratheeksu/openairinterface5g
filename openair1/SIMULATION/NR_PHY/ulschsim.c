@@ -509,11 +509,12 @@ int main(int argc, char **argv)
   /////////////////////////ULSCH coding/////////////////////////
   ///////////
   unsigned int G = available_bits;
-
+  uint8_t buf[1024 * 128];
+  uint8_t *c_list[1024];
   if (input_fd == NULL) {
     uint8_t ULSCH_ids[] = {0};
-    nr_ulsch_pre_encoding(UE, ulsch_ue, 0, 0, &G, 1, ULSCH_ids);
-    nr_ulsch_encoding(UE, ulsch_ue, 0, 0, &G, 1, ULSCH_ids, 0);
+    nr_ulsch_pre_encoding(UE, ulsch_ue, 0, 0, &G, 1, ULSCH_ids, c_list, buf);
+    nr_ulsch_encoding(UE, ulsch_ue, 0, 0, &G, 1, ULSCH_ids, 0, c_list);
   }
   
   printf("\n");

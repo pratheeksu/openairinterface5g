@@ -42,70 +42,6 @@
 // #define DEBUG_DLSCH_CODING
 // #define DEBUG_DLSCH_FREE 1
 
-void free_gNB_dlsch(NR_gNB_DLSCH_t *dlsch, uint16_t N_RB, const NR_DL_FRAME_PARMS *frame_parms)
-{
-  int max_layers = (frame_parms->nb_antennas_tx < NR_MAX_NB_LAYERS) ? frame_parms->nb_antennas_tx : NR_MAX_NB_LAYERS;
-  uint16_t a_segments = MAX_NUM_NR_DLSCH_SEGMENTS_PER_LAYER * max_layers;
-
-  if (N_RB != 273) {
-    a_segments = a_segments * N_RB;
-    a_segments = a_segments / 273 + 1;
-  }
-
-  NR_DL_gNB_HARQ_t *harq = &dlsch->harq_process;
-  if (harq->b) {
-    free16(harq->b, a_segments * 1056);
-    harq->b = NULL;
-  }
-  if (harq->f) {
-    free16(harq->f, N_RB * NR_SYMBOLS_PER_SLOT * NR_NB_SC_PER_RB * 8 * NR_MAX_NB_LAYERS);
-    harq->f = NULL;
-  }
-  for (int r = 0; r < a_segments; r++) {
-    free(harq->c[r]);
-    harq->c[r] = NULL;
-  }
-  free(harq->c);
-}
-
-NR_gNB_DLSCH_t new_gNB_dlsch(NR_DL_FRAME_PARMS *frame_parms, uint16_t N_RB)
-{
-  int max_layers = (frame_parms->nb_antennas_tx < NR_MAX_NB_LAYERS) ? frame_parms->nb_antennas_tx : NR_MAX_NB_LAYERS;
-  uint16_t a_segments = MAX_NUM_NR_DLSCH_SEGMENTS_PER_LAYER * max_layers; // number of segments to be allocated
-
-  if (N_RB != 273) {
-    a_segments = a_segments * N_RB;
-    a_segments = a_segments / 273 + 1;
-  }
-
-  LOG_D(PHY, "Allocating %d segments (MAX %d, N_PRB %d)\n", a_segments, MAX_NUM_NR_DLSCH_SEGMENTS_PER_LAYER, N_RB);
-  uint32_t dlsch_bytes = a_segments * 1056; // allocated bytes per segment
-  NR_gNB_DLSCH_t dlsch;
-
-  NR_DL_gNB_HARQ_t *harq = &dlsch.harq_process;
-  bzero(harq, sizeof(NR_DL_gNB_HARQ_t));
-  harq->b = malloc16(dlsch_bytes);
-  AssertFatal(harq->b, "cannot allocate memory for harq->b\n");
-  bzero(harq->b, dlsch_bytes);
-
-  harq->c = (uint8_t **)malloc16(a_segments * sizeof(uint8_t *));
-  for (int r = 0; r < a_segments; r++) {
-    // account for filler in first segment and CRCs for multiple segment case
-    // [hna] 8448 is the maximum CB size in NR
-    //       68*348 = 68*(maximum size of Zc)
-    //       In section 5.3.2 in 38.212, the for loop is up to N + 2*Zc (maximum size of N is 66*Zc, therefore 68*Zc)
-    harq->c[r] = malloc16(8448);
-    AssertFatal(harq->c[r], "cannot allocate harq->c[%d]\n", r);
-    bzero(harq->c[r], 8448);
-  }
-
-  harq->f = malloc16(N_RB * NR_SYMBOLS_PER_SLOT * NR_NB_SC_PER_RB * 8 * NR_MAX_NB_LAYERS);
-  AssertFatal(harq->f, "cannot allocate harq->f\n");
-  bzero(harq->f, N_RB * NR_SYMBOLS_PER_SLOT * NR_NB_SC_PER_RB * 8 * NR_MAX_NB_LAYERS);
-
-  return (dlsch);
-}
-
 int nr_dlsch_encoding(PHY_VARS_gNB *gNB,
                       processingData_L1tx_t *msgTx,
                       int frame,
@@ -133,8 +69,13 @@ int nr_dlsch_encoding(PHY_VARS_gNB *gNB,
                                                        .tparity = tparity,
                                                        .toutput = toutput,
                                                        .TBs = TBs};
-
   int num_segments = 0;
+  int gross_sz = 0;
+  for (int dlsch_id = 0; dlsch_id < msgTx->num_pdsch_slot; dlsch_id++)
+    gross_sz += msgTx->dlsch[dlsch_id]->harq_process.pdsch_pdu.pdsch_pdu_rel15.TBSize[0] << 3;
+  uint8_t c_buf[gross_sz + 1024]; // 1024 for all crcs, to be refined
+  uint8_t *cur_c = c_buf;
+  uint8_t *c[1024]; // should be the max number of segments in a slot, all layers
 
   for (int dlsch_id = 0; dlsch_id < msgTx->num_pdsch_slot; dlsch_id++) {
     NR_gNB_DLSCH_t *dlsch = msgTx->dlsch[dlsch_id];
@@ -171,7 +112,6 @@ int nr_dlsch_encoding(PHY_VARS_gNB *gNB,
       phy_stats->dlsch_stats.current_Qm = rel15->qamModOrder[0];
     }
 
-    int max_bytes = MAX_NUM_NR_DLSCH_SEGMENTS_PER_LAYER * rel15->nrOfLayers * 1056;
     int B;
     if (A > NR_MAX_PDSCH_TBS) {
       // Add 24-bit crc (polynomial A) to payload
@@ -179,23 +119,13 @@ int nr_dlsch_encoding(PHY_VARS_gNB *gNB,
       a[A >> 3] = ((uint8_t *)&crc)[2];
       a[1 + (A >> 3)] = ((uint8_t *)&crc)[1];
       a[2 + (A >> 3)] = ((uint8_t *)&crc)[0];
-      // printf("CRC %x (A %d)\n",crc,A);
-      // printf("a0 %d a1 %d a2 %d\n", a[A>>3], a[1+(A>>3)], a[2+(A>>3)]);
       B = A + 24;
-      //    harq->b = a;
-      AssertFatal((A / 8) + 4 <= max_bytes, "A %d is too big (A/8+4 = %d > %d)\n", A, (A / 8) + 4, max_bytes);
-      memcpy(harq->b, a, (A / 8) + 4); // why is this +4 if the CRC is only 3 bytes?
     } else {
       // Add 16-bit crc (polynomial A) to payload
       crc = crc16(a, A) >> 16;
       a[A >> 3] = ((uint8_t *)&crc)[1];
       a[1 + (A >> 3)] = ((uint8_t *)&crc)[0];
-      // printf("CRC %x (A %d)\n",crc,A);
-      // printf("a0 %d a1 %d \n", a[A>>3], a[1+(A>>3)]);
       B = A + 16;
-      //    harq->b = a;
-      AssertFatal((A / 8) + 3 <= max_bytes, "A %d is too big (A/8+3 = %d > %d)\n", A, (A / 8) + 3, max_bytes);
-      memcpy(harq->b, a, (A / 8) + 3); // using 3 bytes to mimic the case of 24 bit crc
     }
 
     nrLDPC_TB_encoding_parameters_t *TB_parameters = &TBs[dlsch_id];
@@ -206,14 +136,15 @@ int nr_dlsch_encoding(PHY_VARS_gNB *gNB,
     TB_parameters->Z = harq->Z;
     TB_parameters->A = A;
     start_meas(dlsch_segmentation_stats);
-    TB_parameters->Kb = nr_segmentation(harq->b,
-                                        harq->c,
+    TB_parameters->Kb = nr_segmentation(a,
+                                        c,
                                         B,
                                         &TB_parameters->C,
                                         &TB_parameters->K,
                                         &TB_parameters->Z,
                                         &TB_parameters->F,
-                                        TB_parameters->BG);
+                                        TB_parameters->BG,
+                                        &cur_c);
     stop_meas(dlsch_segmentation_stats);
 
     if (TB_parameters->C > MAX_NUM_NR_DLSCH_SEGMENTS_PER_LAYER * rel15->nrOfLayers) {
@@ -270,7 +201,7 @@ int nr_dlsch_encoding(PHY_VARS_gNB *gNB,
 
     for (int r = 0; r < TB_parameters->C; r++) {
       nrLDPC_segment_encoding_parameters_t *segment_parameters = &TB_parameters->segments[r];
-      segment_parameters->c = harq->c[r];
+      segment_parameters->c = c[r];
       segment_parameters->E = nr_get_E(TB_parameters->G, TB_parameters->C, TB_parameters->Qm, rel15->nrOfLayers, r);
 
       reset_meas(&segment_parameters->ts_interleave);

@@ -608,8 +608,8 @@ static int do_one_dlsch(unsigned char *input_ptr, PHY_VARS_gNB *gNB, NR_gNB_DLSC
   printf("\n");
 #endif
 
-  if (IS_SOFTMODEM_DLSIM)
-    memcpy(harq->f, input_ptr, (encoded_length + 7) >> 3);
+  // if (IS_SOFTMODEM_DLSIM)
+  // memcpy(harq->f, input_ptr, (encoded_length + 7) >> 3);
 
   c16_t mod_symbs[rel15->NrOfCodewords][encoded_length] __attribute__((aligned(64)));
   for (int codeWord = 0; codeWord < rel15->NrOfCodewords; codeWord++) {

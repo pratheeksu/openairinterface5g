@@ -442,7 +442,8 @@ int32_t nr_segmentation(unsigned char *input_buffer,
                         unsigned int *K,
                         unsigned int *Zout,
                         unsigned int *F,
-                        uint8_t BG);
+                        uint8_t BG,
+                        uint8_t **buffer);
 
 /**
  * \brief compute parameter R for NR LDPC decoder

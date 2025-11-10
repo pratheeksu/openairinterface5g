@@ -59,13 +59,6 @@ typedef struct {
   /// pointer to pdu from MAC interface (this is "a" in 36.212)
   uint8_t *pdu;
   /// Pointer to the payload
-  uint8_t *b;
-  /// Pointers to transport block segments
-  uint8_t **c;
-  /// Frame where current HARQ round was sent
-  uint32_t frame;
-  /// Interleaver outputs
-  uint8_t *f;
   /// LDPC lifting size
   uint32_t Z;
   /// REs unavailable for DLSCH (overlapping with PTRS, CSIRS etc.)

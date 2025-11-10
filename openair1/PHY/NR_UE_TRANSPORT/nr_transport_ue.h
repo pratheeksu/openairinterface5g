@@ -52,8 +52,6 @@ typedef struct {
   uint8_t round;
   /// pointer to pdu from MAC interface (TS 36.212 V15.4.0, Sec 5.1 p. 8)
   unsigned char *payload_AB;
-  /// Pointers to transport block segments
-  uint8_t **c;
   /// LDPC-code outputs
   uint8_t **d;
   /// LDPC-code outputs (TS 36.212 V15.4.0, Sec 5.3.2 p. 17)
