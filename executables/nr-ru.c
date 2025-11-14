@@ -475,16 +475,18 @@ static radio_tx_gpio_flag_t get_gpio_flags(RU_t *ru, int slot)
     case RU_GPIO_CONTROL_INTERDIGITAL: {
       // the beam index is written in bits 8-10 of the flags
       // bit 11 enables the gpio programming
-      int beam = 0;
+      //int beam = 0;
+      int beam = 32;
+      beam = beam << 5;
       if ((slot % 10 == 0) && ru->common.beam_id && (ru->common.beam_id[0][slot * fp->symbols_per_slot] < 64)) {
         // beam = ru->common.beam_id[0][slot*fp->symbols_per_slot] | 64;
-        beam = 1024; // hardcoded now for beam32 boresight
+        //beam = 1024; // hardcoded now for beam32 boresight
         // beam = 127; //for the sake of trying beam63
         LOG_D(HW, "slot %d, beam %d\n", slot, beam);
       }
       flags_gpio = beam | TX_GPIO_CHANGE;
       // flags_gpio |= beam << 8; // MSB 8 bits are used for beam
-      LOG_I(HW, "slot %d, beam %d, flags_gpio %d\n", slot, beam, flags_gpio);
+      LOG_D(HW, "slot %d, beam %d, flags_gpio %d\n", slot, beam, flags_gpio);
       break;
     }
     default:

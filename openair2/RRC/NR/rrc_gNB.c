@@ -1765,6 +1765,1260 @@ static void process_Event_Based_Measurement_Report(gNB_RRC_INST *rrc,
   }
 }
 
+static void go_fr2(gNB_RRC_INST *rrc, gNB_RRC_UE_t *UE)
+{
+  if (UE->ongoing_reconfiguration == true) {
+    LOG_E(NR_RRC, "cannot activate FR2 for the moment, we will try at next measurement report\n");
+    return;
+  }
+
+  uint8_t xid = rrc_gNB_get_next_transaction_identifier(rrc->module_id);
+  UE->xids[xid] = RRC_DEDICATED_RECONF;
+  UE->ongoing_reconfiguration = true;
+  LOG_E(NR_RRC, "let's go fr2\n");
+
+  /* build hackish secondary Cell Group (38.331 6.3.2 CellGroupConfig) */
+  NR_CellGroupConfig_t cg = {
+    .cellGroupId = 1,           /* todo: be sure */
+    .rlc_BearerToAddModList = &(struct NR_CellGroupConfig__rlc_BearerToAddModList) {
+      .list = {
+        .array = (struct NR_RLC_BearerConfig *[]) {
+          &(struct NR_RLC_BearerConfig) {
+            .logicalChannelIdentity = 4,
+            .servedRadioBearer = &(struct NR_RLC_BearerConfig__servedRadioBearer) {
+              .present = NR_RLC_BearerConfig__servedRadioBearer_PR_drb_Identity,
+              .choice = {
+                .drb_Identity = 1
+              }
+            },
+            .rlc_Config = &(struct NR_RLC_Config) {
+              .present = NR_RLC_Config_PR_am,
+              .choice = {
+                .am = &(struct NR_RLC_Config__am) {
+                  .ul_AM_RLC = {
+                    .sn_FieldLength = &(NR_SN_FieldLengthAM_t) { NR_SN_FieldLengthAM_size18 },
+                    .t_PollRetransmit = NR_T_PollRetransmit_ms45,
+                    .pollPDU = NR_PollPDU_p64,
+                    .pollByte = NR_PollByte_kB500,
+                    .maxRetxThreshold = NR_UL_AM_RLC__maxRetxThreshold_t32
+                  },
+                  .dl_AM_RLC = {
+                    .sn_FieldLength = &(NR_SN_FieldLengthAM_t) { NR_SN_FieldLengthAM_size18 },
+                    .t_Reassembly = NR_T_Reassembly_ms15,
+                    .t_StatusProhibit = NR_T_StatusProhibit_ms15
+                  }
+                }
+              }
+            },
+            .mac_LogicalChannelConfig = &(struct NR_LogicalChannelConfig) {
+              .ul_SpecificParameters = &(struct NR_LogicalChannelConfig__ul_SpecificParameters) {
+                .priority = 13,
+                .prioritisedBitRate = NR_LogicalChannelConfig__ul_SpecificParameters__prioritisedBitRate_kBps8,
+                .bucketSizeDuration = NR_LogicalChannelConfig__ul_SpecificParameters__bucketSizeDuration_ms100,
+                .logicalChannelGroup = &(long) { 1 },
+                .schedulingRequestID = &(NR_SchedulingRequestId_t) { 0 },
+                .logicalChannelSR_Mask = 0,
+                .logicalChannelSR_DelayTimerApplied = 0
+              }
+            }
+          }
+        },
+        .count = 1
+      }
+    },
+    .mac_CellGroupConfig = &(struct NR_MAC_CellGroupConfig) {
+      .schedulingRequestConfig = &(struct NR_SchedulingRequestConfig) {
+        .schedulingRequestToAddModList = &(struct NR_SchedulingRequestConfig__schedulingRequestToAddModList) {
+          .list = {
+            .array = (struct NR_SchedulingRequestToAddMod *[]) {
+              &(struct NR_SchedulingRequestToAddMod) {
+                .schedulingRequestId = (NR_SchedulingRequestId_t) 0,
+                .sr_TransMax = NR_SchedulingRequestToAddMod__sr_TransMax_n64,
+              }
+            },
+            .count = 1
+          }
+        }
+      },
+      .bsr_Config = &(struct NR_BSR_Config) {
+        .periodicBSR_Timer = NR_BSR_Config__periodicBSR_Timer_sf10,
+        .retxBSR_Timer = NR_BSR_Config__retxBSR_Timer_sf80,
+      },
+      .tag_Config = &(struct NR_TAG_Config) {
+        .tag_ToAddModList = &(struct NR_TAG_Config__tag_ToAddModList) {
+          .list = {
+            .array = (struct NR_TAG *[]) {
+              &(struct NR_TAG) {
+                .tag_Id = (NR_TAG_Id_t) 0,
+                .timeAlignmentTimer = (NR_TimeAlignmentTimer_t) NR_TimeAlignmentTimer_infinity
+              }
+            },
+            .count = 1
+          }
+        }
+      },
+      .phr_Config = &(struct NR_SetupRelease_PHR_Config) {
+        .present = NR_SetupRelease_PHR_Config_PR_setup,
+        .choice = {
+          .setup = &(struct NR_PHR_Config) {
+            .phr_PeriodicTimer = NR_PHR_Config__phr_PeriodicTimer_sf10,
+            .phr_ProhibitTimer = NR_PHR_Config__phr_ProhibitTimer_sf10,
+            .phr_Tx_PowerFactorChange = NR_PHR_Config__phr_Tx_PowerFactorChange_dB1,
+            .multiplePHR = 0,
+            .dummy = 0,
+            .phr_Type2OtherCell = 0,
+            .phr_ModeOtherCG = NR_PHR_Config__phr_ModeOtherCG_real,
+          }
+        }
+      },
+      .skipUplinkTxDynamic = 0
+    },
+    .physicalCellGroupConfig = &(struct NR_PhysicalCellGroupConfig) {
+      .pdsch_HARQ_ACK_Codebook = NR_PhysicalCellGroupConfig__pdsch_HARQ_ACK_Codebook_dynamic
+    },
+    .spCellConfig = &(struct NR_SpCellConfig) {
+      .servCellIndex = &(NR_ServCellIndex_t) { 1 }, /* todo: put it or not? what value? */
+      .reconfigurationWithSync = &(struct NR_ReconfigurationWithSync) {
+        .spCellConfigCommon = &(struct NR_ServingCellConfigCommon) {
+          .physCellId = &(NR_PhysCellId_t) { 1 },
+          .downlinkConfigCommon = &(struct NR_DownlinkConfigCommon) {
+            .frequencyInfoDL = &(struct NR_FrequencyInfoDL) {
+              .absoluteFrequencySSB = &(NR_ARFCN_ValueNR_t) { 2072251 },
+              .frequencyBandList = {
+                .list = {
+                  .array = (NR_FreqBandIndicatorNR_t *[]) {
+                    &(NR_FreqBandIndicatorNR_t) {
+                      257
+                    }
+                  },
+                  .count = 1
+                }
+              },
+              .absoluteFrequencyPointA = (NR_ARFCN_ValueNR_t) 2071707,
+              .scs_SpecificCarrierList = {
+                .list = {
+                  .array = (struct NR_SCS_SpecificCarrier *[]) {
+                    &(struct NR_SCS_SpecificCarrier) {
+                      .offsetToCarrier = 0,
+                      .subcarrierSpacing = NR_SubcarrierSpacing_kHz120,
+                      .carrierBandwidth = 66
+                    }
+                  },
+                  .count = 1
+                }
+              }
+            },
+            .initialDownlinkBWP = &(struct NR_BWP_DownlinkCommon) {
+              .genericParameters = {
+                .locationAndBandwidth = 17875,
+                .subcarrierSpacing = (NR_SubcarrierSpacing_t) NR_SubcarrierSpacing_kHz120,
+              },
+              .pdcch_ConfigCommon = &(struct NR_SetupRelease_PDCCH_ConfigCommon) {
+                .present = NR_SetupRelease_PDCCH_ConfigCommon_PR_setup,
+                .choice = {
+                  .setup = &(struct NR_PDCCH_ConfigCommon) {
+                    .controlResourceSetZero = &(NR_ControlResourceSetZero_t) { 0 }, /* todo: maybe we have to remove this */
+                    .searchSpaceZero = &(NR_SearchSpaceZero_t) { 0 },
+                    .commonSearchSpaceList = &(struct NR_PDCCH_ConfigCommon__commonSearchSpaceList) {
+                      .list = {
+                        .array = (struct NR_SearchSpace *[]) {
+                          &(struct NR_SearchSpace) {
+                            .searchSpaceId = (NR_SearchSpaceId_t) 1,
+                            .controlResourceSetId = &(NR_ControlResourceSetId_t) { 0 },
+                            .monitoringSlotPeriodicityAndOffset = &(struct NR_SearchSpace__monitoringSlotPeriodicityAndOffset) {
+                              .present = NR_SearchSpace__monitoringSlotPeriodicityAndOffset_PR_sl1,
+                              .choice = {
+                                .sl1 = (NULL_t) {}
+                              }
+                            },
+                            .monitoringSymbolsWithinSlot = &(BIT_STRING_t) {
+                              .buf = (uint8_t []) {
+                                0x80, 0
+                              },
+                              .size = 2,
+                              .bits_unused = 2
+                            },
+                            .nrofCandidates = &(struct NR_SearchSpace__nrofCandidates) {
+                              .aggregationLevel1 = NR_SearchSpace__nrofCandidates__aggregationLevel1_n0,
+                              .aggregationLevel2 = NR_SearchSpace__nrofCandidates__aggregationLevel2_n0,
+                              .aggregationLevel4 = NR_SearchSpace__nrofCandidates__aggregationLevel4_n1,
+                              .aggregationLevel8 = NR_SearchSpace__nrofCandidates__aggregationLevel8_n0,
+                              .aggregationLevel16 = NR_SearchSpace__nrofCandidates__aggregationLevel16_n0,
+                            },
+                            .searchSpaceType = &(struct NR_SearchSpace__searchSpaceType) {
+                              .present = NR_SearchSpace__searchSpaceType_PR_common,
+                              .choice = {
+                                .common = &(struct NR_SearchSpace__searchSpaceType__common) {
+                                  .dci_Format0_0_AndFormat1_0 = &(struct NR_SearchSpace__searchSpaceType__common__dci_Format0_0_AndFormat1_0) {
+                                  }
+                                }
+                              }
+                            }
+                          },
+                          &(struct NR_SearchSpace) {
+                            .searchSpaceId = (NR_SearchSpaceId_t) 2,
+                            .controlResourceSetId = &(NR_ControlResourceSetId_t) { 0 },
+                            .monitoringSlotPeriodicityAndOffset = &(struct NR_SearchSpace__monitoringSlotPeriodicityAndOffset) {
+                              .present = NR_SearchSpace__monitoringSlotPeriodicityAndOffset_PR_sl1,
+                              .choice = {
+                                .sl1 = (NULL_t) {}
+                              }
+                            },
+                            .monitoringSymbolsWithinSlot = &(BIT_STRING_t) {
+                              .buf = (uint8_t []) {
+                                0x80, 0
+                              },
+                              .size = 2,
+                              .bits_unused = 2
+                            },
+                            .nrofCandidates = &(struct NR_SearchSpace__nrofCandidates) {
+                              .aggregationLevel1 = NR_SearchSpace__nrofCandidates__aggregationLevel1_n0,
+                              .aggregationLevel2 = NR_SearchSpace__nrofCandidates__aggregationLevel2_n0,
+                              .aggregationLevel4 = NR_SearchSpace__nrofCandidates__aggregationLevel4_n1,
+                              .aggregationLevel8 = NR_SearchSpace__nrofCandidates__aggregationLevel8_n0,
+                              .aggregationLevel16 = NR_SearchSpace__nrofCandidates__aggregationLevel16_n0,
+                            },
+                            .searchSpaceType = &(struct NR_SearchSpace__searchSpaceType) {
+                              .present = NR_SearchSpace__searchSpaceType_PR_common,
+                              .choice = {
+                                .common = &(struct NR_SearchSpace__searchSpaceType__common) {
+                                  .dci_Format0_0_AndFormat1_0 = &(struct NR_SearchSpace__searchSpaceType__common__dci_Format0_0_AndFormat1_0) {
+                                  }
+                                }
+                              }
+                            }
+                          },
+                          &(struct NR_SearchSpace) {
+                            .searchSpaceId = (NR_SearchSpaceId_t) 3,
+                            .controlResourceSetId = &(NR_ControlResourceSetId_t) { 0 },
+                            .monitoringSlotPeriodicityAndOffset = &(struct NR_SearchSpace__monitoringSlotPeriodicityAndOffset) {
+                              .present = NR_SearchSpace__monitoringSlotPeriodicityAndOffset_PR_sl1,
+                              .choice = {
+                                .sl1 = (NULL_t) {}
+                              }
+                            },
+                            .monitoringSymbolsWithinSlot = &(BIT_STRING_t) {
+                              .buf = (uint8_t []) {
+                                0x80, 0
+                              },
+                              .size = 2,
+                              .bits_unused = 2
+                            },
+                            .nrofCandidates = &(struct NR_SearchSpace__nrofCandidates) {
+                              .aggregationLevel1 = NR_SearchSpace__nrofCandidates__aggregationLevel1_n0,
+                              .aggregationLevel2 = NR_SearchSpace__nrofCandidates__aggregationLevel2_n0,
+                              .aggregationLevel4 = NR_SearchSpace__nrofCandidates__aggregationLevel4_n1,
+                              .aggregationLevel8 = NR_SearchSpace__nrofCandidates__aggregationLevel8_n0,
+                              .aggregationLevel16 = NR_SearchSpace__nrofCandidates__aggregationLevel16_n0,
+                            },
+                            .searchSpaceType = &(struct NR_SearchSpace__searchSpaceType) {
+                              .present = NR_SearchSpace__searchSpaceType_PR_common,
+                              .choice = {
+                                .common = &(struct NR_SearchSpace__searchSpaceType__common) {
+                                  .dci_Format0_0_AndFormat1_0 = &(struct NR_SearchSpace__searchSpaceType__common__dci_Format0_0_AndFormat1_0) {
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        },
+                        .count = 3
+                      }
+                    },
+                    //.searchSpaceSIB1 = &(NR_SearchSpaceId_t) { 0 }, /* todo: check that, maybe wrong value? */
+                    //.searchSpaceOtherSystemInformation = &(NR_SearchSpaceId_t) { 3 },
+                    //.pagingSearchSpace = &(NR_SearchSpaceId_t) { 2 },
+                    .ra_SearchSpace = &(NR_SearchSpaceId_t) { 1 }
+                  }
+                }
+              },
+              .pdsch_ConfigCommon = &(struct NR_SetupRelease_PDSCH_ConfigCommon) {
+                .present = NR_SetupRelease_PDSCH_ConfigCommon_PR_setup,
+                .choice = {
+                  .setup = &(struct NR_PDSCH_ConfigCommon) {
+                    .pdsch_TimeDomainAllocationList = &(struct NR_PDSCH_TimeDomainResourceAllocationList) {
+                      .list = {
+                        .array = (struct NR_PDSCH_TimeDomainResourceAllocation *[]) {
+                          &(struct NR_PDSCH_TimeDomainResourceAllocation) {
+                            .mappingType = NR_PDSCH_TimeDomainResourceAllocation__mappingType_typeA,
+                            .startSymbolAndLength = 40
+                          },
+                          &(struct NR_PDSCH_TimeDomainResourceAllocation) {
+                            .mappingType = NR_PDSCH_TimeDomainResourceAllocation__mappingType_typeA,
+                            .startSymbolAndLength = 54
+                          },
+                          &(struct NR_PDSCH_TimeDomainResourceAllocation) {
+                            .mappingType = NR_PDSCH_TimeDomainResourceAllocation__mappingType_typeA,
+                            .startSymbolAndLength = 57
+                          }
+                        },
+                        .count = 3
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          .uplinkConfigCommon = &(struct NR_UplinkConfigCommon) {
+            .frequencyInfoUL = &(struct NR_FrequencyInfoUL) {
+#if 0
+              /* only for FDD (if I understand 38.331 correctly) */
+              .frequencyBandList = &(struct NR_MultiFrequencyBandListNR) {
+                .list = {
+                }
+              },
+#endif
+              .scs_SpecificCarrierList = {
+                .list = {
+                  .array = (struct NR_SCS_SpecificCarrier *[]) {
+                    &(struct NR_SCS_SpecificCarrier) {
+                      .offsetToCarrier = 0,
+                      .subcarrierSpacing = NR_SubcarrierSpacing_kHz120,
+                      .carrierBandwidth = 66
+                    }
+                  },
+                  .count = 1
+                }
+              },
+              //.p_Max = &(long) { 20 }
+            },
+            .initialUplinkBWP = &(struct NR_BWP_UplinkCommon) {
+              .genericParameters = {
+                .locationAndBandwidth = 17875,
+                .subcarrierSpacing = NR_SubcarrierSpacing_kHz120
+              },
+              .rach_ConfigCommon = &(struct NR_SetupRelease_RACH_ConfigCommon) {
+                .present = NR_SetupRelease_RACH_ConfigCommon_PR_setup,
+                .choice = {
+                  .setup = &(struct NR_RACH_ConfigCommon) {
+                    .rach_ConfigGeneric = {
+                      .prach_ConfigurationIndex = 52,
+                      .msg1_FDM = NR_RACH_ConfigGeneric__msg1_FDM_one,
+                      .msg1_FrequencyStart = 0,
+                      .zeroCorrelationZoneConfig = 0,
+                      .preambleReceivedTargetPower = -90,
+                      .preambleTransMax = NR_RACH_ConfigGeneric__preambleTransMax_n10,
+                      .powerRampingStep = NR_RACH_ConfigGeneric__powerRampingStep_dB2,
+                      .ra_ResponseWindow = NR_RACH_ConfigGeneric__ra_ResponseWindow_sl80
+                    },
+                    .ssb_perRACH_OccasionAndCB_PreamblesPerSSB = &(struct NR_RACH_ConfigCommon__ssb_perRACH_OccasionAndCB_PreamblesPerSSB) {
+                      .present = NR_RACH_ConfigCommon__ssb_perRACH_OccasionAndCB_PreamblesPerSSB_PR_one,
+                      .choice = {
+                        .oneHalf = NR_RACH_ConfigCommon__ssb_perRACH_OccasionAndCB_PreamblesPerSSB__one_n64
+                      }
+                    },
+                    .ra_ContentionResolutionTimer = NR_RACH_ConfigCommon__ra_ContentionResolutionTimer_sf64,
+                    .rsrp_ThresholdSSB = &(NR_RSRP_Range_t) {
+                      19  /* magic value */
+                    },
+                    .prach_RootSequenceIndex = {
+                      .present = NR_RACH_ConfigCommon__prach_RootSequenceIndex_PR_l139,
+                      .choice = {
+                        .l139 = 64
+                      }
+                    },
+                    .msg1_SubcarrierSpacing = &(NR_SubcarrierSpacing_t) {
+                      NR_SubcarrierSpacing_kHz120
+                    },
+                    .restrictedSetConfig = NR_RACH_ConfigCommon__restrictedSetConfig_unrestrictedSet
+                  }
+                }
+              },
+              .pusch_ConfigCommon = &(struct NR_SetupRelease_PUSCH_ConfigCommon) {
+                .present = NR_SetupRelease_PUSCH_ConfigCommon_PR_setup,
+                .choice = {
+                  .setup = &(struct NR_PUSCH_ConfigCommon) {
+                    .pusch_TimeDomainAllocationList = &(struct NR_PUSCH_TimeDomainResourceAllocationList) {
+                      .list = {
+                        .array = (struct NR_PUSCH_TimeDomainResourceAllocation *[]) {
+                          &(struct NR_PUSCH_TimeDomainResourceAllocation) {
+                            .k2 = &(long) { 4 },
+                            .mappingType = NR_PUSCH_TimeDomainResourceAllocation__mappingType_typeB,
+                            .startSymbolAndLength = 41
+                          },
+                          &(struct NR_PUSCH_TimeDomainResourceAllocation) {
+                            .k2 = &(long) { 4 },
+                            .mappingType = NR_PUSCH_TimeDomainResourceAllocation__mappingType_typeB,
+                            .startSymbolAndLength = 38
+                          }
+                        },
+                        .count = 2
+                      }
+                    },
+                    .msg3_DeltaPreamble = &(long) {
+                      1  /* means 2 dB */
+                    },
+                    .p0_NominalWithGrant = &(long) {
+                      -96
+                    }
+                  }
+                }
+              },
+              .pucch_ConfigCommon = &(struct NR_SetupRelease_PUCCH_ConfigCommon) {
+                .present = NR_SetupRelease_PUCCH_ConfigCommon_PR_setup,
+                .choice = {
+                  .setup = &(struct NR_PUCCH_ConfigCommon) {
+                    .pucch_ResourceCommon = &(long) { 0 },          /* todo: should it be there? */
+                    .pucch_GroupHopping = NR_PUCCH_ConfigCommon__pucch_GroupHopping_neither,
+                    .hoppingId = &(long) { 40 },
+                    .p0_nominal = &(long) { -96 }
+                  }
+                }
+              }
+            },
+            .dummy = NR_TimeAlignmentTimer_ms500
+          },
+          .ssb_PositionsInBurst = &(struct NR_ServingCellConfigCommon__ssb_PositionsInBurst) {    /* todo: maybe it must not be there? */
+            .present = NR_ServingCellConfigCommon__ssb_PositionsInBurst_PR_longBitmap,
+            .choice = {
+              .longBitmap = {
+                .buf = (uint8_t []) {
+                  0x80, 0, 0, 0, 0, 0, 0, 0
+                },
+                .size = 8,
+                .bits_unused = 0
+              }
+            }
+          },
+          .ssb_periodicityServingCell = &(long) { NR_ServingCellConfigCommon__ssb_periodicityServingCell_ms10 },
+          .dmrs_TypeA_Position = NR_ServingCellConfigCommon__dmrs_TypeA_Position_pos2,
+          .ssbSubcarrierSpacing = &(NR_SubcarrierSpacing_t) {
+            NR_SubcarrierSpacing_kHz120
+          },
+          .tdd_UL_DL_ConfigurationCommon = &(struct NR_TDD_UL_DL_ConfigCommon) {
+            .referenceSubcarrierSpacing = (NR_SubcarrierSpacing_t) NR_SubcarrierSpacing_kHz120,
+            .pattern1 = {
+              .dl_UL_TransmissionPeriodicity = NR_TDD_UL_DL_Pattern__dl_UL_TransmissionPeriodicity_ms1p25,
+              .nrofDownlinkSlots = 7,
+              .nrofDownlinkSymbols = 6,
+              .nrofUplinkSlots = 2,
+              .nrofUplinkSymbols = 4
+            }
+          },
+          .ss_PBCH_BlockPower = 20
+        },
+        .newUE_Identity = 0x6666,
+        .t304 = NR_ReconfigurationWithSync__t304_ms2000,
+        .rach_ConfigDedicated = &(struct NR_ReconfigurationWithSync__rach_ConfigDedicated) {
+          .present = NR_ReconfigurationWithSync__rach_ConfigDedicated_PR_uplink,
+          .choice = {
+            .uplink = &(struct NR_RACH_ConfigDedicated) {
+              .cfra = &(struct NR_CFRA) {
+                .resources = {
+                  .present = NR_CFRA__resources_PR_ssb,
+                  .choice = {
+                    .ssb = &(struct NR_CFRA__resources__ssb) {
+                      .ssb_ResourceList = {
+                        .list = {
+                          .array = (struct NR_CFRA_SSB_Resource *[]) {
+                            &(struct NR_CFRA_SSB_Resource) {
+                              .ssb = 0,
+                              .ra_PreambleIndex = 63
+                            }
+                          },
+                          .count = 1
+                        }
+                      },
+                      .ra_ssb_OccasionMaskIndex = 0
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      .rlf_TimersAndConstants = &(struct NR_SetupRelease_RLF_TimersAndConstants) {
+        .present = NR_SetupRelease_RLF_TimersAndConstants_PR_setup,
+        .choice = {
+          .setup = &(struct NR_RLF_TimersAndConstants) {
+            .t310 = NR_RLF_TimersAndConstants__t310_ms2000,
+            .n310 = NR_RLF_TimersAndConstants__n310_n10,
+            .n311 = NR_RLF_TimersAndConstants__n311_n1,
+            .ext1 = &(struct NR_RLF_TimersAndConstants__ext1) {
+              .t311 = NR_RLF_TimersAndConstants__ext1__t311_ms3000
+            }
+          }
+        }
+      },
+      .spCellConfigDedicated = &(struct NR_ServingCellConfig) {
+        .initialDownlinkBWP = &(struct NR_BWP_DownlinkDedicated) {
+          .pdcch_Config = &(struct NR_SetupRelease_PDCCH_Config) {
+            .present = NR_SetupRelease_PDCCH_Config_PR_setup,
+            .choice = {
+              .setup = &(struct NR_PDCCH_Config) {
+                .controlResourceSetToAddModList = &(struct NR_PDCCH_Config__controlResourceSetToAddModList) {
+                  .list = {
+                    .array = (struct NR_ControlResourceSet *[]) {
+                      &(struct NR_ControlResourceSet) {
+                        .controlResourceSetId = 1,
+                        .frequencyDomainResources = {
+                          .buf = (uint8_t []) {
+                            0xff, 0, 0, 0, 0, 0
+                          },
+                          .size = 6,
+                          .bits_unused = 3,
+                        },
+                        .duration = 1,
+                        .cce_REG_MappingType = {
+                          .present = NR_ControlResourceSet__cce_REG_MappingType_PR_nonInterleaved
+                        },
+                        .precoderGranularity = NR_ControlResourceSet__precoderGranularity_sameAsREG_bundle,
+                        .tci_StatesPDCCH_ToAddList = &(struct NR_ControlResourceSet__tci_StatesPDCCH_ToAddList) {
+                          .list = {
+                            .array = (NR_TCI_StateId_t *[]) {
+                              &(NR_TCI_StateId_t) {
+                                (NR_TCI_StateId_t) 0
+                              }
+                            },
+                            .count = 1
+                          }
+                        },
+                      }
+                    },
+                    .count = 1
+                  }
+                },
+                .searchSpacesToAddModList = &(struct NR_PDCCH_Config__searchSpacesToAddModList) {
+                  .list = {
+                    .array = (struct NR_SearchSpace *[]) {
+                      &(struct NR_SearchSpace) {
+                        .searchSpaceId = (NR_SearchSpaceId_t) 4,
+                        .controlResourceSetId = &(NR_ControlResourceSetId_t) {
+                          (NR_ControlResourceSetId_t) 0,
+                        },
+                        .monitoringSlotPeriodicityAndOffset = &(struct NR_SearchSpace__monitoringSlotPeriodicityAndOffset) {
+                          .present = NR_SearchSpace__monitoringSlotPeriodicityAndOffset_PR_sl1
+                        },
+                        .monitoringSymbolsWithinSlot = &(BIT_STRING_t) {
+                          .buf = (uint8_t []) {
+                            0x80, 0
+                          },
+                          .size = 2,
+                          .bits_unused = 2
+                        },
+                        .nrofCandidates = &(struct NR_SearchSpace__nrofCandidates) {
+                          .aggregationLevel1 = NR_SearchSpace__nrofCandidates__aggregationLevel1_n0,
+                          .aggregationLevel2 = NR_SearchSpace__nrofCandidates__aggregationLevel2_n0,
+                          .aggregationLevel4 = NR_SearchSpace__nrofCandidates__aggregationLevel4_n1,
+                          .aggregationLevel8 = NR_SearchSpace__nrofCandidates__aggregationLevel8_n0,
+                          .aggregationLevel16 = NR_SearchSpace__nrofCandidates__aggregationLevel16_n0
+                        },
+                        .searchSpaceType = &(struct NR_SearchSpace__searchSpaceType) {
+                          .present = NR_SearchSpace__searchSpaceType_PR_common,
+                          .choice = {
+                            .common = &(struct NR_SearchSpace__searchSpaceType__common) {
+                              .dci_Format0_0_AndFormat1_0 = &(struct NR_SearchSpace__searchSpaceType__common__dci_Format0_0_AndFormat1_0) {
+                              }
+                            }
+                          }
+                        }
+                      },
+                      &(struct NR_SearchSpace) {
+                        .searchSpaceId = (NR_SearchSpaceId_t) 5,
+                        .controlResourceSetId = &(NR_ControlResourceSetId_t) {
+                          (NR_ControlResourceSetId_t) 1,
+                        },
+                        .monitoringSlotPeriodicityAndOffset = &(struct NR_SearchSpace__monitoringSlotPeriodicityAndOffset) {
+                          .present = NR_SearchSpace__monitoringSlotPeriodicityAndOffset_PR_sl1
+                        },
+                        .monitoringSymbolsWithinSlot = &(BIT_STRING_t) {
+                          .buf = (uint8_t []) {
+                            0x80, 0
+                          },
+                          .size = 2,
+                          .bits_unused = 2
+                        },
+                        .nrofCandidates = &(struct NR_SearchSpace__nrofCandidates) {
+                          .aggregationLevel1 = NR_SearchSpace__nrofCandidates__aggregationLevel1_n0,
+                          .aggregationLevel2 = NR_SearchSpace__nrofCandidates__aggregationLevel2_n2,
+                          .aggregationLevel4 = NR_SearchSpace__nrofCandidates__aggregationLevel4_n0,
+                          .aggregationLevel8 = NR_SearchSpace__nrofCandidates__aggregationLevel8_n0,
+                          .aggregationLevel16 = NR_SearchSpace__nrofCandidates__aggregationLevel16_n0
+                        },
+                        .searchSpaceType = &(struct NR_SearchSpace__searchSpaceType) {
+                          .present = NR_SearchSpace__searchSpaceType_PR_ue_Specific,
+                          .choice = {
+                            .ue_Specific= &(struct NR_SearchSpace__searchSpaceType__ue_Specific) {
+                              .dci_Formats = NR_SearchSpace__searchSpaceType__ue_Specific__dci_Formats_formats0_1_And_1_1
+                            }
+                          }
+                        }
+                      }
+                    },
+                    .count = 2
+                  }
+                }
+              }
+            }
+          },
+          .pdsch_Config = &(struct NR_SetupRelease_PDSCH_Config) {
+            .present = NR_SetupRelease_PDSCH_Config_PR_setup,
+            .choice = {
+              .setup = &(struct NR_PDSCH_Config) {
+                .dmrs_DownlinkForPDSCH_MappingTypeA = &(struct NR_SetupRelease_DMRS_DownlinkConfig) {
+                  .present = NR_SetupRelease_DMRS_DownlinkConfig_PR_setup,
+                  .choice = {
+                    .setup = &(struct NR_DMRS_DownlinkConfig) {
+                      .dmrs_AdditionalPosition = &(long) {
+                        NR_DMRS_DownlinkConfig__dmrs_AdditionalPosition_pos1
+                      }
+                    }
+                  }
+                },
+                .tci_StatesToAddModList = &(struct NR_PDSCH_Config__tci_StatesToAddModList) {
+                  .list = {
+                    .array = (struct NR_TCI_State *[]) {
+                      &(struct NR_TCI_State) {
+                        .tci_StateId = (NR_TCI_StateId_t) 0,
+                        .qcl_Type1 = {
+                          .bwp_Id = &(NR_BWP_Id_t) {
+                            0
+                          },
+                          .referenceSignal = {
+                            .present = NR_QCL_Info__referenceSignal_PR_ssb,
+                            .choice = {
+                              .ssb = (NR_SSB_Index_t) 0
+                            }
+                          },
+                          .qcl_Type = NR_QCL_Info__qcl_Type_typeC
+                        }
+                      }
+                    },
+                    .count = 1
+                  }
+                },
+                .resourceAllocation = NR_PDSCH_Config__resourceAllocation_resourceAllocationType1,
+                .rbg_Size = NR_PDSCH_Config__rbg_Size_config1,
+#if 0
+                .mcs_Table = &(long) { NR_PDSCH_Config__mcs_Table_qam256 },
+#endif
+                .prb_BundlingType = {
+                  .present = NR_PDSCH_Config__prb_BundlingType_PR_staticBundling,
+                  .choice = {
+                    .staticBundling = &(struct NR_PDSCH_Config__prb_BundlingType__staticBundling) {
+                      .bundleSize = &(long) { NR_PDSCH_Config__prb_BundlingType__staticBundling__bundleSize_wideband }
+                    }
+                  }
+                }
+              }
+            }
+          },
+        },
+        .firstActiveDownlinkBWP_Id = &(NR_BWP_Id_t) {
+          0
+        },
+        .uplinkConfig = &(struct NR_UplinkConfig) {
+          .initialUplinkBWP = &(struct NR_BWP_UplinkDedicated) {
+            .pucch_Config = &(struct NR_SetupRelease_PUCCH_Config) {
+              .present = NR_SetupRelease_PUCCH_Config_PR_setup,
+              .choice = {
+                .setup = &(struct NR_PUCCH_Config) {
+                  .resourceSetToAddModList = &(struct NR_PUCCH_Config__resourceSetToAddModList) {
+                    .list = {
+                      .array = (struct NR_PUCCH_ResourceSet *[]) {
+                        &(struct NR_PUCCH_ResourceSet) {
+                          .pucch_ResourceSetId = (NR_PUCCH_ResourceSetId_t) 0,
+                          .resourceList = {
+                            .list = {
+                              .array = (NR_PUCCH_ResourceId_t *[]) {
+                                &(NR_PUCCH_ResourceId_t) {
+                                  0
+                                }
+                              },
+                              .count = 1
+                            }
+                          }
+                        },
+                        &(struct NR_PUCCH_ResourceSet) {
+                          .pucch_ResourceSetId = (NR_PUCCH_ResourceSetId_t) 1,
+                          .resourceList = {
+                            .list = {
+                              .array = (NR_PUCCH_ResourceId_t *[]) {
+                                &(NR_PUCCH_ResourceId_t) {
+                                  2
+                                }
+                              },
+                              .count = 1
+                            }
+                          }
+                        }
+                      },
+                      .count = 2
+                    }
+                  },
+                  .resourceToAddModList = &(struct NR_PUCCH_Config__resourceToAddModList) {
+                    .list = {
+                      .array = (struct NR_PUCCH_Resource *[]) {
+                        &(struct NR_PUCCH_Resource) {
+                          .pucch_ResourceId = (NR_PUCCH_ResourceId_t) 0,
+                          .startingPRB = (NR_PRB_Id_t) 8,
+                          .format = {
+                            .present = NR_PUCCH_Resource__format_PR_format0,
+                            .choice = {
+                              .format0 = &(struct NR_PUCCH_format0) {
+                                .initialCyclicShift = 0,
+                                .nrofSymbols = 1,
+                                .startingSymbolIndex = 13
+                              }
+                            }
+                          }
+                        },
+                        &(struct NR_PUCCH_Resource) {
+                          .pucch_ResourceId = (NR_PUCCH_ResourceId_t) 2,
+                          .startingPRB = (NR_PRB_Id_t) 0,
+                          .format = {
+                            .present = NR_PUCCH_Resource__format_PR_format2,
+                            .choice = {
+                              .format2 = &(struct NR_PUCCH_format2) {
+                                .nrofPRBs = 8,
+                                .nrofSymbols = 1,
+                                .startingSymbolIndex = 13
+                              }
+                            }
+                          }
+                        }
+                      },
+                      .count = 2
+                    }
+                  },
+                  .format2 = &(struct NR_SetupRelease_PUCCH_FormatConfig) {
+                    .present = NR_SetupRelease_PUCCH_FormatConfig_PR_setup,
+                    .choice = {
+                      .setup = &(struct NR_PUCCH_FormatConfig) {
+                        .maxCodeRate = &(NR_PUCCH_MaxCodeRate_t) {
+                          NR_PUCCH_MaxCodeRate_zeroDot15
+                        },
+                        .simultaneousHARQ_ACK_CSI = &(long) { NR_PUCCH_FormatConfig__simultaneousHARQ_ACK_CSI_true }
+                      }
+                    }
+                  },
+                  .schedulingRequestResourceToAddModList = &(struct NR_PUCCH_Config__schedulingRequestResourceToAddModList) {
+                    .list = {
+                      .array = (struct NR_SchedulingRequestResourceConfig *[]) {
+                        &(struct NR_SchedulingRequestResourceConfig) {
+                          .schedulingRequestResourceId = (NR_SchedulingRequestResourceId_t) 1,
+                          .schedulingRequestID = (NR_SchedulingRequestId_t) 0,
+                          .periodicityAndOffset = &(struct NR_SchedulingRequestResourceConfig__periodicityAndOffset) {
+                            .present = NR_SchedulingRequestResourceConfig__periodicityAndOffset_PR_sl10,
+                            .choice = {
+                              .sl10 = 7
+                            }
+                          },
+                          .resource = &(NR_PUCCH_ResourceId_t) {
+                            0
+                          }
+                        }
+                      },
+                      .count = 1
+                    }
+                  },
+                  .dl_DataToUL_ACK = &(struct NR_PUCCH_Config__dl_DataToUL_ACK) {
+                    .list = {
+                      .array = (long *[]) {
+                        &(long) { 6 },
+                        &(long) { 7 },
+                        &(long) { 8 },
+                        &(long) { 9 },
+                        &(long) { 10 },
+                        &(long) { 11 },
+                        &(long) { 12 },
+                        &(long) { 13 }
+                      },
+                      .count = 8
+                    }
+                  },
+                  .spatialRelationInfoToAddModList = &(struct NR_PUCCH_Config__spatialRelationInfoToAddModList) {
+                    .list = {
+                      .array = (struct NR_PUCCH_SpatialRelationInfo *[]) {
+                        &(struct NR_PUCCH_SpatialRelationInfo) {
+                          .pucch_SpatialRelationInfoId = (NR_PUCCH_SpatialRelationInfoId_t) 1,
+                          .referenceSignal = {
+                            .present = NR_PUCCH_SpatialRelationInfo__referenceSignal_PR_ssb_Index,
+                            .choice = {
+                              .ssb_Index = (NR_SSB_Index_t) 0
+                            }
+                          },
+                          .pucch_PathlossReferenceRS_Id = (NR_PUCCH_PathlossReferenceRS_Id_t) 0,
+                          .p0_PUCCH_Id = (NR_P0_PUCCH_Id_t) 1,
+                          .closedLoopIndex = NR_PUCCH_SpatialRelationInfo__closedLoopIndex_i0
+                        }
+                      },
+                      .count = 1
+                    }
+                  },
+                  .pucch_PowerControl = &(struct NR_PUCCH_PowerControl) {
+                    .deltaF_PUCCH_f0 = &(long) { 0 },
+                    .deltaF_PUCCH_f2 = &(long) { 0 },
+                    .p0_Set = &(struct NR_PUCCH_PowerControl__p0_Set) {
+                      .list = {
+                        .array = (struct NR_P0_PUCCH *[]) {
+                          &(struct NR_P0_PUCCH) {
+                            .p0_PUCCH_Id = (NR_P0_PUCCH_Id_t) 1,
+                            .p0_PUCCH_Value = 0
+                          }
+                        },
+                        .count = 1
+                      }
+                    },
+                    .pathlossReferenceRSs = &(struct NR_PUCCH_PowerControl__pathlossReferenceRSs) {
+                      .list = {
+                        .array = (struct NR_PUCCH_PathlossReferenceRS *[]) {
+                          &(struct NR_PUCCH_PathlossReferenceRS) {
+                            .pucch_PathlossReferenceRS_Id = (NR_PUCCH_PathlossReferenceRS_Id_t) 0,
+                            .referenceSignal = {
+                              .present = NR_PUCCH_PathlossReferenceRS__referenceSignal_PR_ssb_Index,
+                              .choice = {
+                                .ssb_Index = (NR_SSB_Index_t) 0
+                              }
+                            }
+                          }
+                        },
+                        .count = 1
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            .pusch_Config = &(struct NR_SetupRelease_PUSCH_Config) {
+              .present = NR_SetupRelease_PUSCH_Config_PR_setup,
+              .choice = {
+                .setup = &(struct NR_PUSCH_Config) {
+                  .txConfig = &(long) { NR_PUSCH_Config__txConfig_codebook },
+                  .dmrs_UplinkForPUSCH_MappingTypeB = &(struct NR_SetupRelease_DMRS_UplinkConfig) {
+                    .present = NR_SetupRelease_DMRS_UplinkConfig_PR_setup,
+                    .choice = {
+                      .setup = &(struct NR_DMRS_UplinkConfig) {
+                        .transformPrecodingDisabled = &(struct NR_DMRS_UplinkConfig__transformPrecodingDisabled) {
+                          /* empty, todo: check if normal */
+                        },
+                        .transformPrecodingEnabled = &(struct NR_DMRS_UplinkConfig__transformPrecodingEnabled) {
+                          /* empty, todo: check if normal */
+                        }
+                      }
+                    }
+                  },
+                  .pusch_PowerControl = &(struct NR_PUSCH_PowerControl) {
+                    .msg3_Alpha = &(NR_Alpha_t) {
+                      NR_Alpha_alpha1
+                    },
+                    .p0_AlphaSets = &(struct NR_PUSCH_PowerControl__p0_AlphaSets) {
+                      .list = {
+                        .array = (struct NR_P0_PUSCH_AlphaSet *[]) {
+                          &(struct NR_P0_PUSCH_AlphaSet) {
+                            .p0_PUSCH_AlphaSetId = (NR_P0_PUSCH_AlphaSetId_t) 0,
+                            .p0 = &(long) { 0 },
+                            .alpha = &(NR_Alpha_t) {
+                              NR_Alpha_alpha1
+                            }
+                          }
+                        },
+                        .count = 1
+                      }
+                    },
+                    .pathlossReferenceRSToAddModList = &(struct NR_PUSCH_PowerControl__pathlossReferenceRSToAddModList) {
+                      .list = {
+                        .array = (struct NR_PUSCH_PathlossReferenceRS *[]) {
+                          &(struct NR_PUSCH_PathlossReferenceRS) {
+                            .pusch_PathlossReferenceRS_Id = (NR_PUSCH_PathlossReferenceRS_Id_t) 0,
+                            .referenceSignal = {
+                              .present = NR_PUSCH_PathlossReferenceRS__referenceSignal_PR_ssb_Index,
+                              .choice = {
+                                .ssb_Index = (NR_SSB_Index_t) 0
+                              }
+                            }
+                          }
+                        },
+                        .count = 1
+                      }
+                    }
+                  },
+                  .resourceAllocation = NR_PUSCH_Config__resourceAllocation_resourceAllocationType1,
+#if 0
+                  .mcs_Table = &(long) { NR_PUSCH_Config__mcs_Table_qam256 },
+#endif
+                  .codebookSubset = &(long) { NR_PUSCH_Config__codebookSubset_nonCoherent },
+                  .maxRank = &(long) { 1 }
+                }
+              }
+            },
+            .srs_Config = &(struct NR_SetupRelease_SRS_Config) {
+              .present = NR_SetupRelease_SRS_Config_PR_setup,
+              .choice = {
+                .setup = &(struct NR_SRS_Config) {
+                  .srs_ResourceSetToAddModList = &(struct NR_SRS_Config__srs_ResourceSetToAddModList) {
+                    .list = {
+                      .array = (struct NR_SRS_ResourceSet *[]) {
+                        &(struct NR_SRS_ResourceSet) {
+                          .srs_ResourceSetId = (NR_SRS_ResourceSetId_t) 0,
+                          .srs_ResourceIdList = &(struct NR_SRS_ResourceSet__srs_ResourceIdList) {
+                            .list = {
+                              .array = (NR_SRS_ResourceId_t *[]) {
+                                &(NR_SRS_ResourceId_t) {
+                                  (NR_SRS_ResourceId_t) 0
+                                }
+                              },
+                              .count = 1
+                            }
+                          },
+                          .resourceType = {
+                            .present = NR_SRS_ResourceSet__resourceType_PR_aperiodic,
+                            .choice = {
+                              .aperiodic = &(struct NR_SRS_ResourceSet__resourceType__aperiodic) {
+                                .aperiodicSRS_ResourceTrigger = 1,
+                                .slotOffset = &(long) { 6 }
+                              }
+                            }
+                          },
+                          .usage = NR_SRS_ResourceSet__usage_codebook,
+                          .alpha = &(NR_Alpha_t) {
+                            NR_Alpha_alpha1
+                          },
+                          .p0 = &(long) { -80 }
+                        }
+                      },
+                      .count = 1
+                    }
+                  },
+                  .srs_ResourceToAddModList = &(struct NR_SRS_Config__srs_ResourceToAddModList) {
+                    .list = {
+                      .array = (struct NR_SRS_Resource *[]) {
+                        &(struct NR_SRS_Resource) {
+                          .srs_ResourceId = 0,
+                          .nrofSRS_Ports = NR_SRS_Resource__nrofSRS_Ports_port1,
+                          .transmissionComb = {
+                            .present = NR_SRS_Resource__transmissionComb_PR_n2,
+                            .choice = {
+                              .n2 = &(struct NR_SRS_Resource__transmissionComb__n2) {
+                                .combOffset_n2 = 0,
+                                .cyclicShift_n2 = 0
+                              }
+                            }
+                          },
+                          .resourceMapping = {
+                            .startPosition = 1,
+                            .nrofSymbols = NR_SRS_Resource__resourceMapping__nrofSymbols_n1,
+                            .repetitionFactor = NR_SRS_Resource__resourceMapping__repetitionFactor_n1
+                          },
+                          .freqDomainPosition = 0,
+                          .freqDomainShift = 0,
+                          .freqHopping = {
+                            .c_SRS = 17,
+                            .b_SRS = 0,
+                            .b_hop = 0
+                          },
+                          .groupOrSequenceHopping = NR_SRS_Resource__groupOrSequenceHopping_neither,
+                          .resourceType = {
+                            .present = NR_SRS_Resource__resourceType_PR_aperiodic,
+                            .choice = {
+                              .aperiodic = &(struct NR_SRS_Resource__resourceType__aperiodic) {
+                                /* empty */
+                              }
+                            }
+                          },
+                          .sequenceId = 40,
+                          .spatialRelationInfo = &(struct NR_SRS_SpatialRelationInfo) {
+                            .referenceSignal = {
+                              .present = NR_SRS_SpatialRelationInfo__referenceSignal_PR_ssb_Index,
+                              .choice = {
+                                .ssb_Index = (NR_SSB_Index_t) 0
+                              }
+                            }
+                          }
+                        }
+                      },
+                      .count = 1
+                    }
+                  }
+                }
+              }
+            }
+          },
+          .firstActiveUplinkBWP_Id = &(NR_BWP_Id_t) {
+            (NR_BWP_Id_t) 0
+          },
+          .pusch_ServingCellConfig = &(struct NR_SetupRelease_PUSCH_ServingCellConfig) {
+            .present = NR_SetupRelease_PUSCH_ServingCellConfig_PR_setup,
+            .choice = {
+              .setup = &(struct NR_PUSCH_ServingCellConfig) {
+                .ext1 = &(struct NR_PUSCH_ServingCellConfig__ext1) {
+                  .maxMIMO_Layers = &(long) { 1 }
+                }
+              }
+            }
+          }
+        },
+        .pdsch_ServingCellConfig = &(struct NR_SetupRelease_PDSCH_ServingCellConfig) {
+          .present = NR_SetupRelease_PDSCH_ServingCellConfig_PR_setup,
+          .choice = {
+            .setup = &(struct NR_PDSCH_ServingCellConfig) {
+              .nrofHARQ_ProcessesForPDSCH = &(long) { NR_PDSCH_ServingCellConfig__nrofHARQ_ProcessesForPDSCH_n16 },
+              .ext1 = &(struct NR_PDSCH_ServingCellConfig__ext1) {
+                .maxMIMO_Layers = &(long) { 2 }
+              }
+            }
+          }
+        },
+        .csi_MeasConfig = &(struct NR_SetupRelease_CSI_MeasConfig) {
+          .present = NR_SetupRelease_CSI_MeasConfig_PR_setup,
+          .choice = {
+            .setup = &(struct NR_CSI_MeasConfig) {
+              .csi_SSB_ResourceSetToAddModList = &(struct NR_CSI_MeasConfig__csi_SSB_ResourceSetToAddModList) {
+                .list = {
+                  .array = (struct NR_CSI_SSB_ResourceSet *[]) {
+                    &(struct NR_CSI_SSB_ResourceSet) {
+                      .csi_SSB_ResourceSetId = (NR_CSI_SSB_ResourceSetId_t) 0,
+                      .csi_SSB_ResourceList = {
+                        .list = {
+                          .array = (NR_SSB_Index_t *[]) {
+                             &(NR_SSB_Index_t) {
+                               0
+                             }
+                          },
+                          .count = 1
+                        }
+                      }
+                    }
+                  },
+                  .count = 1
+                }
+              },
+              .csi_ResourceConfigToAddModList = &(struct NR_CSI_MeasConfig__csi_ResourceConfigToAddModList) {
+                .list = {
+                  .array = (struct NR_CSI_ResourceConfig *[]) {
+                    &(struct NR_CSI_ResourceConfig) {
+                      .csi_ResourceConfigId = (NR_CSI_ResourceConfigId_t) 20,
+                      .csi_RS_ResourceSetList = {
+                        .present = NR_CSI_ResourceConfig__csi_RS_ResourceSetList_PR_nzp_CSI_RS_SSB,
+                        .choice = {
+                          .nzp_CSI_RS_SSB = &(struct NR_CSI_ResourceConfig__csi_RS_ResourceSetList__nzp_CSI_RS_SSB) {
+                            .csi_SSB_ResourceSetList = &(struct NR_CSI_ResourceConfig__csi_RS_ResourceSetList__nzp_CSI_RS_SSB__csi_SSB_ResourceSetList) {
+                              .list = {
+                                .array = (NR_CSI_SSB_ResourceSetId_t *[]) {
+                                  &(NR_CSI_SSB_ResourceSetId_t) { 0 }
+                                },
+                                .count = 1
+                              }
+                            }
+                          }
+                        }
+                      },
+                      .bwp_Id = (NR_BWP_Id_t) 0,
+                      .resourceType = NR_CSI_ResourceConfig__resourceType_periodic
+                    }
+                  },
+                  .count = 1
+                }
+              },
+              .csi_ReportConfigToAddModList = &(struct NR_CSI_MeasConfig__csi_ReportConfigToAddModList) {
+                .list = {
+                  .array = (struct NR_CSI_ReportConfig *[]) {
+                    &(struct NR_CSI_ReportConfig) {
+                      .reportConfigId = 10,
+                      .resourcesForChannelMeasurement = 20,
+                      .reportConfigType = {
+                        .present = NR_CSI_ReportConfig__reportConfigType_PR_periodic,
+                        .choice = {
+                          .periodic = &(struct NR_CSI_ReportConfig__reportConfigType__periodic) {
+                            .reportSlotConfig = {
+                              .present = NR_CSI_ReportPeriodicityAndOffset_PR_slots160,
+                              .choice = {
+                                .slots160 = 37
+                              }
+                            },
+                            .pucch_CSI_ResourceList = {
+                              .list = {
+                                .array = (struct NR_PUCCH_CSI_Resource *[]) {
+                                  &(struct NR_PUCCH_CSI_Resource) {
+                                    .uplinkBandwidthPartId = 0,
+                                    .pucch_Resource = 2
+                                  }
+                                },
+                                .count = 1
+                              }
+                            }
+                          }
+                        }
+                      },
+                      .reportQuantity = {
+                        .present = NR_CSI_ReportConfig__reportQuantity_PR_ssb_Index_RSRP,
+                        .choice = {
+                          .ssb_Index_RSRP = (NULL_t){}
+                        }
+                      },
+                      .timeRestrictionForChannelMeasurements = NR_CSI_ReportConfig__timeRestrictionForChannelMeasurements_configured,
+                      .timeRestrictionForInterferenceMeasurements = NR_CSI_ReportConfig__timeRestrictionForInterferenceMeasurements_configured,
+                      .groupBasedBeamReporting = {
+                        .present = NR_CSI_ReportConfig__groupBasedBeamReporting_PR_disabled,
+                        .choice = {
+                          .disabled = &(struct NR_CSI_ReportConfig__groupBasedBeamReporting__disabled) {
+                            .nrofReportedRS = &(long) { NR_CSI_ReportConfig__groupBasedBeamReporting__disabled__nrofReportedRS_n1 }
+                          }
+                        }
+                      },
+                      .subbandSize = NR_CSI_ReportConfig__subbandSize_value1
+                    }
+                  },
+                  .count = 1
+                }
+              }
+            }
+          }
+        },
+        .tag_Id = (NR_TAG_Id_t) 0
+      }
+    }
+  };
+
+  /* encode it */
+  OCTET_STRING_t cgbuf = { 0 };
+  cgbuf.size = uper_encode_to_new_buffer(&asn_DEF_NR_CellGroupConfig, NULL, &cg, (void **)&cgbuf.buf);
+  if (cgbuf.size <= 0) {
+    LOG_E(NR_RRC, "go_fr2: Failed to encode CellGroupConfig\n");
+    return;
+  }
+
+  /* build an RRCReconfiguration that contains only the sCG */
+  NR_RRCReconfiguration_t scg = {
+    .rrc_TransactionIdentifier = xid,  /* not sure what to put here */
+    .criticalExtensions = {
+      .present = NR_RRCReconfiguration__criticalExtensions_PR_rrcReconfiguration,
+      .choice = {
+        .rrcReconfiguration = &(struct NR_RRCReconfiguration_IEs) {
+          .secondaryCellGroup = &cgbuf
+        }
+      }
+    }
+  };
+
+  /* encode it */
+  OCTET_STRING_t nr_scg = { 0 };
+  nr_scg.size = uper_encode_to_new_buffer(&asn_DEF_NR_RRCReconfiguration, NULL, &scg, (void **)&nr_scg.buf);
+  free(cgbuf.buf);
+  if (nr_scg.size <= 0) {
+    LOG_E(NR_RRC, "go_fr2: Failed to encode RRCReconfiguration\n");
+    return;
+  }
+
+  /* we have to release rlc of drb1 in the master cell group */
+  NR_CellGroupConfig_t mcg = {
+    .cellGroupId = 0,
+    .rlc_BearerToReleaseList = &(struct NR_CellGroupConfig__rlc_BearerToReleaseList) {
+      .list = {
+        .array = (NR_LogicalChannelIdentity_t *[]) {
+          &(NR_LogicalChannelIdentity_t) {
+            4
+          }
+        },
+        .count = 1
+      }
+    }
+  };
+
+  /* encode the mcg */
+  OCTET_STRING_t nr_mcg = { 0 };
+  nr_mcg.size = uper_encode_to_new_buffer(&asn_DEF_NR_CellGroupConfig, NULL, &mcg, (void **)&nr_mcg.buf);
+  if (nr_mcg.size <= 0) {
+    LOG_E(NR_RRC, "go_fr2: Failed to encode CellGroupConfig of MCG\n");
+    free(nr_scg.buf);
+    return;
+  }
+
+  /* build main RRCReconfiguration containing the sCG one
+   * (we have to embed an RRCReconfiguration inside an RRCReconfiguration
+   * as explained in 38.331 6.2.2 description of RRCReconfiguration,
+   * especially the explaination about secondaryCellGroup)
+   */
+  NR_DL_DCCH_Message_t dl_dcch_msg = {
+    .message = {
+       .present = NR_DL_DCCH_MessageType_PR_c1,
+       .choice = {
+         .c1 = &(struct NR_DL_DCCH_MessageType__c1) {
+           .present = NR_DL_DCCH_MessageType__c1_PR_rrcReconfiguration,
+           .choice = {
+             .rrcReconfiguration = &(struct NR_RRCReconfiguration) {
+               .rrc_TransactionIdentifier = xid,
+               .criticalExtensions = {
+                 .present = NR_RRCReconfiguration__criticalExtensions_PR_rrcReconfiguration,
+                 .choice = {
+                   .rrcReconfiguration = &(struct NR_RRCReconfiguration_IEs) {
+                     .radioBearerConfig = &(struct NR_RadioBearerConfig) {
+                       .drb_ToAddModList = &(struct NR_DRB_ToAddModList) {
+                         .list = {
+                           .array = (struct NR_DRB_ToAddMod *[]) {
+                             &(struct NR_DRB_ToAddMod) {
+                               .drb_Identity = (NR_DRB_Identity_t) 1,
+#if 0
+                               .reestablishPDCP = &(long) {
+                                 NR_DRB_ToAddMod__reestablishPDCP_true
+                               },
+#endif
+                               .recoverPDCP = &(long) {
+                                 NR_DRB_ToAddMod__recoverPDCP_true
+                               }
+                             }
+                           },
+                           .count = 1
+                         }
+                       },
+#if 0
+                       .securityConfig = &(struct NR_SecurityConfig) {
+                         .keyToUse = &(long) { NR_SecurityConfig__keyToUse_secondary }
+                       }
+#endif
+                     },
+                     .nonCriticalExtension = &(struct NR_RRCReconfiguration_v1530_IEs) {
+                       .masterCellGroup = &nr_mcg,
+                       .nonCriticalExtension = &(struct NR_RRCReconfiguration_v1540_IEs) {
+                         .nonCriticalExtension = &(struct NR_RRCReconfiguration_v1560_IEs) {
+                           .mrdc_SecondaryCellGroupConfig = &(struct NR_SetupRelease_MRDC_SecondaryCellGroupConfig) {
+                             .present = NR_SetupRelease_MRDC_SecondaryCellGroupConfig_PR_setup,
+                             .choice = {
+                               .setup = &(struct NR_MRDC_SecondaryCellGroupConfig) {
+                                 .mrdc_SecondaryCellGroup = {
+                                   .present = NR_MRDC_SecondaryCellGroupConfig__mrdc_SecondaryCellGroup_PR_nr_SCG,
+                                   .choice = {
+                                     .nr_SCG = nr_scg
+                                   }
+                                 }
+                               }
+                             }
+                           },
+                           .sk_Counter = &(NR_SK_Counter_t) {
+                             (NR_SK_Counter_t) 0
+                           }
+                         }
+                       }
+                     }
+                   }
+                 }
+               }
+             }
+           }
+         }
+       }
+    }
+  };
+
+  /* encode and send */
+  unsigned char *buf = 0;
+
+  int len = uper_encode_to_new_buffer(&asn_DEF_NR_DL_DCCH_Message, NULL, &dl_dcch_msg, (void **)&buf);
+  free(nr_scg.buf);
+  free(nr_mcg.buf);
+  if (len <= 0) {
+    LOG_E(NR_RRC, "go_fr2: Failed to encode DL-DCCH message\n");
+    return;
+  }
+
+  const uint32_t msg_id = NR_DL_DCCH_MessageType__c1_PR_rrcReconfiguration;
+  nr_rrc_transfer_protected_rrc_message(rrc, UE, DL_SCH_LCID_DCCH, msg_id, buf, len);
+
+  free(buf);
+}
+
 static void rrc_gNB_process_MeasurementReport(gNB_RRC_INST *rrc, gNB_RRC_UE_t *UE, NR_MeasurementReport_t *measurementReport)
 {
   NR_MeasurementReport__criticalExtensions_PR p = measurementReport->criticalExtensions.present;
@@ -1785,6 +3039,13 @@ static void rrc_gNB_process_MeasurementReport(gNB_RRC_INST *rrc, gNB_RRC_UE_t *U
 
   NR_MeasurementReport_IEs_t *measurementReport_IEs = measurementReport->criticalExtensions.choice.measurementReport;
   const NR_MeasId_t measId = measurementReport_IEs->measResults.measId;
+
+  /* hack */
+  if (measId == 3) {
+    static int done = 0;
+    if (!done) go_fr2(rrc, UE);
+    done = 1;
+  }
 
   NR_MeasIdToAddMod_t *meas_id_s = NULL;
   for (int meas_idx = 0; meas_idx < meas_config->measIdToAddModList->list.count; meas_idx++) {
