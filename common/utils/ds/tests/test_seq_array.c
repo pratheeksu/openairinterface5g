@@ -7,6 +7,16 @@
 #include "../../alg/foreach.h"
 #include <assert.h>
 
+/* needed because shared_pointer.c is using DevAssert() and AssertFatal() */
+void exit_function(const char *file, const char *function, const int line, const char *s, const int assert)
+{
+  if (assert) {
+    abort();
+  } else {
+    exit(EXIT_SUCCESS);
+  }
+}
+
 /*
   Example to show seq_arr_t capabilities and usage
   To compile: gcc test_seq_array.c ../seq_arr.c  ../../alg/find.c ../../alg/foreach.c
