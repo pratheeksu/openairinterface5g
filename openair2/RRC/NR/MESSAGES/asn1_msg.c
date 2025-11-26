@@ -1318,69 +1318,6 @@ NR_MeasConfig_t *get_MeasConfig(const NR_MeasTiming_t *mt,
     }
   }
 
-  /* add FR2 measurement */
-  {
-    /* measObject */
-    NR_MeasObjectToAddMod_t *mo1 = calloc(1, sizeof(*mo1));
-    mo1->measObjectId = 2;
-    mo1->measObject.present = NR_MeasObjectToAddMod__measObject_PR_measObjectNR;
-    NR_MeasObjectNR_t *monr1 = calloc(1, sizeof(*monr1));
-    asn1cCallocOne(monr1->ssbFrequency, 2072251);
-    asn1cCallocOne(monr1->ssbSubcarrierSpacing, 3 /* 120KHz */);
-    monr1->referenceSignalConfig.ssb_ConfigMobility = calloc(1, sizeof(*monr1->referenceSignalConfig.ssb_ConfigMobility));
-    monr1->referenceSignalConfig.ssb_ConfigMobility->deriveSSB_IndexFromCell = true;
-    monr1->absThreshSS_BlocksConsolidation = calloc(1, sizeof(*monr1->absThreshSS_BlocksConsolidation));
-    asn1cCallocOne(monr1->absThreshSS_BlocksConsolidation->thresholdRSRP, 36);
-    asn1cCallocOne(monr1->nrofSS_BlocksToAverage, 8);
-    monr1->smtc1 = calloc(1, sizeof(*monr1->smtc1));
-    const NR_SSB_MTC_t *ssb_mtc = &ft->ssb_MeasurementTimingConfiguration;
-    monr1->smtc1->periodicityAndOffset = ssb_mtc->periodicityAndOffset;
-    monr1->smtc1->periodicityAndOffset.choice.sf20 = 2;
-    monr1->smtc1->duration = 1;
-    monr1->quantityConfigIndex = 1;
-    monr1->ext1 = calloc(1, sizeof(*monr1->ext1));
-    asn1cCallocOne(monr1->ext1->freqBandIndicatorNR, 257);
-
-
-    mo1->measObject.choice.measObjectNR = monr1;
-    asn1cSeqAdd(&mc->measObjectToAddModList->list, mo1);
-
-    /* measReportConfig */
-    /* A4 event */
-    NR_ReportConfigToAddMod_t *rc_A4 = calloc(1, sizeof(*rc_A4));
-    rc_A4->reportConfigId = 3;
-    rc_A4->reportConfig.present = NR_ReportConfigToAddMod__reportConfig_PR_reportConfigNR;
-    NR_EventTriggerConfig_t *etrc_A4 = calloc(1, sizeof(*etrc_A4));
-    etrc_A4->eventId.present = NR_EventTriggerConfig__eventId_PR_eventA4;
-    etrc_A4->eventId.choice.eventA4 = calloc(1, sizeof(*etrc_A4->eventId.choice.eventA4));
-    etrc_A4->eventId.choice.eventA4->a4_Threshold.present = NR_MeasTriggerQuantity_PR_rsrp;
-    etrc_A4->eventId.choice.eventA4->a4_Threshold.choice.rsrp = 20;
-    etrc_A4->eventId.choice.eventA4->reportOnLeave = true;
-    etrc_A4->eventId.choice.eventA4->hysteresis = 0;
-    etrc_A4->eventId.choice.eventA4->timeToTrigger = 1; // ms40
-    etrc_A4->rsType = NR_NR_RS_Type_ssb;
-    etrc_A4->reportInterval = NR_ReportInterval_ms120;
-    etrc_A4->reportAmount = NR_EventTriggerConfig__reportAmount_infinity;
-    etrc_A4->reportQuantityCell.rsrp = true;
-    etrc_A4->reportQuantityCell.rsrq = true;
-    etrc_A4->reportQuantityCell.sinr = true;
-    asn1cCallocOne(etrc_A4->maxNrofRS_IndexesToReport, 4);
-    etrc_A4->maxReportCells = 4;
-    etrc_A4->includeBeamMeasurements = false;
-    NR_ReportConfigNR_t *rcnr_A4 = calloc(1, sizeof(*rcnr_A4));
-    rcnr_A4->reportType.present = NR_ReportConfigNR__reportType_PR_eventTriggered;
-    rcnr_A4->reportType.choice.eventTriggered = etrc_A4;
-    rc_A4->reportConfig.choice.reportConfigNR = rcnr_A4;
-    asn1cSeqAdd(&mc->reportConfigToAddModList->list, rc_A4);
-
-    /* measId */
-    NR_MeasIdToAddMod_t *measid = calloc(1, sizeof(NR_MeasIdToAddMod_t));
-    measid->measId = 3;
-    measid->reportConfigId = 3;
-    measid->measObjectId = 2;
-    asn1cSeqAdd(&mc->measIdToAddModList->list, measid);
-  }
-
   // Quantity configurations: The quantity configuration defines the measurement filtering configuration used for measurement event
   // evaluation and related reporting, and for periodical reporting of that measurement.
   mc->quantityConfig = calloc_or_fail(1, sizeof(*mc->quantityConfig));
