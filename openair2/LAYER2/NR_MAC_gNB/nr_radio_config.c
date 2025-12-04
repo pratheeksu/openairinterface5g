@@ -2826,13 +2826,6 @@ NR_BCCH_DL_SCH_Message_t *get_SIB1_NR(const NR_ServingCellConfigCommon_t *scc,
   ServCellCom->downlinkConfigCommon.pcch_Config.nAndPagingFrameOffset.choice.quarterT = 1;
   ServCellCom->downlinkConfigCommon.pcch_Config.ns = NR_PCCH_Config__ns_one;
 
-  asn1cCalloc(ServCellCom->downlinkConfigCommon.pcch_Config.firstPDCCH_MonitoringOccasionOfPO, P0);
-  P0->present = NR_PCCH_Config__firstPDCCH_MonitoringOccasionOfPO_PR_sCS120KHZoneT_SCS60KHZhalfT_SCS30KHZquarterT_SCS15KHZoneEighthT;
-
-  asn1cCalloc(P0->choice.sCS120KHZoneT_SCS60KHZhalfT_SCS30KHZquarterT_SCS15KHZoneEighthT, Z8);
-  asn1cSequenceAdd(Z8->list, long, ZoneEight);
-  *ZoneEight = 0;
-
   asn1cCalloc(ServCellCom->uplinkConfigCommon, UL);
   asn_set_empty(&UL->frequencyInfoUL.scs_SpecificCarrierList.list);
   const NR_FrequencyInfoUL_t *frequencyInfoUL = scc->uplinkConfigCommon->frequencyInfoUL;
