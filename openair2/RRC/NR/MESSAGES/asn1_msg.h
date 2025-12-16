@@ -111,6 +111,7 @@ int do_RRCSetupRequest(uint8_t *buffer, size_t buffer_size, uint8_t *rv, uint64_
 
 int do_nrMeasurementReport_SA(long trigger_to_measid,
                               long trigger_quantity,
+                              bool report_rsrp,
                               long rs_type,
                               uint16_t Nid_cell,
                               int rsrp_index,

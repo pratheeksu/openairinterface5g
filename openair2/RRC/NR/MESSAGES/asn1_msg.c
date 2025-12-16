@@ -880,9 +880,10 @@ int do_RRCSetupComplete(uint8_t *buffer,
   return((enc_rval.encoded+7)/8);
 }
 
-// TODO: This function is only implemented for event A2/A3
+// This function is implemented for event A2/A3 and periodical report
 int do_nrMeasurementReport_SA(long trigger_to_measid,
                               long trigger_quantity,
+                              bool report_rsrp,
                               long rs_type,
                               uint16_t Nid_cell,
                               int rsrp_index,
@@ -913,7 +914,7 @@ int do_nrMeasurementReport_SA(long trigger_to_measid,
   *pci = Nid_cell;
 
   struct NR_MeasQuantityResults *active_mq_res = calloc_or_fail(1, sizeof(*active_mq_res));
-  if (trigger_quantity == NR_MeasTriggerQuantityOffset_PR_rsrp) {
+  if (trigger_quantity == NR_MeasTriggerQuantityOffset_PR_rsrp || report_rsrp) {
     asn1cCalloc(active_mq_res->rsrp, rsrp);
     // Assign precomputed RSRP index
     *rsrp = rsrp_index;
@@ -937,7 +938,7 @@ int do_nrMeasurementReport_SA(long trigger_to_measid,
     *neighbor_pci = neighbor_Nid_cell;
     struct NR_MeasResultNR__measResult__cellResults *cellResults = &meas_result_neigh_cell->measResult.cellResults;
     struct NR_MeasQuantityResults *neigh_mq_res = calloc_or_fail(1, sizeof(*neigh_mq_res));
-    if (trigger_quantity == NR_MeasTriggerQuantityOffset_PR_rsrp) {
+    if (trigger_quantity == NR_MeasTriggerQuantityOffset_PR_rsrp || report_rsrp) {
       asn1cCalloc(neigh_mq_res->rsrp, rsrp);
       *rsrp = neighbor_rsrp_index;
       if (rs_type == NR_NR_RS_Type_ssb)
