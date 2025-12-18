@@ -17,6 +17,15 @@
 void nr_interleaving_ldpc(uint32_t E, uint8_t Qm, uint8_t *e, uint8_t *f);
 
 /**
+ * \brief interleave a code segment after encoding and rate matching (32bit)
+ * \param E size of the code segment in bits
+ * \param Qm modulation order
+ * \param e input rate matched segment
+ * \param f output interleaved segment
+ */
+
+void nr_interleaving_ldpc32(uint32_t E, uint8_t Qm, uint32_t *e, uint32_t *f);
+/**
  * \brief deinterleave a code segment before RX rate matching and decoding
  * \param E size of the code segment in bits
  * \param Qm modulation order
@@ -48,6 +57,30 @@ int nr_rate_matching_ldpc(uint32_t Tbslbrm,
                           uint32_t Foffset,
                           uint8_t rvidx,
                           uint32_t E);
+
+/**
+ * \brief rate match a code segment after encoding (32bit)
+ * \Tbslbrm Transport Block size LBRM
+ * \param BG LDPC base graph number
+ * \param Z segment lifting size
+ * \param d input encoded segment
+ * \param e output rate matched segment
+ * \param C number of segments in the Transport Block
+ * \param F number of filler bits in the segment
+ * \param Foffset offset of the filler bits in the segment
+ * \param rvidx redundancy version index
+ * \param E size of the code segment in bits
+ */
+int nr_rate_matching_ldpc32(uint32_t Tbslbrm,
+                            uint8_t BG,
+                            uint16_t Z,
+                            uint32_t *d,
+                            uint32_t *e,
+                            uint8_t C,
+                            uint32_t F,
+                            uint32_t Foffset,
+                            uint8_t rvidx,
+                            uint32_t E);
 
 /**
  * \brief rate match a code segment before decoding
