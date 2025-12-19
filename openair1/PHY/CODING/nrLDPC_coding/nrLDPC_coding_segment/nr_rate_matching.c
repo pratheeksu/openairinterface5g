@@ -648,13 +648,13 @@ static inline uint8x16_t tbl96_u8(uint8x16_t b0, uint8x16_t b1, uint8x16_t b2,
                                   uint8x16_t idx /* 0..95 */)
 {
    // Table 0: bytes 0..63
-   uint8x16x4_t T0 = { b0, b1, b2, b3 };
+   uint8x16x4_t T0 = {{ b0, b1, b2, b3 }};
    uint8x16_t r0 = vqtbl4q_u8(T0, idx);
 
    // Table 1: bytes 64..95, presented as a 64-byte table:
    // bytes 0..31 map to original 64..95, bytes 32..63 are dummy (return 0)
    uint8x16_t z = vdupq_n_u8(0);
-   uint8x16x4_t T1 = { b4, b5, z, z };
+   uint8x16x4_t T1 = {{ b4, b5, z, z }};
 
    // idx1 = idx - 64 (wrap-safe via unsigned subtract); only valid when idx>=64
    uint8x16_t idx1 = vsubq_u8(idx, vdupq_n_u8(64));
@@ -670,11 +670,11 @@ static inline uint8x16_t tbl128_u8(uint8x16_t b0, uint8x16_t b1, uint8x16_t b2, 
 	                           uint8x16_t idx /* 0..127 */)
 {
   // Table low: bytes 0..63
-     uint8x16x4_t T0 = { b0, b1, b2, b3 };
+     uint8x16x4_t T0 = {{ b0, b1, b2, b3 }};
      uint8x16_t r0 = vqtbl4q_u8(T0, idx);
 
  // Table high: bytes 64..127, mapped to 0..63 by subtracting 64
-     uint8x16x4_t T1 = { b4, b5, b6, b7 };
+     uint8x16x4_t T1 = {{ b4, b5, b6, b7 }};
      uint8x16_t idx1 = vsubq_u8(idx, vdupq_n_u8(64));
      uint8x16_t r1 = vqtbl4q_u8(T1, idx1);
 
@@ -919,7 +919,7 @@ void nr_deinterleaving_ldpc(uint32_t E, uint8_t Qm, int16_t *e, int16_t *f)
       const uint8x16_t idx5 = { 10, 11, 22, 23, 34, 35, 46, 47,
                                 58, 59, 70, 71, 82, 83, 94, 95 };
 
-      for (; i < EQm; i += 8) {
+      for (; i + 8 < EQm; i += 8) {
 	// Load 96 bytes (48 u16)
 	uint8x16_t b0 = vld1q_u8((const uint8_t*)(f +  0)); // bytes  0..15
 	uint8x16_t b1 = vld1q_u8((const uint8_t*)(f +  8)); // bytes 16..31
@@ -996,35 +996,6 @@ void nr_deinterleaving_ldpc(uint32_t E, uint8_t Qm, int16_t *e, int16_t *f)
         _mm512_mask_storeu_epi16((void*)e5, store16, o5); e5 += 16;
      }
 			//
-#elif defined()
-    // Byte offsets inside one 8-group block (96 bytes):
-    // want u16 at position (k + 6*n) => byte offset 2*(k + 6*n).
-    static const int idx0[8] = {  0, 12, 24, 36, 48, 60, 72, 84 } __attribute__((aligned(64)));
-    static const int idx1[8] = {  2, 14, 26, 38, 50, 62, 74, 86 } __attribute__((aligned(64)));
-    static const int idx2[8] = {  4, 16, 28, 40, 52, 64, 76, 88 } __attribute__((aligned(64)));
-    static const int idx3[8] = {  6, 18, 30, 42, 54, 66, 78, 90 } __attribute__((aligned(64)));
-    static const int idx4[8] = {  8, 20, 32, 44, 56, 68, 80, 92 } __attribute__((aligned(64)));
-    static const int idx5[8] = { 10, 22, 34, 46, 58, 70, 82, 94 } __attribute__((aligned(64)));
-    //
-    int i = 0;
-    for (; i + 8 <= EQm; i += 8) {
-    // Gather within current 96-byte block starting at f
-    __m128i o0 = gather8_u16_to_xmm(f, idx0);
-    __m128i o1 = gather8_u16_to_xmm(f, idx1);
-    __m128i o2 = gather8_u16_to_xmm(f, idx2);
-    __m128i o3 = gather8_u16_to_xmm(f, idx3);      
-    __m128i o4 = gather8_u16_to_xmm(f, idx4);
-    __m128i o5 = gather8_u16_to_xmm(f, idx5);
-
-    _mm_storeu_si128((__m128i*)e0, o0); e0 += 8;
-    _mm_storeu_si128((__m128i*)e1, o1); e1 += 8;
-    _mm_storeu_si128((__m128i*)e2, o2); e2 += 8;
-    _mm_storeu_si128((__m128i*)e3, o3); e3 += 8;
-    _mm_storeu_si128((__m128i*)e4, o4); e4 += 8;
-    _mm_storeu_si128((__m128i*)e5, o5); e5 += 8;
-
-    f += 48; // consumed 8 groups * 6 u16 = 48 u16
-}	
 #endif
       for (; i < EQm; i++) {
         *e++ = *f++;
