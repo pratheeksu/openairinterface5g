@@ -723,23 +723,6 @@ static inline __mmask32 make_mask_bc(int k) {
    }
    return m;
 }
-//
-#elif defined(__AVX2__)
-static inline __m128i gather8_u16_to_xmm(const uint16_t *base_u16, const int idx_bytes[8])
-{
-    // Gather 8x 32-bit values from byte offsets; each contains desired u16 in low 16 bits.
-    const int *base_i8_as_i32 = (const int *)(const void *)((const char*)base_u16);
-    __m256i vidx = _mm256_loadu_si256((const __m256i*)idx_bytes);
-    __m256i g32  = _mm256_i32gather_epi32(base_i8_as_i32, vidx, 1);
-
-    // keep low 16 bits
-    g32 = _mm256_and_si256(g32, _mm256_set1_epi32(0xFFFF));
-
-    // pack 8x32 -> 8x16 in low 128 bits (values are unsigned <= 65535 so packus is safe)
-    __m256i packed = _mm256_packus_epi32(g32, g32);
-    // packed contains 16x16 with duplicates; take low 128 which has our 8 u16
-    return _mm256_castsi256_si128(packed);
-}
 #endif
 
 void nr_deinterleaving_ldpc(uint32_t E, uint8_t Qm, int16_t *e, int16_t *f)
@@ -771,8 +754,6 @@ void nr_deinterleaving_ldpc(uint32_t E, uint8_t Qm, int16_t *e, int16_t *f)
         _mm512_storeu_si512((void*)e, o0); e += 32;
         _mm512_storeu_si512((void*)e1, o1); e1 += 32;
     }
-#elif defined(__AVX2__)
-
 #else 
       simde__m128i *e0_128 = (simde__m128i *)e;
       simde__m128i *e1_128 = (simde__m128i *)e1;
@@ -855,8 +836,6 @@ void nr_deinterleaving_ldpc(uint32_t E, uint8_t Qm, int16_t *e, int16_t *f)
 	_mm512_storeu_si512((void*)e2, o2); e2 += 32;
 	_mm512_storeu_si512((void*)e3, o3); e3 += 32;
       }
-#elif defined(__AVX2__
-
 #else 
       simde__m128i *e0_128 = (simde__m128i *)e;
       simde__m128i *e1_128 = (simde__m128i *)e1;
@@ -1120,7 +1099,6 @@ void nr_deinterleaving_ldpc(uint32_t E, uint8_t Qm, int16_t *e, int16_t *f)
 
         #undef DO_STREAM
     }
-#elif defined(__AVX2__)
 
 #else
       simde__m128i *e0_128 = (simde__m128i *)e;
@@ -1396,21 +1374,9 @@ int nr_rate_matching_ldpc32(uint32_t Tbslbrm,
 }
 
 //#define USE_SCALAR 1
-/*
-#if defined(__AVX512BW__) 
-#define RMLOOP for (;ind<(ind2&31);k+=32,ind+=32) \
-      simde_mm_storeu_si128(&d[ind],simde_mm_adds_epi16(simde_mm_loadu_si128(&soft_input[k]),simde_mm_loadu_si128(&d[ind])));\
-   for (; ind<ind2 ; ind++,k++) d[ind] += soft_input[k];  
-#elif defined(__AVX2__)
-#define RMLOOP for (;ind<(ind2&15);k+=16,ind+=16) \
-      _mm256_storeu_si256(&d[ind],_mm256_adds_epi16(_mm256_loadu_si128(&soft_input[k]),_mm256_loadu_si256(&d[ind])));\
-   for (; ind<ind2 ; ind++,k++) d[ind] += soft_input[k];  
-
-#else */
 #define RMLOOP for (;ind<(ind2&7);k+=8,ind+=8) \
       simde_mm_storeu_si128(&d[ind],simde_mm_adds_epi16(simde_mm_loadu_si128(&soft_input[k]),simde_mm_loadu_si128(&d[ind])));\
    for (; ind<ind2 ; ind++,k++) d[ind] += soft_input[k];  
-//#endif
   
 int nr_rate_matching_ldpc_rx(uint32_t Tbslbrm,
                              uint8_t BG,
