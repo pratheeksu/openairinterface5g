@@ -760,7 +760,7 @@ void nr_deinterleaving_ldpc(uint32_t E, uint8_t Qm, int16_t *e, int16_t *f)
       simde__m128i *f128   = (simde__m128i *)f;	  
       const uint8_t shuf4[16]  __attribute__((aligned(16))) = {0,1,4,5,8,9,12,13,2,3,6,7,10,11,14,15};
       const simde__m128i *shuf4_128 = (const simde__m128i *)shuf4;
-      for (i=0; i < (EQm & ~7); i += 8) {      
+      for (; i < (EQm & ~7); i += 8) {      
             simde__m128i f0j = simde_mm_loadu_si128(f128++); // f0(i) f0(i+1) f0(i+2) f0(i+3) f0(i+4) f0(i+5) f0(i+6) f0(i+7)
             simde__m128i f1j = simde_mm_loadu_si128(f128++); // f1(i) f1(i+1) f1(i+2) f1(i+3) f1(i+4) f1(i+5) f1(i+6) f1(i+7)
     	    simde__m128i tmp0 = simde_mm_shuffle_epi8(f0j,*shuf4_128); // f0(i) f0(i+2) f0(i+4) f0(i+6) f0(i+1) f0(i+3) f0(i+5) f0(i+7)
@@ -768,6 +768,9 @@ void nr_deinterleaving_ldpc(uint32_t E, uint8_t Qm, int16_t *e, int16_t *f)
             simde_mm_storeu_si128(e0_128++,simde_mm_unpacklo_epi64(tmp0, tmp1));   // f0(i) f0(i+2) f0(i+4) f0(i+6) f1(i) f1(i+2) f1(i+4) f1(i+6)
             simde_mm_storeu_si128(e1_128++,simde_mm_unpackhi_epi64(tmp0, tmp1));   // f0(i+1) f0(i+3) f0(i+5) f0(i+7) f1(i+1) f1(i+3) f1(i+5) f1(i+7)
       }
+      e=(int16_t *)e0_128;
+      e1=(int16_t *)e1_128;
+      f=(int16_t *)f128;
 #endif
       for (; i < EQm; i++) {
         *e++ = *f++;
@@ -865,6 +868,11 @@ void nr_deinterleaving_ldpc(uint32_t E, uint8_t Qm, int16_t *e, int16_t *f)
         simde_mm_storeu_si128(e2_128++,simde_mm_unpacklo_epi64(tmp4, tmp5));   // f0(i+2) f0(i+6) f1(i+2) f1(i+6) f2(i+2) f2(i+6) f3(i+2) f3(i+6)
   	simde_mm_storeu_si128(e3_128++,simde_mm_unpackhi_epi64(tmp4, tmp5));   // f0(i+3) f0(i+7) f1(i+3) f1(i+7) f2(i+3) f2(i+7) f3(i+3) f3(i+7)
       } 
+      e=(int16_t *)e0_128;
+      e1=(int16_t *)e1_128;
+      e2=(int16_t *)e2_128;
+      e3=(int16_t *)e3_128;
+      f=(int16_t *)f128;
 #endif
       for (; i < EQm; i++) {
         *e++ = *f++;
