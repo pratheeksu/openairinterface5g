@@ -758,7 +758,7 @@ void nr_deinterleaving_ldpc(uint32_t E, uint8_t Qm, int16_t *e, int16_t *f)
       simde__m128i *e0_128 = (simde__m128i *)e;
       simde__m128i *e1_128 = (simde__m128i *)e1;
       simde__m128i *f128   = (simde__m128i *)f;	  
-      const uint8_t shuf4[16] = {0,1,4,5,8,9,12,13,2,3,6,7,10,11,14,15} __attribute__((aligned(16)));;
+      const uint8_t shuf4[16]  __attribute__((aligned(16))) = {0,1,4,5,8,9,12,13,2,3,6,7,10,11,14,15};
       const simde__m128i *shuf4_128 = (const simde__m128i *)shuf4;
       for (i=0; i < (EQm & ~7); i += 8) {      
             simde__m128i f0j = simde_mm_loadu_si128(f128++); // f0(i) f0(i+1) f0(i+2) f0(i+3) f0(i+4) f0(i+5) f0(i+6) f0(i+7)
@@ -843,7 +843,7 @@ void nr_deinterleaving_ldpc(uint32_t E, uint8_t Qm, int16_t *e, int16_t *f)
       simde__m128i *e3_128 = (simde__m128i *)e3;
       simde__m128i *f128   = (simde__m128i *)f;	  
      
-      const uint8_t shuf16[16] = {0,1,8,9,2,3,10,11,4,5,12,13,6,7,14,15} __attribute__((aligned(64)));
+      const uint8_t shuf16[16]  __attribute__((aligned(16))) = {0,1,8,9,2,3,10,11,4,5,12,13,6,7,14,15};
       const simde__m128i *shuf16_128 = (const simde__m128i *)shuf16;
 
       for (i=0; i < (EQm & ~7); i += 8) {      
