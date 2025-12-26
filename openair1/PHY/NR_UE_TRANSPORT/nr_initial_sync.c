@@ -289,6 +289,49 @@ void nr_scan_ssb(void *arg)
     int detected_nid_cell = -1;
     int ssb_offset = 0;
     int freq_offset_pss = 0;
+    const int sync_pos = pss_synchro_nr((const c16_t **)rxdata,
+                                        fp,
+                                        pssTime,
+                                        frame_id,
+                                        ssbInfo->foFlag,
+                                        ssbInfo->targetNidCell,
+                                        &nid2,
+                                        &freq_offset_pss,
+                                        &ssbInfo->pssCorrPeakPower,
+                                        &ssbInfo->pssCorrAvgPower);
+    if (sync_pos < fp->nb_prefix_samples)
+      continue;
+
+    ssbInfo->ssbOffset = sync_pos - fp->nb_prefix_samples;
+
+#if 1
+    LOG_I(PHY, "Initial sync : Estimated PSS position %d, Nid2 %d, ssb offset %d\n", sync_pos, nid2, ssbInfo->ssbOffset);
+#endif
+    /* check that SSS/PBCH block is continuous inside the received buffer */
+    if (ssbInfo->ssbOffset + NR_N_SYMBOLS_SSB * (fp->ofdm_symbol_size + fp->nb_prefix_samples) >= fp->samples_per_frame) {
+      LOG_D(PHY, "Can't try to decode SSS from PSS position, will retry (PSS circular buffer wrapping): sync_pos %d\n", sync_pos);
+      continue;
+    }
+
+    // digital compensation of FFO for SSB symbols
+    if (ssbInfo->foFlag) {
+      compensate_freq_offset(rxdata, fp, freq_offset_pss, frame_id);
+    }
+
+    /* slot_fep function works for lte and takes into account begining of frame with prefix for subframe 0 */
+    /* for NR this is not the case but slot_fep is still used for computing FFT of samples */
+    /* in order to achieve correct processing for NR prefix samples is forced to 0 and then restored after function call */
+    /* symbol number are from beginning of SS/PBCH blocks as below:  */
+    /*    Signal            PSS  PBCH  SSS  PBCH                     */
+    /*    symbol number      0     1    2    3                       */
+    /* time samples in buffer rxdata are used as input of FFT -> FFT results are stored in the frequency buffer rxdataF */
+    /* rxdataF stores SS/PBCH from beginning of buffers in the same symbol order as in time domain */
+
+    const uint32_t rxdataF_sz = fp->samples_per_slot_wCP;
+    __attribute__((aligned(32))) c16_t rxdataF[fp->nb_antennas_rx][rxdataF_sz];
+    for (int i = 0; i < NR_N_SYMBOLS_SSB; i++)
+      nr_slot_fep(NULL, fp, 0, i, rxdataF, link_type_dl, frame_id * fp->samples_per_frame + ssbInfo->ssbOffset, (c16_t **)rxdata);
+
     int freq_offset_sss = 0;
 
     int32_t metric_tdd_ncp = 0;
