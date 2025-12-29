@@ -1738,7 +1738,7 @@ static NR_BWP_Downlink_t *config_downlinkBWP(const NR_ServingCellConfigCommon_t 
     bwp->bwp_Common->genericParameters.subcarrierSpacing = bwp_config->scs;
     bwp->bwp_Common->genericParameters.cyclicPrefix = NULL;
   } else {
-    bwp->bwp_Common->genericParameters.locationAndBandwidth = PRBalloc_to_locationandbandwidth(scc->downlinkConfigCommon->frequencyInfoDL->scs_SpecificCarrierList.list.array[0]->carrierBandwidth,0);
+    bwp->bwp_Common->genericParameters.locationAndBandwidth = 24485;
     bwp->bwp_Common->genericParameters.subcarrierSpacing = scc->downlinkConfigCommon->initialDownlinkBWP->genericParameters.subcarrierSpacing;
     bwp->bwp_Common->genericParameters.cyclicPrefix = scc->downlinkConfigCommon->initialDownlinkBWP->genericParameters.cyclicPrefix;
   }
@@ -1846,7 +1846,7 @@ static NR_BWP_Uplink_t *config_uplinkBWP(bool is_SA,
     ubwp->bwp_Common->genericParameters.subcarrierSpacing = configuration->bwp_config[bwp_idx].scs;
     ubwp->bwp_Common->genericParameters.cyclicPrefix = NULL;
   } else {
-    ubwp->bwp_Common->genericParameters.locationAndBandwidth = PRBalloc_to_locationandbandwidth(scc->uplinkConfigCommon->frequencyInfoUL->scs_SpecificCarrierList.list.array[0]->carrierBandwidth,0);
+    ubwp->bwp_Common->genericParameters.locationAndBandwidth = 24485;
     ubwp->bwp_Common->genericParameters.subcarrierSpacing = scc->uplinkConfigCommon->initialUplinkBWP->genericParameters.subcarrierSpacing;
     ubwp->bwp_Common->genericParameters.cyclicPrefix = scc->uplinkConfigCommon->initialUplinkBWP->genericParameters.cyclicPrefix;
   }
