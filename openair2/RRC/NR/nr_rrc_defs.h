@@ -119,6 +119,7 @@ typedef enum {
   RRC_PDUSESSION_MODIFY,
   RRC_PDUSESSION_RELEASE,
   RRC_UECAPABILITY_ENQUIRY,
+  RRC_F1_NRDC_IN_PROGRESS,
 } rrc_action_t;
 
 typedef struct nr_rrc_config {
@@ -266,6 +267,9 @@ typedef struct gNB_RRC_UE_s {
   uint64_t measurement_object_ids;       /* bitfield, 64 possible values */
   uint64_t measurement_ids;              /* bitfield, 64 possible values */
   uint64_t report_config_ids;            /* bitfield, 64 possible values */
+
+  /* opaque pointer to store NR-DC state (NULL when no NR-DC) */
+  void *nrdc;
 } gNB_RRC_UE_t;
 
 typedef struct rrc_gNB_ue_context_s {

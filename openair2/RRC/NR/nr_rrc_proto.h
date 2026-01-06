@@ -105,4 +105,11 @@ void rrc_f1_ue_context_setup_for_target_du(const gNB_RRC_INST *rrc,
                                            const nr_rrc_cell_container_t *cell,
                                            const byte_array_t *ho_prep_info);
 
+void nr_rrc_transfer_protected_rrc_message(const gNB_RRC_INST *rrc,
+                                           const gNB_RRC_UE_t *ue_p,
+                                           uint8_t srb_id,
+                                           const uint32_t message_id,
+                                           const uint8_t *buffer,
+                                           int size);
+
 #endif
