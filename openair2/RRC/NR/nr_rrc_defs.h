@@ -261,6 +261,11 @@ typedef struct gNB_RRC_UE_s {
   delayed_action_state_t delayed_action;
 
   nr_redcap_ue_cap_t *redcap_cap;
+
+  /* measurement IDs */
+  uint64_t measurement_object_ids;       /* bitfield, 64 possible values */
+  uint64_t measurement_ids;              /* bitfield, 64 possible values */
+  uint64_t report_config_ids;            /* bitfield, 64 possible values */
 } gNB_RRC_UE_t;
 
 typedef struct rrc_gNB_ue_context_s {
