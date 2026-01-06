@@ -42,9 +42,9 @@
 #include "notified_fifo.h"
 
 #define NB_CNX_UE 2//MAX_MANAGED_RG_PER_MOBILE
-#define MAX_MEAS_OBJ 64
-#define MAX_MEAS_CONFIG 64
-#define MAX_MEAS_ID 64
+#define NR_MAX_MEAS_OBJ 64
+#define NR_MAX_MEAS_CONFIG 64
+#define NR_MAX_MEAS_ID 64
 #define MAX_QUANTITY_CONFIG 2
 #define NUMBER_OF_NEIGHBORING_CELLS_MAX 1
 
@@ -187,11 +187,11 @@ typedef struct l3_measurements_s {
 } l3_measurements_t;
 
 typedef struct rrcPerNB {
-  NR_MeasObjectToAddMod_t *MeasObj[MAX_MEAS_OBJ];
-  NR_ReportConfigToAddMod_t *ReportConfig[MAX_MEAS_CONFIG];
+  NR_MeasObjectToAddMod_t *MeasObj[NR_MAX_MEAS_OBJ];
+  NR_ReportConfigToAddMod_t *ReportConfig[NR_MAX_MEAS_CONFIG];
   NR_QuantityConfigNR_t *QuantityConfig[MAX_QUANTITY_CONFIG];
-  NR_MeasIdToAddMod_t *MeasId[MAX_MEAS_ID];
-  NR_VarMeasReport_t *MeasReport[MAX_MEAS_ID];
+  NR_MeasIdToAddMod_t *MeasId[NR_MAX_MEAS_ID];
+  NR_VarMeasReport_t *MeasReport[NR_MAX_MEAS_ID];
   NR_MeasGapConfig_t *measGapConfig;
   NR_UE_RRC_SI_INFO SInfo;
   NR_RSRP_Range_t s_measure;

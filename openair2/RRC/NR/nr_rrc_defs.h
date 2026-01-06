@@ -45,10 +45,6 @@ typedef enum {
   NR_RRC_HO_STARTED
 } NR_RRC_status_t;
 
-#define MAX_MEAS_OBJ                                  7
-#define MAX_MEAS_CONFIG                               7
-#define MAX_MEAS_ID                                   7
-
 #define UNDEF_SECURITY_MODE                           0xff
 #define NO_SECURITY_MODE                              0x20
 

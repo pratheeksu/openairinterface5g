@@ -941,7 +941,7 @@ static void nr_rrc_process_reconfigurationWithSync(NR_UE_RRC_INST_t *rrc,
 
   // Clear neighbor cell lists from measurement objects during handover
   rrcPerNB_t *rrcNB = &rrc->perNB[gNB_index];
-  for (int i = 0; i < MAX_MEAS_OBJ; i++) {
+  for (int i = 0; i < NR_MAX_MEAS_OBJ; i++) {
     if (rrcNB->MeasObj[i] && rrcNB->MeasObj[i]->measObject.present == NR_MeasObjectToAddMod__measObject_PR_measObjectNR) {
       NR_MeasObjectNR_t *measObjNR = rrcNB->MeasObj[i]->measObject.choice.measObjectNR;
       if (measObjNR->cellsToAddModList) {
@@ -1221,7 +1221,7 @@ static void handle_measobj_remove(rrcPerNB_t *rrc, struct NR_MeasObjectToRemoveL
       // remove the entry with the matching measObjectId from the measObjectList
       asn1cFreeStruc(asn_DEF_NR_MeasObjectToAddMod, rrc->MeasObj[id - 1]);
       // remove all measId associated with this measObjectId from the measIdList
-      for (int j = 0; j < MAX_MEAS_ID; j++) {
+      for (int j = 0; j < NR_MAX_MEAS_ID; j++) {
         if (rrc->MeasId[j] && rrc->MeasId[j]->measObjectId == id) {
           asn1cFreeStruc(asn_DEF_NR_MeasIdToAddMod, rrc->MeasId[j]);
           handle_meas_reporting_remove(rrc, j, timers);
@@ -1319,7 +1319,7 @@ static void handle_reportconfig_remove(rrcPerNB_t *rrc,
     NR_ReportConfigId_t id = *remove_list->list.array[i];
     // remove the entry with the matching reportConfigId from the reportConfigList
     asn1cFreeStruc(asn_DEF_NR_ReportConfigToAddMod, rrc->ReportConfig[id]);
-    for (int j = 0; j < MAX_MEAS_ID; j++) {
+    for (int j = 0; j < NR_MAX_MEAS_ID; j++) {
       if (rrc->MeasId[j] && rrc->MeasId[j]->reportConfigId == id) {
         // remove all measId associated with the reportConfigId from the measIdList
         asn1cFreeStruc(asn_DEF_NR_MeasIdToAddMod, rrc->MeasId[j]);
@@ -1341,7 +1341,7 @@ static void handle_reportconfig_addmod(rrcPerNB_t *rrc,
     }
     NR_ReportConfigId_t id = rep->reportConfigId;
     if (rrc->ReportConfig[id]) {
-      for (int j = 0; j < MAX_MEAS_ID; j++) {
+      for (int j = 0; j < NR_MAX_MEAS_ID; j++) {
         // for each measId associated with this reportConfigId included in the measIdList
         if (rrc->MeasId[j] && rrc->MeasId[j]->reportConfigId == id)
           handle_meas_reporting_remove(rrc, j, timers);
@@ -1371,7 +1371,7 @@ static void handle_quantityconfig(rrcPerNB_t *rrc, NR_QuantityConfig_t *quantity
         UPDATE_IE(rrc->QuantityConfig[i]->quantityConfigRS_Index, quantityNR->quantityConfigRS_Index, struct NR_QuantityConfigRS);
     }
   }
-  for (int j = 0; j < MAX_MEAS_ID; j++) {
+  for (int j = 0; j < NR_MAX_MEAS_ID; j++) {
     // for each measId included in the measIdList
     if (rrc->MeasId[j])
       handle_meas_reporting_remove(rrc, j, timers);
@@ -2770,7 +2770,7 @@ static int get_rsrp_value(const meas_t *cell)
 
 static int get_meas_id(rrcPerNB_t *rrcNB, int report_config_id)
 {
-  for (int j = 0; j < MAX_MEAS_ID; j++) {
+  for (int j = 0; j < NR_MAX_MEAS_ID; j++) {
     NR_MeasIdToAddMod_t *meas_id_toAddMod = rrcNB->MeasId[j];
     if (meas_id_toAddMod && meas_id_toAddMod->reportConfigId == report_config_id)
       return meas_id_toAddMod->measId;
@@ -2937,7 +2937,7 @@ static void nr_ue_check_meas_report(NR_UE_RRC_INST_t *rrc, const uint8_t gnb_ind
   rrcPerNB_t *rrcNB = rrc->perNB + gnb_index;
   l3_measurements_t *l3_measurements = &rrcNB->l3_measurements;
 
-  for (int i = 0; i < MAX_MEAS_CONFIG; i++) {
+  for (int i = 0; i < NR_MAX_MEAS_CONFIG; i++) {
     NR_ReportConfigToAddMod_t *report_config = rrcNB->ReportConfig[i];
     if (report_config == NULL)
       continue;
