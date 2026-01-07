@@ -3051,6 +3051,12 @@ static void rrc_gNB_process_MeasurementReport(gNB_RRC_INST *rrc, gNB_RRC_UE_t *U
     done = 1;
   }
 
+  /* check NR-DC measurement */
+  if (measId == get_scg_measurement_id(UE)) {
+    rrc_gnb_nrdc_measurement_received(rrc, UE, measurementReport);
+    return;
+  }
+
   NR_MeasIdToAddMod_t *meas_id_s = NULL;
   for (int meas_idx = 0; meas_idx < meas_config->measIdToAddModList->list.count; meas_idx++) {
     if (measId == meas_config->measIdToAddModList->list.array[meas_idx]->measId) {
@@ -3134,6 +3140,12 @@ static void handle_ueCapabilityInformation(gNB_RRC_INST *rrc, gNB_RRC_UE_t *UE, 
   int xid = ue_cap_info->rrc_TransactionIdentifier;
   rrc_action_t a = UE->xids[xid];
   UE->xids[xid] = RRC_ACTION_NONE;
+
+  if (a == RRC_F1_NRDC_IN_PROGRESS) {
+    rrc_gnb_nrdc_ue_capabilities_received(rrc, UE, ue_cap_info);
+    return;
+  }
+
   if (a != RRC_UECAPABILITY_ENQUIRY) {
     LOG_E(NR_RRC, "UE %d: received unsolicited UE Capability Information, aborting procedure\n", UE->rrc_ue_id);
     return;
@@ -3366,6 +3378,9 @@ static void handle_rrcReconfigurationComplete(gNB_RRC_INST *rrc, gNB_RRC_UE_t *U
       break;
     case RRC_ACTION_NONE:
       LOG_E(RRC, "UE %d: Received RRC Reconfiguration Complete with xid %d while no transaction is ongoing\n", UE->rrc_ue_id, xid);
+      break;
+    case RRC_F1_NRDC_IN_PROGRESS:
+      rrc_gnb_nrdc_rrc_reconfiguration_complete_received(rrc, UE, xid);
       break;
     default:
       LOG_E(RRC, "UE %d: Received unexpected transaction type %d for xid %d\n", UE->rrc_ue_id, UE->xids[xid], xid);
