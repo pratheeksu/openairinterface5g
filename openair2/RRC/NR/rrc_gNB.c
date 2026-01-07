@@ -4968,6 +4968,10 @@ void *rrc_gnb_task(void *args_p)
         rrc_gNB_free_Handover_Command(&NGAP_HANDOVER_COMMAND(msg_p)); // Free transfered NG message
         break;
 
+      case NR_RRC_NRDC_TIMEOUT:
+        rrc_gnb_nrdc_timeout(RC.nrrrc[instance], &NR_RRC_NRDC_TIMEOUT(msg_p));
+        break;
+
       default:
         LOG_E(NR_RRC, "[gNB %ld] Received unexpected message %s\n", instance, msg_name_p);
         break;

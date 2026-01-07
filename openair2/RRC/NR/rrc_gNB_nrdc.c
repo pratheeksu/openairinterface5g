@@ -10,6 +10,7 @@
 #include "LAYER2/NR_MAC_COMMON/nr_mac.h"
 #include "NR_UE-CapabilityRequestFilterNR.h"
 #include "NR_UECapabilityEnquiry-v1560-IEs.h"
+#include "common/utils/time_manager/time_timer.h"
 
 typedef enum {
   NRDC_NONE,
@@ -21,6 +22,7 @@ typedef struct {
   int mcg_band;
   int scg_band;
   int xid;
+  void *timer;
 } nrdc_ue_state_t;
 
 static int generate_ue_capability_enquiry(uint8_t *out, int outsize, int xid, int mcg_band, int scg_band)
@@ -153,6 +155,26 @@ static int generate_ue_capability_enquiry(uint8_t *out, int outsize, int xid, in
   return (size.encoded + 7) / 8;
 }
 
+/* called from timer thread, so simply send a "nrdc timeout" ITTI message to
+ * RRC that will do the real work
+ */
+static void timeout(void **p, uint64_t *v)
+{
+  gNB_RRC_INST *rrc = p[0];
+  uint64_t ue_id = v[0];
+  int xid = v[1];
+  nrdc_state_t state = v[2];
+
+  MessageDef *message_p = itti_alloc_new_message(TASK_RRC_GNB, rrc->module_id, NR_RRC_NRDC_TIMEOUT);
+  nr_rrc_nrdc_timeout_t *m = &NR_RRC_NRDC_TIMEOUT(message_p);
+  memset(m, 0, sizeof(*m));
+  m->ue_id = ue_id;
+  m->xid = xid;
+  m->state = state;
+
+  itti_send_msg_to_task(TASK_RRC_GNB, rrc->module_id, message_p);
+}
+
 /* This function checks that the CU has DUs connected that correspond
  * to a configured NR-DC combination.
  * For the first one that is found, the UE capabilities for NR-DC are
@@ -188,4 +210,50 @@ void rrc_gnb_nrdc_start(gNB_RRC_INST *rrc, gNB_RRC_UE_t *ue)
   /* send it to the UE */
   uint32_t msg_id = NR_DL_DCCH_MessageType__c1_PR_ueCapabilityEnquiry;
   nr_rrc_transfer_protected_rrc_message(rrc, ue, DL_SCH_LCID_DCCH, msg_id, ue_cap, size);
+
+  /* start a timer to react after some time (2s, arbitrary value) if the UE does not reply */
+  nrdc->timer = tick_timeout_start(2000, timeout,
+                                  (void *[]){ rrc }, 1,
+                                  (uint64_t []){ ue->rrc_ue_id, xid, nrdc->state }, 3);
+}
+
+void rrc_gnb_nrdc_timeout(gNB_RRC_INST *rrc, nr_rrc_nrdc_timeout_t *timeout)
+{
+  rrc_gNB_ue_context_t *ue_context = rrc_gNB_get_ue_context(rrc, timeout->ue_id);
+  if (!ue_context) {
+    LOG_W(NR_RRC, "UE %"PRIu64" not found, discard NR-DC timeout\n", timeout->ue_id);
+    return;
+  }
+  gNB_RRC_UE_t *ue = &ue_context->ue_context;
+  int state = timeout->state;
+  int xid = timeout->xid;
+
+  nrdc_ue_state_t *nrdc = ue->nrdc;
+  if (!nrdc) {
+    LOG_W(NR_RRC, "no NR-DC context found for ue %d, discard timeout\n", ue->rrc_ue_id);
+    return;
+  }
+  if (nrdc->state != state) {
+    LOG_W(NR_RRC, "bad state %d for NR-DC context of ue %d, discard timeout\n", state, ue->rrc_ue_id);
+    return;
+  }
+  if (nrdc->xid != xid) {
+    LOG_W(NR_RRC, "bad xid %d for NR-DC context of ue %d, discard timeout\n", xid, ue->rrc_ue_id);
+    return;
+  }
+
+  /* stop the timer (if any) */
+  if (nrdc->timer)
+    tick_timeout_stop(nrdc->timer);
+  nrdc->timer = 0;
+
+  /* clear the current action for this xid (if any) */
+  if (xid != -1) {
+    ue->xids[xid] = RRC_ACTION_NONE;
+  }
+
+  /* cancel the NR-DC activation procedure */
+  LOG_E(NR_RRC, "timeout, cancelling NR-DC activation procedure for UE %d\n", ue->rrc_ue_id);
+  free(ue->nrdc);
+  ue->nrdc = 0;
 }

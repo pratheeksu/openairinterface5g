@@ -10,5 +10,6 @@
 #include "NR_UL-DCCH-Message.h"
 
 void rrc_gnb_nrdc_start(gNB_RRC_INST *rrc, gNB_RRC_UE_t *ue);
+void rrc_gnb_nrdc_timeout(gNB_RRC_INST *rrc, nr_rrc_nrdc_timeout_t *timeout);
 
 #endif /* __RRC_GNB_NRDC_H__ */
