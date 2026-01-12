@@ -56,6 +56,7 @@ COPY --from=phy-sim-build \
     /usr/lib64/libubsan.so.1 \
     /oai-ran/cmake_targets/ran_build/build/libdfts.so \
     /oai-ran/cmake_targets/ran_build/build/libldpc*.so \
+    /oai-ran/cmake_targets/ran_build/build/libpolar.so \
     /usr/local/lib/
 
 RUN ldconfig && \

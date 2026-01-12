@@ -478,6 +478,7 @@ int main(int argc, char **argv)
     exit(-1);
   }
 
+  UE->polar_interface = gNB->polar_interface;
   fapi_nr_ul_config_pucch_pdu pucch_tx_pdu = {0};
   if (format == 0) {
     pucch_tx_pdu.format_type = 0;
@@ -543,7 +544,7 @@ int main(int argc, char **argv)
       } else if (format == 1 && do_DTX == 0) {
         nr_generate_pucch1(txdataF, frame_parms, amp, nr_slot_tx, &pucch_tx_pdu);
       } else if (do_DTX == 0) {
-        nr_generate_pucch2(txdataF, frame_parms, amp, nr_slot_tx, &pucch_tx_pdu);
+        nr_generate_pucch2(UE, txdataF, frame_parms, amp, nr_slot_tx, &pucch_tx_pdu);
       }
 
       // SNR Computation

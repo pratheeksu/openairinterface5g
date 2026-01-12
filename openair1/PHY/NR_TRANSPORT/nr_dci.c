@@ -13,7 +13,7 @@
 #include "PHY/MODULATION/nr_modulation.h"
 #include "common/utils/nr/nr_common.h"
 #include "SCHED_NR/sched_nr.h"
-
+#include "PHY/CODING/nrPolar_tools/polar_interface.h"
 //#define DEBUG_PDCCH_DMRS
 //#define DEBUG_DCI
 //#define DEBUG_CHANNEL_CODING
@@ -119,8 +119,12 @@ void nr_generate_dci(PHY_VARS_gNB *gNB,
     uint16_t Nid    = dci_pdu->ScramblingId;
     uint16_t scrambling_RNTI = dci_pdu->ScramblingRNTI;
 
-    polar_encoder_fast((uint64_t*)dci_pdu->Payload, (void*)encoder_output, n_RNTI, 1, 
-                       NR_POLAR_DCI_MESSAGE_TYPE, dci_pdu->PayloadSizeBits, dci_pdu->AggregationLevel);
+    gNB->polar_interface.polar_encoder((uint64_t *)dci_pdu->Payload,
+                                       encoder_output,
+                                       NR_POLAR_DCI_MESSAGE_TYPE,
+                                       dci_pdu->PayloadSizeBits,
+                                       dci_pdu->AggregationLevel,
+                                       n_RNTI);
 #ifdef DEBUG_CHANNEL_CODING
 //debug dump dci
     printf("polar rnti %x,length %d, L %d\n",n_RNTI, dci_pdu->PayloadSizeBits,pdcch_pdu_rel15->dci_pdu->AggregationLevel);

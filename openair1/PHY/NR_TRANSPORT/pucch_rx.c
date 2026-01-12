@@ -27,6 +27,7 @@
 #include "SCHED_NR/sched_nr.h"
 #include "bits.h"
 
+#include "PHY/CODING/nrPolar_tools/polar_interface.h"
 #include "T.h"
 #include "nr_phy_common.h"
 
@@ -1496,7 +1497,7 @@ void nr_decode_pucch2(PHY_VARS_gNB *gNB,
 
     // run polar decoder on llrs
     decoderState =
-        polar_decoder_int16((int16_t *)llrs, decodedPayload, 0, NR_POLAR_UCI_PUCCH_MESSAGE_TYPE, nb_bit, pucch_pdu->prb_size);
+        gNB->polar_interface.polar_decoder((int16_t *)llrs, decodedPayload, NR_POLAR_UCI_MESSAGE_TYPE, nb_bit, pucch_pdu->prb_size);
 
     // Decoder reversal
     decodedPayload[0] = reverse_bits(decodedPayload[0], nb_bit);

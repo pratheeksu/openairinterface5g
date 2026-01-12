@@ -16,7 +16,6 @@
 #endif
 
 #include "defs_nr_common.h"
-#include "CODING/nrPolar_tools/nr_polar_pbch_defs.h"
 #include "PHY/defs_nr_sl_UE.h"
 #include "openair1/PHY/nr_phy_common/inc/nr_ue_phy_meas.h"
 #include "common/utils/threadPool/task_ans.h"
@@ -61,6 +60,7 @@
 #include "time_meas.h"
 #include "PHY/CODING/coding_defs.h"
 #include "PHY/CODING/nrLDPC_coding/nrLDPC_coding_interface.h"
+#include "PHY/CODING/nrPolar_tools/polar_interface.h"
 #include "PHY/TOOLS/tools_defs.h"
 #include "common/platform_types.h"
 #include "NR_UE_TRANSPORT/nr_transport_ue.h"
@@ -401,6 +401,9 @@ typedef struct PHY_VARS_NR_UE_s {
   /// NR LDPC coding related
   nrLDPC_coding_interface_t nrLDPC_coding_interface;
   uint8_t max_ldpc_iterations;
+
+  /// NR Polar coding related
+  polar_interface_t polar_interface;
 
   /// CSI variables
   nr_csi_info_t *nr_csi_info;

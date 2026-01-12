@@ -11,13 +11,73 @@
 #include <stdlib.h>
 #include <string.h>
 #include <pthread.h>
-
-#include "PHY/CODING/nrPolar_tools/nr_polar_dci_defs.h"
-#include "PHY/CODING/nrPolar_tools/nr_polar_uci_defs.h"
-#include "PHY/CODING/nrPolar_tools/nr_polar_pbch_defs.h"
 #include "PHY/CODING/coding_defs.h"
 #include "PHY/sse_intrin.h"
-// #include "SIMULATION/TOOLS/sim.h"
+
+typedef enum polar_type_e {
+  NR_POLAR_PBCH_MESSAGE_TYPE,
+  NR_POLAR_DCI_MESSAGE_TYPE,
+  NR_POLAR_UCI_MESSAGE_TYPE,
+  SL_NR_POLAR_PSBCH_MESSAGE_TYPE
+} polar_type_t;
+
+#define NR_POLAR_DEFAULT_CRC 24
+
+typedef struct {
+  uint8_t n_max;
+  uint8_t i_il;
+  uint8_t i_bil;
+  uint8_t crcCorrectionBits;
+} polar_type_consts_t;
+
+static const polar_type_consts_t dci_polar_consts = (polar_type_consts_t){
+    // Sec. 7.3.3: Channel Coding
+    .n_max = 9,
+    .i_il = 1,
+    // Sec. 7.3.4: Rate Matching
+    .i_bil = 0,
+    .crcCorrectionBits = 3,
+};
+
+static const polar_type_consts_t pucch_polar_consts = (polar_type_consts_t){// Ref. 38-212, Section 6.3.1.3.1
+                                                                            .n_max = 10,
+                                                                            .i_il = 0,
+                                                                            // Ref. 38-212, Section 6.3.1.4.1
+                                                                            .i_bil = 1,
+                                                                            .crcCorrectionBits = 3};
+
+static const polar_type_consts_t pbch_polar_consts = (polar_type_consts_t){// Sec. 7.1.4: Channel Coding
+                                                                           .n_max = 9,
+                                                                           .i_il = 1,
+                                                                           // Sec. 7.1.5: Rate Matching
+                                                                           .i_bil = 0,
+                                                                           .crcCorrectionBits = 3};
+
+#define NR_POLAR_PBCH_AGGREGATION_LEVEL 0 // uint8_t
+#define NR_POLAR_PBCH_PAYLOAD_BITS 32 // uint16_t
+// Assumed 3 by 3GPP when NR_POLAR_PBCH_L>8 to meet false alarm rate requirements.
+#define NR_POLAR_PBCH_E 864 // uint16_t
+#define NR_POLAR_PBCH_E_DWORD 27 // NR_POLAR_PBCH_E/32
+#define NR_POLAR_PSBCH_E 1792 // uint16_t
+#define NR_POLAR_PSBCH_E_DWORD 56 // NR_POLAR_PSBCH_E/32
+
+static const polar_type_consts_t psbch_polar_consts = (polar_type_consts_t){// Sec. 7.1.4: Channel Coding
+                                                                            .n_max = 9,
+                                                                            .i_il = 1,
+                                                                            // Sec. 7.1.5: Rate Matching
+                                                                            .i_bil = 0,
+                                                                            .crcCorrectionBits = 3};
+
+// PSBCH related polar parameters.
+// PSBCH symbols sent in 11RBS, 9 symbols. 11*9*(12-3(for DMRS))*2bits = 1782 bits
+#define SL_NR_POLAR_PSBCH_E_NORMAL_CP 1782
+// PSBCH symbols sent in 11RBS, 7 symbols. 11*7*(12-3(for DMRS))*2bits = 1386 bits
+#define SL_NR_POLAR_PSBCH_E_EXT_CP 1386
+// SL_NR_POLAR_PSBCH_E_NORMAL_CP/32
+#define SL_NR_POLAR_PSBCH_E_DWORD 56
+
+#define SL_NR_POLAR_PSBCH_PAYLOAD_BITS 32
+#define SL_NR_POLAR_PSBCH_AGGREGATION_LEVEL 0
 
 #define NR_POLAR_DECODER_LISTSIZE 8 // uint8_t
 
@@ -62,16 +122,13 @@ typedef struct nrPolar_params {
   struct nrPolar_params *nextPtr __attribute__((aligned(16)));
   bool busy;
   uint32_t idx;
-  uint8_t n_max;
-  uint8_t i_il;
+  polar_type_consts_t consts;
   uint8_t i_seg;
   uint8_t n_pc;
   uint8_t n_pc_wm;
-  uint8_t i_bil;
   uint16_t payloadBits;
   uint16_t encoderLength;
   uint8_t crcParityBits;
-  uint8_t crcCorrectionBits;
   uint16_t K;
   uint16_t N;
   uint8_t n;
@@ -103,44 +160,6 @@ typedef struct nrPolar_params {
   } tree_linearization;
 } t_nrPolar_params;
 
-void polar_encoder(uint32_t *input, uint32_t *output, int8_t messageType, uint16_t messageLength, uint8_t aggregation_level);
-
-void polar_encoder_dci(uint32_t *in,
-                       uint32_t *out,
-                       uint16_t n_RNTI,
-                       int8_t messageType,
-                       uint16_t messageLength,
-                       uint8_t aggregation_level);
-
-void polar_encoder_fast(uint64_t *A,
-                        void *out,
-                        int32_t crcmask,
-                        uint8_t ones_flag,
-                        int8_t messageType,
-                        uint16_t messageLength,
-                        uint8_t aggregation_level);
-
-int8_t polar_decoder(double *input,
-                     uint32_t *output,
-                     uint8_t listSize,
-                     int8_t messageType,
-                     uint16_t messageLength,
-                     uint8_t aggregation_level);
-
-uint32_t polar_decoder_int16(int16_t *input,
-                             uint64_t *out,
-                             uint8_t ones_flag,
-                             int8_t messageType,
-                             uint16_t messageLength,
-                             uint8_t aggregation_level);
-
-int8_t polar_decoder_dci(double *input,
-                         uint32_t *out,
-                         uint8_t listSize,
-                         uint16_t n_RNTI,
-                         int8_t messageType,
-                         uint16_t messageLength,
-                         uint8_t aggregation_level);
 
 void generic_polar_decoder(t_nrPolar_params *pp, decoder_node_t *node, uint8_t *nr_polar_U);
 
@@ -159,7 +178,7 @@ void build_polar_tables(t_nrPolar_params *polarParams);
 
 void nr_polar_print_polarParams(void);
 
-t_nrPolar_params *nr_polar_params(int8_t messageType, uint16_t messageLength, uint8_t aggregation_level);
+t_nrPolar_params *nr_polar_params(polar_type_t messageType, uint16_t messageLength, uint8_t aggregation_level);
 
 uint16_t nr_polar_aggregation_prime(uint8_t aggregation_level);
 

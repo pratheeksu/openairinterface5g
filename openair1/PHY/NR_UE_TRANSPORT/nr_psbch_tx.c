@@ -5,7 +5,6 @@
 #include "PHY/defs_nr_UE.h"
 #include "PHY/NR_REFSIG/nr_mod_table.h"
 #include "PHY/NR_UE_TRANSPORT/nr_transport_proto_ue.h"
-#include "PHY/CODING/nrPolar_tools/nr_polar_psbch_defs.h"
 #include "PHY/MODULATION/nr_modulation.h"
 #include "PHY/gold.h"
 
@@ -134,7 +133,7 @@ void sl_map_pss_or_sss(c16_t *txF,
  * symbol size = OFDM symbol size used for RE Mapping
  */
 
-void sl_generate_and_map_psbch(c16_t *txF,
+void sl_generate_and_map_psbch(PHY_VARS_NR_UE *UE, c16_t *txF,
                                uint32_t *payload,
                                uint16_t id,
                                uint16_t cp,
@@ -143,6 +142,7 @@ void sl_generate_and_map_psbch(c16_t *txF,
                                uint16_t symbol_size,
                                c16_t *psbch_dmrs)
 {
+
   uint64_t psbch_a_reversed = 0;
   uint16_t num_psbch_modsym = 0, numsym = 0;
   const int mod_order = 2; // QPSK
@@ -161,13 +161,12 @@ void sl_generate_and_map_psbch(c16_t *txF,
 #endif
 
   /// CRC, coding and rate matching
-  polar_encoder_fast(&psbch_a_reversed,
-                     (void *)encoder_output,
-                     0,
-                     0,
-                     SL_NR_POLAR_PSBCH_MESSAGE_TYPE,
-                     SL_NR_POLAR_PSBCH_PAYLOAD_BITS,
-                     SL_NR_POLAR_PSBCH_AGGREGATION_LEVEL);
+  UE->polar_interface.polar_encoder(&psbch_a_reversed,
+                                    encoder_output,
+                                    SL_NR_POLAR_PSBCH_MESSAGE_TYPE,
+                                    SL_NR_POLAR_PSBCH_PAYLOAD_BITS,
+                                    SL_NR_POLAR_PSBCH_AGGREGATION_LEVEL,
+                                    0);
 
 #ifdef SL_DEBUG
   for (int i = 0; i < SL_NR_POLAR_PSBCH_E_DWORD; i++)
@@ -346,7 +345,7 @@ void nr_tx_psbch(PHY_VARS_NR_UE *UE, uint32_t frame_tx, uint32_t slot_tx, sl_nr_
 
   struct complex16 *psbch_dmrs = &sl_ue_phy_params->init_params.psbch_dmrs_modsym[slss_id][0];
 
-  sl_generate_and_map_psbch(txF, &psbch_payload, slss_id, sl_fp->Ncp, re_offset, scaling_factor, symbol_size, psbch_dmrs);
+  sl_generate_and_map_psbch(UE, txF, &psbch_payload, slss_id, sl_fp->Ncp, re_offset, scaling_factor, symbol_size, psbch_dmrs);
 
 #ifdef SL_DEBUG
   printf("DEBUG PSBCH TX: txdataF Prepared\n");

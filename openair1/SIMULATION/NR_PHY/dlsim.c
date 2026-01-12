@@ -914,6 +914,7 @@ int main(int argc, char **argv)
   UE->frame_parms.nb_antennas_rx = n_rx;
   UE->frame_parms.nb_antenna_ports_gNB = n_tx;
   UE->nrLDPC_coding_interface = gNB->nrLDPC_coding_interface;
+  UE->polar_interface = gNB->polar_interface;
   UE->max_ldpc_iterations = max_ldpc_iterations;
   init_nr_ue_phy_cpu_stats(&UE->phy_cpu_stats);
   UE->is_synchronized = 1;

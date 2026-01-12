@@ -482,7 +482,7 @@ int main(int argc, char **argv)
     printf("Error at UE NR initialisation\n");
     exit(-1);
   }
-
+  UE->polar_interface = gNB->polar_interface;
   // generate signal
   const uint32_t rxdataF_sz = UE->frame_parms.samples_per_slot_wCP;
   __attribute__ ((aligned(32))) c16_t rxdataF[UE->frame_parms.nb_antennas_rx][rxdataF_sz];

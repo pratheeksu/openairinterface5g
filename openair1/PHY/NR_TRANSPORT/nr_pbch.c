@@ -14,7 +14,7 @@
 #include "openair1/PHY/NR_REFSIG/nr_refsig.h"
 #include "openair1/PHY/NR_REFSIG/nr_mod_table.h"
 #include "openair1/PHY/TOOLS/tools_defs.h"
-
+#include "PHY/CODING/nrPolar_tools/polar_interface.h"
 //#define DEBUG_PBCH
 //#define DEBUG_PBCH_ENCODING
 //#define DEBUG_PBCH_DMRS
@@ -256,13 +256,12 @@ void nr_generate_pbch(PHY_VARS_gNB *gNB,
   uint64_t a_reversed = reverse_bits((uint64_t)pbch_a_prime, NR_POLAR_PBCH_PAYLOAD_BITS);
   uint32_t pbch_e[NR_POLAR_PBCH_E_DWORD];
   /// CRC, coding and rate matching
-  polar_encoder_fast(&a_reversed,
-                     pbch_e,
-                     0,
-                     0,
-                     NR_POLAR_PBCH_MESSAGE_TYPE,
-                     NR_POLAR_PBCH_PAYLOAD_BITS,
-                     NR_POLAR_PBCH_AGGREGATION_LEVEL);
+  gNB->polar_interface.polar_encoder(&a_reversed,
+                                     pbch_e,
+                                     NR_POLAR_PBCH_MESSAGE_TYPE,
+                                     NR_POLAR_PBCH_PAYLOAD_BITS,
+                                     NR_POLAR_PBCH_AGGREGATION_LEVEL,
+                                     0);
 
 #ifdef DEBUG_PBCH_ENCODING
   printf("Channel coding:\n");
