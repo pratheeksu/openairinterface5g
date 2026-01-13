@@ -4158,7 +4158,7 @@ unsigned int mask_flip(unsigned int x) {
 /** @brief Get F1AP QoS flow parameters from PDU session QoS parameters
  * @param qos_param PDU session level QoS parameters from NGAP
  * @return F1AP QoS flow parameters */
-static f1ap_qos_flow_param_t nr_rrc_get_f1_qos_flow_param(const pdusession_level_qos_parameter_t *qos_param)
+f1ap_qos_flow_param_t nr_rrc_get_f1_qos_flow_param(const pdusession_level_qos_parameter_t *qos_param)
 {
   f1ap_qos_flow_param_t qos_char = {0};
 

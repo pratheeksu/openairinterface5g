@@ -8,16 +8,19 @@
 #include "rrc_gNB_du.h"
 #include "rrc_cell_management.h"
 #include "rrc_gNB_measurements.h"
+#include "rrc_gNB_radio_bearers.h"
 #include "LAYER2/NR_MAC_COMMON/nr_mac.h"
 #include "NR_UE-CapabilityRequestFilterNR.h"
 #include "NR_UECapabilityEnquiry-v1560-IEs.h"
 #include "common/utils/time_manager/time_timer.h"
+#include "openair2/F1AP/lib/f1ap_ue_context.h"
 
 typedef enum {
   NRDC_NONE,
   ACTIVATE_NRDC_WAIT_FOR_CAPABILITIES,
   ACTIVATE_NRDC_WAIT_FOR_A4_RECONFIGURATION_COMPLETE,
   ACTIVATE_NRDC_WAIT_FOR_SCG_MEASUREMENT,
+  ACTIVATE_NRDC_WAIT_FOR_F1_CONTEXT_SETUP_RESPONSE,
   NRDC_ACTIVE
 } nrdc_state_t;
 
@@ -482,7 +485,150 @@ void rrc_gnb_nrdc_rrc_reconfiguration_complete_received(gNB_RRC_INST *rrc, gNB_R
 
 void rrc_gnb_nrdc_measurement_received(gNB_RRC_INST *rrc, gNB_RRC_UE_t *ue, NR_MeasurementReport_t *meas)
 {
-  LOG_E(NR_RRC, "rrc_gnb_nrdc_measurement_received called!!\n");
+  LOG_D(NR_RRC, "rrc_gnb_nrdc_measurement_received called!!\n");
+
+  nrdc_ue_state_t *nrdc = ue->nrdc;
+  if (!nrdc) {
+    LOG_W(NR_RRC, "no NR-DC context found for ue %d\n", ue->rrc_ue_id);
+    return;
+  }
+
+  if (nrdc->state != ACTIVATE_NRDC_WAIT_FOR_SCG_MEASUREMENT) {
+    LOG_W(NR_RRC, "ignore NR-DC measurement for ue %d\n", ue->rrc_ue_id);
+    return;
+  }
+
+  /* measurement received, send context setup request to the secondary DU
+   * including CG-ConfigInfo to inform the secondary DU that the CU requests
+   * an SCG establishment
+   */
+
+  nr_rrc_cell_container_t *cell = get_cell_by_band(&rrc->cells, nrdc->scg_band);
+  if (!cell) {
+    /* no cell found, cancel the process */
+    LOG_E(NR_RRC, "no cell found for SCG band %d, cancelling NR-DC activation procedure for UE %d\n", nrdc->scg_band, ue->rrc_ue_id);
+    free(ue->nrdc);
+    ue->nrdc = 0;
+    return;
+  }
+
+  uint64_t *ue_agg_mbr = malloc_or_fail(sizeof(*ue_agg_mbr));
+  *ue_agg_mbr = 1000000000 /*bps*/;       /* todo: hardcoded, use correct value */
+
+  /* tranfser the first DRB (should be the 'default' one) */
+  /* note: this code is copy/paste from fill_drb_to_be_setup(), think about how to factorize */
+  int nb_drb = 1;
+  f1ap_drb_to_setup_t *drbs = calloc_or_fail(1, sizeof(*drbs));
+  f1ap_drb_to_setup_t *drb = &drbs[0];
+  drb_t *rrc_drb = seq_arr_front(&ue->drbs);
+  DevAssert(rrc_drb);
+  /* fetch an existing PDU session for this DRB */
+  rrc_pdu_session_param_t *pdu = find_pduSession_from_drbId(ue, rrc_drb->drb_id);
+  AssertFatal(pdu != NULL, "no PDU session for DRB ID %d\n", rrc_drb->drb_id);
+
+  drb->id = rrc_drb->drb_id;
+
+  drb->qos_choice = F1AP_QOS_CHOICE_NR;
+  drb->nr.nssai = pdu->param.nssai;
+  drb->nr.flows_len = 1;
+  drb->nr.flows = calloc_or_fail(1, sizeof(*drb->nr.flows));
+
+  // Find the QoS flow associated with this DRB
+  // Since we don't have QFI mapping in the new structure, we'll use the first QoS flow
+  AssertFatal(seq_arr_size(&pdu->param.qos) == 1, "only 1 Qos flow supported\n");
+  nr_rrc_qos_t *qos_param = (nr_rrc_qos_t *)seq_arr_at(&pdu->param.qos, 0);
+  DevAssert(qos_param->qos.qfi > 0);
+  drb->nr.flows[0].qfi = qos_param->qos.qfi;
+  drb->nr.flows[0].param = nr_rrc_get_f1_qos_flow_param(&qos_param->qos);
+  /* the DRB QoS parameters: we just reuse the ones from the first flow */
+  drb->nr.drb_qos = drb->nr.flows[0].param;
+
+  memcpy(&drb->up_ul_tnl[0].tl_address, &rrc_drb->cuup_tunnel_config.addr.buffer, sizeof(uint8_t) * 4);
+  drb->up_ul_tnl[0].teid = rrc_drb->cuup_tunnel_config.teid;
+  drb->up_ul_tnl_len = 1;
+
+  drb->rlc_mode = rrc->configuration.um_on_default_drb ? F1AP_RLC_MODE_UM_BIDIR : F1AP_RLC_MODE_AM;
+  nr_pdcp_configuration_t *pdcp = &rrc_drb->pdcp_config;
+  DevAssert(pdcp->drb.sn_size == 18 || pdcp->drb.sn_size == 12);
+  drb->dl_pdcp_sn_len = malloc_or_fail(sizeof(*drb->dl_pdcp_sn_len));
+  *drb->dl_pdcp_sn_len = pdcp->drb.sn_size == 18 ? F1AP_PDCP_SN_18B : F1AP_PDCP_SN_12B;
+  drb->ul_pdcp_sn_len = malloc_or_fail(sizeof(*drb->ul_pdcp_sn_len));
+  *drb->ul_pdcp_sn_len = pdcp->drb.sn_size == 18 ? F1AP_PDCP_SN_18B : F1AP_PDCP_SN_12B;
+
+  /* create CG-ConfigInfo to inform the DU that the CU requests
+   * an SCG establishment (38.331 11.2.2 CG-ConfigInfo)
+   */
+  /* include UE NR capabilities into the CG Config Info */
+  /* encode UE NR capabilities (they must be there) */
+  DevAssert(ue->UE_Capability_nr);
+  OCTET_STRING_t uecap = { 0 };
+  uecap.size = uper_encode_to_new_buffer(&asn_DEF_NR_UE_NR_Capability, NULL, ue->UE_Capability_nr, (void **)&uecap.buf);
+  DevAssert(uecap.size > 0);
+
+  /* put the encoded UE NR capabilities inside a container */
+  DevAssert(ue->UE_Capability_nr);
+  NR_UE_CapabilityRAT_ContainerList_t uecap_container = {
+    .list = {
+      .array = (struct NR_UE_CapabilityRAT_Container *[]) {
+        &(struct NR_UE_CapabilityRAT_Container) {
+          .rat_Type = NR_RAT_Type_nr,
+          .ue_CapabilityRAT_Container = uecap
+        }
+      },
+      .count = 1
+    }
+  };
+  /* encode the container */
+  OCTET_STRING_t uecap_container_buf = { 0 };
+  uecap_container_buf.size = uper_encode_to_new_buffer(&asn_DEF_NR_UE_CapabilityRAT_ContainerList, NULL, &uecap_container, (void **)&uecap_container_buf.buf);
+  DevAssert(uecap_container_buf.size > 0);
+  free(uecap.buf);
+
+  /* create the CG Config Info containing the UE capabilities */
+  NR_CG_ConfigInfo_t cg = {
+    .criticalExtensions = {
+      .present = NR_CG_ConfigInfo__criticalExtensions_PR_c1,
+      .choice = {
+        .c1 = &(struct NR_CG_ConfigInfo__criticalExtensions__c1) {
+          .present = NR_CG_ConfigInfo__criticalExtensions__c1_PR_cg_ConfigInfo,
+          .choice = {
+            .cg_ConfigInfo = &(struct NR_CG_ConfigInfo_IEs) {
+              .ue_CapabilityInfo = &uecap_container_buf
+            }
+          }
+        }
+      }
+    }
+  };
+  /* encode the CG Config Info */
+  OCTET_STRING_t cgbuf = { 0 };
+  cgbuf.size = uper_encode_to_new_buffer(&asn_DEF_NR_CG_ConfigInfo, NULL, &cg, (void **)&cgbuf.buf);
+  DevAssert(cgbuf.size > 0);
+  free(uecap_container_buf.buf);
+
+  /* create the F1 Context Setup Request message */
+  byte_array_t *cg_configinfo = calloc_or_fail(1, sizeof(*cg_configinfo));
+  *cg_configinfo = create_byte_array(cgbuf.size, cgbuf.buf);
+  free(cgbuf.buf);
+
+  f1ap_ue_context_setup_req_t ue_context_setup_req = {
+    .gNB_CU_ue_id = ue->rrc_ue_id,
+    .plmn.mcc = cell->info.plmn.mcc,
+    .plmn.mnc = cell->info.plmn.mnc,
+    .plmn.mnc_digit_length = cell->info.plmn.mnc_digit_length,
+    .nr_cellid = cell->info.cell_id,
+    .servCellIndex = 0, // TODO: correct value?
+    .drbs_len = nb_drb,
+    .drbs = drbs,
+    .cu_to_du_rrc_info.cg_configinfo = cg_configinfo,
+    .gnb_du_ue_agg_mbr_ul = ue_agg_mbr,
+  };
+  rrc->mac_rrc.ue_context_setup_request(cell->assoc_id, &ue_context_setup_req);
+  free_ue_context_setup_req(&ue_context_setup_req);
+
+  nrdc->state = ACTIVATE_NRDC_WAIT_FOR_F1_CONTEXT_SETUP_RESPONSE;
+
+  LOG_E(NR_RRC, "NR-DC activation: rrc->mac_rrc.ue_context_setup_request() has been called\n");
 }
 
 void rrc_gnb_nrdc_timeout(gNB_RRC_INST *rrc, nr_rrc_nrdc_timeout_t *timeout)
