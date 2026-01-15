@@ -144,19 +144,8 @@ void gNB_I0_measurements(PHY_VARS_gNB *gNB, int slot, int first_symb, int num_sy
   PHY_MEASUREMENTS_gNB *measurements = &gNB->measurements;
   int nb_symb[275]={0};
 
-  allocCast2D(n0_subband_power,
-              unsigned int,
-              gNB->measurements.n0_subband_power,
-              frame_parms->nb_antennas_rx,
-              frame_parms->N_RB_UL,
-              false);
-  clearArray(gNB->measurements.n0_subband_power, unsigned int);
-  allocCast2D(n0_subband_power_dB,
-              unsigned int,
-              gNB->measurements.n0_subband_power_dB,
-              frame_parms->nb_antennas_rx,
-              frame_parms->N_RB_UL,
-              false);
+  unsigned int tmp_n0_subband[frame_parms->nb_antennas_rx][frame_parms->N_RB_UL];
+  memset(tmp_n0_subband, 0, sizeof(tmp_n0_subband));
 
   // TODO modify the measurements to take into account concurrent beams
   for (int s = first_symb; s < first_symb + num_symb; s++) {
@@ -176,7 +165,8 @@ void gNB_I0_measurements(PHY_VARS_gNB *gNB, int slot, int first_symb, int num_sy
           } else {
             signal_energy = signal_energy_nodc(ul_ch, 12);
           }
-          n0_subband_power[aarx][rb] += signal_energy;
+          // noise power per antenna/RB, symbols summed up
+          tmp_n0_subband[aarx][rb] += signal_energy;
           LOG_D(NR_PHY,"slot %d symbol %d RB %d aarx %d n0_subband_power %d\n", slot, s, rb, aarx, signal_energy);
         } //antenna
       }
@@ -185,14 +175,30 @@ void gNB_I0_measurements(PHY_VARS_gNB *gNB, int slot, int first_symb, int num_sy
   int nb_rb=0;
   int64_t n0_subband_tot=0;
   int32_t n0_subband_tot_perANT[frame_parms->nb_antennas_rx];
-
   memset(n0_subband_tot_perANT, 0, sizeof(n0_subband_tot_perANT));
+
+  allocCast2D(n0_subband_power,
+              unsigned int,
+              gNB->measurements.n0_subband_power,
+              frame_parms->nb_antennas_rx,
+              frame_parms->N_RB_UL,
+              false);
+  allocCast2D(n0_subband_power_dB,
+              unsigned int,
+              gNB->measurements.n0_subband_power_dB,
+              frame_parms->nb_antennas_rx,
+              frame_parms->N_RB_UL,
+              false);
 
   for (int rb = 0 ; rb<frame_parms->N_RB_UL;rb++) {
     int32_t n0_subband_tot_perPRB=0;
     if (nb_symb[rb] > 0) {
       for (int aarx=0;aarx<frame_parms->nb_antennas_rx;aarx++) {
-        n0_subband_power[aarx][rb] /= nb_symb[rb];
+        tmp_n0_subband[aarx][rb] /= nb_symb[rb];
+        // apply exponential moving average if noise on antenna/RB, otherwise
+        // retain previous measurement
+        if (tmp_n0_subband[aarx][rb] != 0)
+          n0_subband_power[aarx][rb] = 0.9 * n0_subband_power[aarx][rb] + 0.1 * tmp_n0_subband[aarx][rb];
         n0_subband_power_dB[aarx][rb] = dB_fixed(n0_subband_power[aarx][rb]);
         n0_subband_tot_perPRB += n0_subband_power[aarx][rb];
         n0_subband_tot_perANT[aarx] += n0_subband_power[aarx][rb];
