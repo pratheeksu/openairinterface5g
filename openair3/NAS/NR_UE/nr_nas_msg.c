@@ -2117,11 +2117,63 @@ void *nas_nrue(void *args_p)
         /* TODO not processed by NAS currently */
         break;
 
-      case NAS_PAGING_IND:
+      case NAS_PAGING_IND: {
         LOG_I(NAS, "[UE %ld] Received %s: cause %u\n", nas->UE_id, ITTI_MSG_NAME(msg_p), NAS_PAGING_IND(msg_p).cause);
+        if (NAS_PAGING_IND(msg_p).cause != AS_CONNECTION_ESTABLISH) {
+          LOG_I(NAS,
+                "[UE %ld] Paging received with unsupported cause %u, not triggering Service Request\n",
+                nas->UE_id,
+                NAS_PAGING_IND(msg_p).cause);
+          break;
+        }
 
-        /* TODO not processed by NAS currently */
+        /** Paging for 5GS services (TS 24.501 §5.6.2.2.1) and
+         *  network-triggered Service Request (TS 23.502 §4.2.3.3 step 6):
+         *  - Upon reception of a paging indication the UE shall,
+         *    when 5GMM‑REGISTERED and in 5GMM‑IDLE without suspend indication,
+         *    initiate a Service Request over 3GPP access.
+         *
+         * This implementation currently enforces:
+         *  1. UE has GUTI
+         *  2. UE is 5GMM-REGISTERED
+         *  3. UE is 5GMM-IDLE
+         *
+         * TODO (future work):
+         *  - Implement T3346 and stop it here if running.
+         *  - Add explicit "suspend indication" handling for the 5GMM-IDLE-with-suspend case
+         *    as per TS 24.501 §5.6.2.2.1 ("proceed as specified in subclause 5.3.1.5"). */
+        if (!nas->guti) {
+          LOG_W(NAS, "[UE %ld] Paging received but no GUTI available, cannot generate Service Request\n", nas->UE_id);
+          break;
+        }
+
+        if (nas->fiveGMM_state != FGS_REGISTERED) {
+          LOG_W(NAS,
+                "[UE %ld] Paging received but UE not in 5GMM-REGISTERED state (state=%d), cannot generate Service Request\n",
+                nas->UE_id,
+                nas->fiveGMM_state);
+          break;
+        }
+
+        if (nas->fiveGMM_mode != FGS_IDLE) {
+          // If UE is 5GMM-CONNECTED, Service Request is not needed as connection already exists (TS 24.501 §5.6.2.2.1)
+          LOG_W(NAS,
+                "[UE %ld] Paging received but UE already in 5GMM-CONNECTED (mode=%d), dropping Service Request\n",
+                nas->UE_id,
+                nas->fiveGMM_mode);
+          break;
+        }
+
+        as_nas_info_t initialNasMsg = {0};
+        generateServiceRequest(&initialNasMsg, nas);
+        if (initialNasMsg.length <= 0) {
+          LOG_E(NAS, "[UE %ld] Failed to generate Service Request after paging\n", nas->UE_id);
+          break;
+        }
+        send_nas_uplink_data_req(nas, &initialNasMsg);
+        LOG_I(NAS, "[UE %ld] Paging received: Service Request sent\n", nas->UE_id);
         break;
+      }
 
       case NAS_PDU_SESSION_REQ: {
         as_nas_info_t pduEstablishMsg = {0};

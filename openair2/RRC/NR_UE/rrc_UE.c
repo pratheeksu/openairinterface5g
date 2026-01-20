@@ -3221,6 +3221,14 @@ void *rrc_nrue(void *notUsed)
     const byte_array_t pcch = {.len = ind->sdu_size, .buf = ind->sdu};
     if (nr_rrc_ue_decode_pcch(rrc, pcch) == 1) {
       LOG_I(NR_RRC, "[UE %ld] Paging match found in PagingRecordList\n", rrc->ue_id);
+      MessageDef *nas_msg = itti_alloc_new_message(TASK_RRC_NRUE, rrc->ue_id, NAS_PAGING_IND);
+      if (nas_msg != NULL) {
+        NAS_PAGING_IND(nas_msg).cause = AS_CONNECTION_ESTABLISH;
+        LOG_I(NR_RRC, "[UE %ld] Triggering Service Request after paging (cause=AS_CONNECTION_ESTABLISH)\n", rrc->ue_id);
+        itti_send_msg_to_task(TASK_NAS_NRUE, rrc->ue_id, nas_msg);
+      } else {
+        LOG_E(NR_RRC, "[UE %ld] Failed to allocate NAS_PAGING_IND message\n", rrc->ue_id);
+      }
     }
   } break;
 
