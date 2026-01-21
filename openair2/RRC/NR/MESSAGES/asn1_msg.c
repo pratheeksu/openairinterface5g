@@ -61,6 +61,7 @@
 #include "NR_RRCReestablishmentRequest.h"
 #include "NR_PCCH-Message.h"
 #include "NR_PagingRecord.h"
+#include "NR_Paging-v1700-IEs.h"
 #include "NR_UE-CapabilityRequestFilterNR.h"
 #include "NR_HandoverPreparationInformation.h"
 #include "NR_HandoverPreparationInformation-IEs.h"
@@ -1515,44 +1516,82 @@ void free_MeasConfig(NR_MeasConfig_t *mc)
   ASN_STRUCT_FREE(asn_DEF_NR_MeasConfig, mc);
 }
 
-int do_NR_Paging(uint8_t Mod_id, uint8_t *buffer, uint32_t tmsi)
+/** @brief Generate NR RRC Paging message (TS 38.331 §5.3.2)
+ * Creates a PCCH message with a single PagingRecord containing ng-5G-S-TMSI
+ * for CN-initiated paging of RRC_IDLE UEs. */
+byte_array_t do_NR_Paging(const nr_paging_params_t *params)
 {
-  LOG_D(NR_RRC, "[gNB %d] do_NR_Paging start\n", Mod_id);
+  LOG_D(NR_RRC, "Generate NR RRC Paging message (ue_identity_type=%d)\n", params->ue_identity_type);
+  byte_array_t msg = {.buf = NULL, .len = 0};
+
   NR_PCCH_Message_t pcch_msg = {0};
-  pcch_msg.message.present           = NR_PCCH_MessageType_PR_c1;
+  pcch_msg.message.present = NR_PCCH_MessageType_PR_c1;
   asn1cCalloc(pcch_msg.message.choice.c1, c1);
   c1->present = NR_PCCH_MessageType__c1_PR_paging;
-  c1->choice.paging = CALLOC(1, sizeof(NR_Paging_t));
-  c1->choice.paging->pagingRecordList = CALLOC(
-      1, sizeof(*pcch_msg.message.choice.c1->choice.paging->pagingRecordList));
-  c1->choice.paging->nonCriticalExtension = NULL;
-  asn_set_empty(&c1->choice.paging->pagingRecordList->list);
-  c1->choice.paging->pagingRecordList->list.count = 0;
+  asn1cCalloc(c1->choice.paging, paging);
 
-  asn1cSequenceAdd(c1->choice.paging->pagingRecordList->list, NR_PagingRecord_t,
-                   paging_record_p);
-  /* convert ue_paging_identity_t to PagingUE_Identity_t */
-  paging_record_p->ue_Identity.present = NR_PagingUE_Identity_PR_ng_5G_S_TMSI;
-  // set ng_5G_S_TMSI
-  INT32_TO_BIT_STRING(tmsi, &paging_record_p->ue_Identity.choice.ng_5G_S_TMSI);
+  /* pagingRecordList (Optional)
+   * Network may address multiple UEs by including one PagingRecord per UE.
+   * If pagingRecordList-v1700 is included, it has same entries in same order. */
+  asn1cCalloc(paging->pagingRecordList, pagingRecordList);
 
-  /* add to list */
-  LOG_D(NR_RRC, "[gNB %d] do_Paging paging_record: PagingRecordList.count %d\n",
-        Mod_id, c1->choice.paging->pagingRecordList->list.count);
-  asn_enc_rval_t enc_rval = uper_encode_to_buffer(
-      &asn_DEF_NR_PCCH_Message, NULL, (void *)&pcch_msg, buffer, NR_RRC_BUF_SIZE);
+  /* PagingRecord (Optional): ue-Identity (mandatory), accessType (optional) */
+  asn1cSequenceAdd(pagingRecordList->list, NR_PagingRecord_t, paging_record_p);
 
-  if ( LOG_DEBUGFLAG(DEBUG_ASN1) ) {
+  /* PagingUE-Identity (choice) { ng-5G-S-TMSI | fullI-RNTI } */
+  paging_record_p->ue_Identity.present = params->ue_identity_type;
+  if (params->ue_identity_type == NR_PagingUE_Identity_PR_ng_5G_S_TMSI) {
+    /* ng-5G-S-TMSI: BIT STRING (SIZE(48)); we send M-TMSI (32 bits), high 16 bits zero. */
+    BIT_STRING_t *tmsi_bs = &paging_record_p->ue_Identity.choice.ng_5G_S_TMSI;
+    tmsi_bs->size = 6;
+    tmsi_bs->buf = calloc_or_fail(6, sizeof(uint8_t));
+    tmsi_bs->bits_unused = 0;
+    INT32_TO_BUFFER(params->ue_identity.m_tmsi, &tmsi_bs->buf[2]);
+  } else {
+    /* fullI-RNTI: I-RNTI-Value BIT STRING (SIZE(40)) for RAN-initiated paging (RRC_INACTIVE). */
+    BIT_STRING_t *i_rnti_bs = &paging_record_p->ue_Identity.choice.fullI_RNTI;
+    i_rnti_bs->size = NR_PAGING_FULL_I_RNTI_SIZE;
+    i_rnti_bs->buf = calloc_or_fail(NR_PAGING_FULL_I_RNTI_SIZE, sizeof(uint8_t));
+    i_rnti_bs->bits_unused = 0;
+    memcpy(i_rnti_bs->buf, params->ue_identity.full_i_rnti, NR_PAGING_FULL_I_RNTI_SIZE);
+  }
+
+  /* accessType (optional): indicates whether paging is due to PDU sessions from non-3GPP access */
+  if (params->access_type) {
+    paging_record_p->accessType = calloc_or_fail(1, sizeof(long));
+    *paging_record_p->accessType = NR_PagingRecord__accessType_non3GPP;
+  }
+
+  /* nonCriticalExtension (optional): pagingRecordList-v1700 with pagingCause-r17 for IMS voice */
+  if (params->paging_cause != NULL) {
+    asn1cCalloc(paging->nonCriticalExtension, ext_v1700);
+    ext_v1700->pagingGroupList_r17 = NULL;
+    ext_v1700->nonCriticalExtension = NULL;
+    asn1cCalloc(ext_v1700->pagingRecordList_v1700, list_v1700);
+    asn1cSequenceAdd(list_v1700->list, NR_PagingRecord_v1700_t, rec_v1700);
+    rec_v1700->pagingCause_r17 = calloc_or_fail(1, sizeof(long));
+    *rec_v1700->pagingCause_r17 = NR_PagingRecord_v1700__pagingCause_r17_voice;
+  }
+
+  LOG_D(NR_RRC, "Paging: PagingRecordList.count=%d\n", pagingRecordList->list.count);
+
+  if (LOG_DEBUGFLAG(DEBUG_ASN1)) {
     xer_fprint(stdout, &asn_DEF_NR_PCCH_Message, (void *)&pcch_msg);
   }
+
+  int val = uper_encode_to_new_buffer(&asn_DEF_NR_PCCH_Message, NULL, &pcch_msg, (void **)&msg.buf);
   ASN_STRUCT_FREE_CONTENTS_ONLY(asn_DEF_NR_PCCH_Message, &pcch_msg);
-  if(enc_rval.encoded == -1) {
-    LOG_I(NR_RRC, "[gNB AssertFatal]ASN1 message encoding failed (%s, %lu)!\n",
-          enc_rval.failed_type->name, enc_rval.encoded);
-    return -1;
+
+  if (val <= 0) {
+    LOG_E(NR_RRC, "Failed to encode NR RRC Paging message\n");
+    free_byte_array(msg);
+    return msg;
   }
 
-  return((enc_rval.encoded+7)/8);
+  msg.len = val;
+  LOG_I(NR_RRC, "Encoded NR RRC Paging message (%zu bytes)\n", msg.len);
+
+  return msg;
 }
 
 /* \brief generate HandoverPreparationInformation to be sent to the DU for

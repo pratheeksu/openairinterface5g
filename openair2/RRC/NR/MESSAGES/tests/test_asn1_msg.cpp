@@ -113,8 +113,18 @@ TEST(nr_asn1, rrc_reestablishment)
 
 TEST(nr_asn1, paging)
 {
-  unsigned char buf[1000];
-  EXPECT_GT(do_NR_Paging(0, buf, 0), 0);
+  nr_paging_params_t params = {};
+  params.ue_identity_type = NR_PagingUE_Identity_PR_ng_5G_S_TMSI;
+  params.ue_identity.m_tmsi = 0;
+  params.access_type = false;
+  params.paging_cause = NULL;
+
+  byte_array_t msg = do_NR_Paging(&params);
+
+  EXPECT_GT(msg.len, 0);
+  EXPECT_NE(msg.buf, nullptr);
+
+  free_byte_array(msg);
 }
 
 void free_RRCReconfiguration_params(nr_rrc_reconfig_param_t params)

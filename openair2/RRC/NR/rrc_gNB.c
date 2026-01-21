@@ -3829,15 +3829,16 @@ int rrc_gNB_generate_pcch_msg(sctp_assoc_t assoc_id, const NR_SIB1_t *sib1, uint
   (void) Ns; /* not used, suppress warning */
   (void) pfoffset; /* not used, suppress warning */
 
+  #if 0
   /* Create message for PDCP (DLInformationTransfer_t) */
   int length = do_NR_Paging(instance, buffer, tmsi);
-
   if (length == -1) {
     LOG_I(NR_RRC, "do_Paging error\n");
     return -1;
   }
   // TODO, send message to pdcp
   (void) assoc_id;
+  #endif
 
   return 0;
 }
