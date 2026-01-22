@@ -1769,7 +1769,8 @@ static void process_Event_Based_Measurement_Report(gNB_RRC_INST *rrc,
   }
 }
 
-static void go_fr2(gNB_RRC_INST *rrc, gNB_RRC_UE_t *UE)
+#if 0
+void go_fr2(gNB_RRC_INST *rrc, gNB_RRC_UE_t *UE)
 {
   if (UE->ongoing_reconfiguration == true) {
     LOG_E(NR_RRC, "cannot activate FR2 for the moment, we will try at next measurement report\n");
@@ -3022,6 +3023,7 @@ static void go_fr2(gNB_RRC_INST *rrc, gNB_RRC_UE_t *UE)
 
   free(buf);
 }
+#endif
 
 static void rrc_gNB_process_MeasurementReport(gNB_RRC_INST *rrc, gNB_RRC_UE_t *UE, NR_MeasurementReport_t *measurementReport)
 {
@@ -3044,12 +3046,14 @@ static void rrc_gNB_process_MeasurementReport(gNB_RRC_INST *rrc, gNB_RRC_UE_t *U
   NR_MeasurementReport_IEs_t *measurementReport_IEs = measurementReport->criticalExtensions.choice.measurementReport;
   const NR_MeasId_t measId = measurementReport_IEs->measResults.measId;
 
+#if 0
   /* hack */
   if (measId == 3) {
     static int done = 0;
     if (!done) go_fr2(rrc, UE);
     done = 1;
   }
+#endif
 
   /* check NR-DC measurement */
   if (measId == get_scg_measurement_id(UE)) {
