@@ -17,4 +17,7 @@ void rrc_gnb_nrdc_timeout(gNB_RRC_INST *rrc, nr_rrc_nrdc_timeout_t *timeout);
 
 int get_scg_measurement_id(gNB_RRC_UE_t *ue);
 
+bool rrc_gnb_nrdc_wait_for_f1_context_setup_response(gNB_RRC_UE_t *ue);
+void nrdc_rrc_CU_process_ue_context_setup_response(gNB_RRC_UE_t *ue, gNB_RRC_INST *rrc, f1ap_ue_context_setup_resp_t *resp);
+
 #endif /* __RRC_GNB_NRDC_H__ */

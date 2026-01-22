@@ -679,3 +679,16 @@ int get_scg_measurement_id(gNB_RRC_UE_t *ue)
   nrdc_ue_state_t *nrdc = ue->nrdc;
   return nrdc->measurement_id;
 }
+
+bool rrc_gnb_nrdc_wait_for_f1_context_setup_response(gNB_RRC_UE_t *ue)
+{
+  if (!ue->nrdc)
+    return false;
+  nrdc_ue_state_t *nrdc = ue->nrdc;
+  return nrdc->state == ACTIVATE_NRDC_WAIT_FOR_F1_CONTEXT_SETUP_RESPONSE;
+}
+
+void nrdc_rrc_CU_process_ue_context_setup_response(gNB_RRC_UE_t *ue, gNB_RRC_INST *rrc, f1ap_ue_context_setup_resp_t *resp)
+{
+  LOG_E(NR_RRC, "nrdc_rrc_CU_process_ue_context_setup_response called\n");
+}

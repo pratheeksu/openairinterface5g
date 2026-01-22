@@ -3856,6 +3856,9 @@ static void rrc_CU_process_ue_context_setup_response(MessageDef *msg_p, instance
   gNB_RRC_UE_t *UE = &ue_context_p->ue_context;
   UE->f1_ue_context_active = true;
 
+  if (UE->nrdc && rrc_gnb_nrdc_wait_for_f1_context_setup_response(UE))
+    return nrdc_rrc_CU_process_ue_context_setup_response(UE, rrc, resp);
+
   // Store the encoded CellGroupConfig for transparent forwarding
   byte_array_t *cgc = &resp->du_to_cu_rrc_info.cell_group_config;
   store_cgc(UE, cgc);

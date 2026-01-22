@@ -17,6 +17,7 @@
 #include "lib/f1ap_rrc_message_transfer.h"
 #include "lib/f1ap_interface_management.h"
 #include "lib/f1ap_ue_context.h"
+#include "nrdc_mac_rrc_dl_handler.h"
 
 #include "executables/softmodem-common.h"
 
@@ -288,12 +289,12 @@ static NR_QoS_config_t get_qos_config(const f1ap_qos_flow_param_t *qos)
   return qos_c;
 }
 
-static int handle_ue_context_drbs_setup(NR_UE_info_t *UE,
-                                        int drbs_len,
-                                        const f1ap_drb_to_setup_t *req_drbs,
-                                        f1ap_drb_setup_t **resp_drbs,
-                                        NR_CellGroupConfig_t *cellGroupConfig,
-                                        const nr_rlc_configuration_t *rlc_config)
+int handle_ue_context_drbs_setup(NR_UE_info_t *UE,
+                                 int drbs_len,
+                                 const f1ap_drb_to_setup_t *req_drbs,
+                                 f1ap_drb_setup_t **resp_drbs,
+                                 NR_CellGroupConfig_t *cellGroupConfig,
+                                 const nr_rlc_configuration_t *rlc_config)
 {
   DevAssert(req_drbs != NULL && resp_drbs != NULL && cellGroupConfig != NULL);
   instance_t f1inst = get_f1_gtp_instance();
@@ -459,7 +460,7 @@ static NR_UE_NR_Capability_t *get_ue_nr_cap_from_ho_prep_info(uint8_t *buf, uint
   return cap;
 }
 
-static NR_CG_ConfigInfo_t *get_cg_config_info(uint8_t *buf, uint32_t len)
+NR_CG_ConfigInfo_t *get_cg_config_info(uint8_t *buf, uint32_t len)
 {
   struct NR_CG_ConfigInfo *cg_configinfo = NULL;
   asn_dec_rval_t dec_rval = uper_decode_complete(NULL, &asn_DEF_NR_CG_ConfigInfo, (void **)&cg_configinfo, buf, len);
@@ -471,7 +472,7 @@ static NR_CG_ConfigInfo_t *get_cg_config_info(uint8_t *buf, uint32_t len)
   return cg_configinfo;
 }
 
-static NR_UE_NR_Capability_t *get_ue_nr_cap_from_cg_config_info(const NR_CG_ConfigInfo_t *cgci)
+NR_UE_NR_Capability_t *get_ue_nr_cap_from_cg_config_info(const NR_CG_ConfigInfo_t *cgci)
 {
   /* INTO DU handler */
   if (cgci->criticalExtensions.present != NR_CG_ConfigInfo__criticalExtensions_PR_c1)
@@ -692,11 +693,13 @@ void ue_context_setup_request(const f1ap_ue_context_setup_req_t *req)
   if (cu2du->meas_timing_config != NULL)
     mtc = get_nr_mtc(cu2du->meas_timing_config->buf, cu2du->meas_timing_config->len);
 
-  /* 38.473: "For DC operation, the CG-ConfigInfo IE shall be included in the CU
-   * to DU RRC Information IE at the gNB acting as secondary node" As of now,
-   * we only handle NSA => we check we have CG-ConfigInfo if not SA or have SA
-   * and no CG-ConfigInfo */
-  AssertFatal(is_SA ^ (cg_configinfo != NULL), "cannot have SA and CG-ConfigInfo: NR-DC not supported xor need CG-ConfigInfo for NSA/phy-test/do-ra\n");
+  /* inclusion of CG-ConfigInfo in SA mode is interpreted
+   * as NR-DC activation in the DU
+   */
+  if (is_SA && cg_configinfo)
+    return nrdc_ue_context_setup_request(req);
+
+  AssertFatal(is_SA || (cg_configinfo != NULL), "CG-ConfigInfo needed for NSA/phy-test/do-ra\n");
 
   NR_SCHED_LOCK(&mac->sched_lock);
 
