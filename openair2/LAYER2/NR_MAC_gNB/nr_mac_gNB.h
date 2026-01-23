@@ -104,6 +104,18 @@ typedef struct {
   bool new_beam;
 } NR_beam_alloc_t;
 
+typedef struct {
+  uint8_t *sdu;
+  uint16_t sdu_len;
+  uint16_t ue_id;
+} nr_mac_pcch_item_t;
+
+typedef struct {
+  nr_mac_pcch_item_t items[NR_PCCH_MAX_PAGING_RECORDS];
+  int head;
+  int count;
+} nr_mac_pcch_queue_t;
+
 typedef struct nr_pdsch_AntennaPorts_t {
   int N1;
   int N2;
@@ -320,6 +332,8 @@ typedef struct {
   /// Max prach length in slots
   int prach_len;
   nr_prach_info_t prach_info;
+  /// PCCH FIFO queue (one queue per common-channel context)
+  nr_mac_pcch_queue_t pcch_queue;
 } NR_COMMON_channels_t;
 
 // SP ZP CSI-RS Resource Set Activation/Deactivation MAC CE

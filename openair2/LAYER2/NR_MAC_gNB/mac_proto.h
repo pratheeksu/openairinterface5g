@@ -84,6 +84,8 @@ void schedule_nr_mib(module_id_t module_idP, frame_t frameP, slot_t slotP, nfapi
  * messages, statistics, HARQ handling, ... */
 void nr_schedule_ulsch(module_id_t module_id, frame_t frame, slot_t slot, nfapi_nr_ul_dci_request_t *ul_dci_req);
 
+void nr_mac_pcch_enqueue(module_id_t module_id, uint32_t m_tmsi, uint16_t ue_id);
+
 /* \brief default UL preprocessor init routine, returns preprocessor to call */
 nr_pp_impl_ul nr_init_ulsch_preprocessor();
 

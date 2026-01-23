@@ -7,6 +7,7 @@
 #include <stdbool.h>
 #include "assertions.h"
 #include "f1ap_messages_types.h"
+#include "openair2/F1AP/f1ap_du_paging.h"
 #include "mac_rrc_dl.h"
 #include "nr_rrc_defs.h"
 #include "openair2/LAYER2/NR_MAC_gNB/mac_rrc_dl_handler.h"
@@ -81,11 +82,7 @@ static void dl_rrc_message_transfer_direct(sctp_assoc_t assoc_id, const f1ap_dl_
 static void f1_paging_transfer_direct(sctp_assoc_t assoc_id, const f1ap_paging_t *paging)
 {
   AssertFatal(assoc_id == -1, "illegal assoc_id %d\n", assoc_id);
-  /** @todo Build PCCH-Message (Paging) at DU per TS 38.331 §5.3.2; apply
-   *  RRC padding per §8.5; deliver as RLC SDU per §8.2. For each
-   *  cell in Paging Cell List that belongs to this DU, queue for MAC;
-   *  MAC schedules at PF/PO per TS 38.304 §7. */
-  (void)paging;
+  f1_paging(paging);
 }
 
 void mac_rrc_dl_direct_init(nr_mac_rrc_dl_if_t *mac_rrc)
