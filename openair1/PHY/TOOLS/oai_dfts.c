@@ -827,16 +827,6 @@ __attribute__((always_inline)) static inline void transpose4_ooff_simd256(simde_
 
 // 16-point optimized DFT kernel
 
-const static int16_t tw16[24] __attribute__((aligned(32))) = { 32767,0,30272,-12540,23169 ,-23170,12539 ,-30273,
-                                                  32767,0,23169,-23170,0     ,-32767,-23170,-23170,
-                                                  32767,0,12539,-30273,-23170,-23170,-30273,12539
-                                                };
-
-const static int16_t tw16c[24] __attribute__((aligned(32))) = { 0,32767,12540,30272,23170,23169 ,30273 ,12539,
-                                                   0,32767,23170,23169,32767,0     ,23170 ,-23170,
-                                                   0,32767,30273,12539,23170,-23170,-12539,-30273
-                                                 };
-
 const static int16_t tw16rep[48] __attribute__((aligned(32))) = { 32767,0,30272,-12540,23169 ,-23170,12539 ,-30273,32767,0,30272,-12540,23169 ,-23170,12539 ,-30273,
 						     32767,0,23169,-23170,0     ,-32767,-23170,-23170,32767,0,23169,-23170,0     ,-32767,-23170,-23170,
 						     32767,0,12539,-30273,-23170,-23170,-30273,12539,32767,0,12539,-30273,-23170,-23170,-30273,12539
@@ -939,67 +929,6 @@ __attribute__((always_inline)) static inline void dft16_simd256(int16_t *x, int1
   // [y24 y25 y26 y27 y28 y29 y30 y31]
 }
 
-__attribute__((always_inline)) static inline void idft16(int16_t *x, int16_t *y)
-{
-  simde__m128i *tw16a_128 = (simde__m128i *)tw16, *tw16b_128 = (simde__m128i *)tw16c, *x128 = (simde__m128i *)x,
-               *y128 = (simde__m128i *)y;
-
-  /*
-  bfly4_tw1(x128,x128+1,x128+2,x128+3,
-      y128,y128+1,y128+2,y128+3);
-
-  transpose16(y128,ytmp);
-
-  bfly4_16(ytmp,ytmp+1,ytmp+2,ytmp+3,
-     y128,y128+1,y128+2,y128+3,
-     tw16_128,tw16_128+1,tw16_128+2);
-  */
-
-  register simde__m128i x1_flip, x3_flip, x02t, x13t;
-  register simde__m128i ytmp0, ytmp1, ytmp2, ytmp3, xtmp0, xtmp1, xtmp2, xtmp3;
-
-  // First stage : 4 Radix-4 butterflies without input twiddles
-
-  x02t = simde_mm_adds_epi16(x128[0], x128[2]);
-  x13t = simde_mm_adds_epi16(x128[1], x128[3]);
-  xtmp0 = simde_mm_adds_epi16(x02t, x13t);
-  xtmp2 = simde_mm_subs_epi16(x02t, x13t);
-  x1_flip = simde_mm_sign_epi16(x128[1], *conjugatedft128);
-  x1_flip = simde_mm_shuffle_epi8(x1_flip, *complex_shuffle128);
-  x3_flip = simde_mm_sign_epi16(x128[3], *conjugatedft128);
-  x3_flip = simde_mm_shuffle_epi8(x3_flip, *complex_shuffle128);
-  x02t = simde_mm_subs_epi16(x128[0], x128[2]);
-  x13t = simde_mm_subs_epi16(x1_flip, x3_flip);
-  xtmp3 = simde_mm_adds_epi16(x02t, x13t); // x0 + x1f - x2 - x3f
-  xtmp1 = simde_mm_subs_epi16(x02t, x13t); // x0 - x1f - x2 + x3f
-
-  ytmp0 = simde_mm_unpacklo_epi32(xtmp0, xtmp1);
-  ytmp1 = simde_mm_unpackhi_epi32(xtmp0, xtmp1);
-  ytmp2 = simde_mm_unpacklo_epi32(xtmp2, xtmp3);
-  ytmp3 = simde_mm_unpackhi_epi32(xtmp2, xtmp3);
-  xtmp0 = simde_mm_unpacklo_epi64(ytmp0, ytmp2);
-  xtmp1 = simde_mm_unpackhi_epi64(ytmp0, ytmp2);
-  xtmp2 = simde_mm_unpacklo_epi64(ytmp1, ytmp3);
-  xtmp3 = simde_mm_unpackhi_epi64(ytmp1, ytmp3);
-
-  // Second stage : 4 Radix-4 butterflies with input twiddles
-  xtmp1 = packed_cmult2(xtmp1,tw16a_128[0],tw16b_128[0]);
-  xtmp2 = packed_cmult2(xtmp2,tw16a_128[1],tw16b_128[1]);
-  xtmp3 = packed_cmult2(xtmp3,tw16a_128[2],tw16b_128[2]);
-
-  x02t = simde_mm_adds_epi16(xtmp0, xtmp2);
-  x13t = simde_mm_adds_epi16(xtmp1, xtmp3);
-  y128[0] = simde_mm_adds_epi16(x02t, x13t);
-  y128[2] = simde_mm_subs_epi16(x02t, x13t);
-  x1_flip = simde_mm_sign_epi16(xtmp1, *conjugatedft128);
-  x1_flip = simde_mm_shuffle_epi8(x1_flip, *complex_shuffle128);
-  x3_flip = simde_mm_sign_epi16(xtmp3, *conjugatedft128);
-  x3_flip = simde_mm_shuffle_epi8(x3_flip, *complex_shuffle128);
-  x02t = simde_mm_subs_epi16(xtmp0, xtmp2);
-  x13t = simde_mm_subs_epi16(x1_flip, x3_flip);
-  y128[3] = simde_mm_adds_epi16(x02t, x13t); // x0 + x1f - x2 - x3f
-  y128[1] = simde_mm_subs_epi16(x02t, x13t); // x0 - x1f - x2 + x3f
-}
 
 // Does two 16-point IDFTS (x[0 .. 15] is 128 LSBs of input vector, x[16..31] is in 128 MSBs)
 __attribute__((always_inline)) static inline void idft16_simd256(int16_t *x, int16_t *y)
@@ -7764,6 +7693,77 @@ void fill_gauss(c16_t *x, int N, double dBFS)
     x[i].r = (int16_t)(gaussZiggurat(0, 1.0) * SHRT_MAX * pow(10.0, dBFS * .05));
     x[i].i = (int16_t)(gaussZiggurat(0, 1.0) * SHRT_MAX * pow(10.0, dBFS * .05));
   }
+}
+const static int16_t tw16[24] __attribute__((aligned(32))) = { 32767,0,30272,-12540,23169 ,-23170,12539 ,-30273,
+                                                  32767,0,23169,-23170,0     ,-32767,-23170,-23170,
+                                                  32767,0,12539,-30273,-23170,-23170,-30273,12539
+                                                };
+
+const static int16_t tw16c[24] __attribute__((aligned(32))) = { 0,32767,12540,30272,23170,23169 ,30273 ,12539,
+                                                   0,32767,23170,23169,32767,0     ,23170 ,-23170,
+                                                   0,32767,30273,12539,23170,-23170,-12539,-30273
+                                                 };
+
+__attribute__((always_inline)) static inline void idft16(int16_t *x, int16_t *y)
+{
+  simde__m128i *tw16a_128 = (simde__m128i *)tw16, *tw16b_128 = (simde__m128i *)tw16c, *x128 = (simde__m128i *)x,
+               *y128 = (simde__m128i *)y;
+
+  /*
+  bfly4_tw1(x128,x128+1,x128+2,x128+3,
+      y128,y128+1,y128+2,y128+3);
+
+  transpose16(y128,ytmp);
+
+  bfly4_16(ytmp,ytmp+1,ytmp+2,ytmp+3,
+     y128,y128+1,y128+2,y128+3,
+     tw16_128,tw16_128+1,tw16_128+2);
+  */
+
+  register simde__m128i x1_flip, x3_flip, x02t, x13t;
+  register simde__m128i ytmp0, ytmp1, ytmp2, ytmp3, xtmp0, xtmp1, xtmp2, xtmp3;
+
+  // First stage : 4 Radix-4 butterflies without input twiddles
+
+  x02t = simde_mm_adds_epi16(x128[0], x128[2]);
+  x13t = simde_mm_adds_epi16(x128[1], x128[3]);
+  xtmp0 = simde_mm_adds_epi16(x02t, x13t);
+  xtmp2 = simde_mm_subs_epi16(x02t, x13t);
+  x1_flip = simde_mm_sign_epi16(x128[1], *conjugatedft128);
+  x1_flip = simde_mm_shuffle_epi8(x1_flip, *complex_shuffle128);
+  x3_flip = simde_mm_sign_epi16(x128[3], *conjugatedft128);
+  x3_flip = simde_mm_shuffle_epi8(x3_flip, *complex_shuffle128);
+  x02t = simde_mm_subs_epi16(x128[0], x128[2]);
+  x13t = simde_mm_subs_epi16(x1_flip, x3_flip);
+  xtmp3 = simde_mm_adds_epi16(x02t, x13t); // x0 + x1f - x2 - x3f
+  xtmp1 = simde_mm_subs_epi16(x02t, x13t); // x0 - x1f - x2 + x3f
+
+  ytmp0 = simde_mm_unpacklo_epi32(xtmp0, xtmp1);
+  ytmp1 = simde_mm_unpackhi_epi32(xtmp0, xtmp1);
+  ytmp2 = simde_mm_unpacklo_epi32(xtmp2, xtmp3);
+  ytmp3 = simde_mm_unpackhi_epi32(xtmp2, xtmp3);
+  xtmp0 = simde_mm_unpacklo_epi64(ytmp0, ytmp2);
+  xtmp1 = simde_mm_unpackhi_epi64(ytmp0, ytmp2);
+  xtmp2 = simde_mm_unpacklo_epi64(ytmp1, ytmp3);
+  xtmp3 = simde_mm_unpackhi_epi64(ytmp1, ytmp3);
+
+  // Second stage : 4 Radix-4 butterflies with input twiddles
+  xtmp1 = packed_cmult2(xtmp1,tw16a_128[0],tw16b_128[0]);
+  xtmp2 = packed_cmult2(xtmp2,tw16a_128[1],tw16b_128[1]);
+  xtmp3 = packed_cmult2(xtmp3,tw16a_128[2],tw16b_128[2]);
+
+  x02t = simde_mm_adds_epi16(xtmp0, xtmp2);
+  x13t = simde_mm_adds_epi16(xtmp1, xtmp3);
+  y128[0] = simde_mm_adds_epi16(x02t, x13t);
+  y128[2] = simde_mm_subs_epi16(x02t, x13t);
+  x1_flip = simde_mm_sign_epi16(xtmp1, *conjugatedft128);
+  x1_flip = simde_mm_shuffle_epi8(x1_flip, *complex_shuffle128);
+  x3_flip = simde_mm_sign_epi16(xtmp3, *conjugatedft128);
+  x3_flip = simde_mm_shuffle_epi8(x3_flip, *complex_shuffle128);
+  x02t = simde_mm_subs_epi16(xtmp0, xtmp2);
+  x13t = simde_mm_subs_epi16(x1_flip, x3_flip);
+  y128[3] = simde_mm_adds_epi16(x02t, x13t); // x0 + x1f - x2 - x3f
+  y128[1] = simde_mm_subs_epi16(x02t, x13t); // x0 - x1f - x2 + x3f
 }
 
 int main(int argc, char**argv)
