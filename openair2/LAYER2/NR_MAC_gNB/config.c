@@ -781,7 +781,7 @@ static void initialize_beam_information(NR_beam_info_t *beam_info, int mu, int s
   }
 }
 
-static void config_sched_ctrlSIB1(gNB_MAC_INST *nr_mac)
+static bool config_sched_ctrlSIB1(gNB_MAC_INST *nr_mac)
 {
   const NR_MIB_t *mib = nr_mac->common_channels[0].mib->message.choice.mib;
   NR_ServingCellConfigCommon_t *scc = nr_mac->common_channels[0].ServingCellConfigCommon;
@@ -825,16 +825,23 @@ static void config_sched_ctrlSIB1(gNB_MAC_INST *nr_mac)
   fill_coresetZero(&sched_ctrlCommon->coreset, &type0_PDCCH_CSS_config);
   nr_mac->cset0_bwp_start = type0_PDCCH_CSS_config.cset_start_rb;
   nr_mac->cset0_bwp_size = type0_PDCCH_CSS_config.num_rbs;
+  int bwp_size = NRRIV2BW(scc->downlinkConfigCommon->initialDownlinkBWP->genericParameters.locationAndBandwidth, MAX_BWP_SIZE);
+  bool long_cset = false;
   if (type0_PDCCH_CSS_config.type0_pdcch_ss_mux_pattern > 1) {
     int bwp_start = NRRIV2PRBOFFSET(scc->downlinkConfigCommon->initialDownlinkBWP->genericParameters.locationAndBandwidth,
                                     MAX_BWP_SIZE);
-    int bwp_size = NRRIV2BW(scc->downlinkConfigCommon->initialDownlinkBWP->genericParameters.locationAndBandwidth, MAX_BWP_SIZE);
     // we need to configure a commonControlResourceSet != 0
     // because CSET0 would start from a symbol != 0 and that's unwanted for anything but SIB1
     // The network configures the commonControlResourceSet in SIB1 so that it is contained in the bandwidth of CSET0
     bool do_TCI = nr_mac->radio_config.do_TCI;
-    configure_coreset_for_mux23(scc, nr_mac->cset0_bwp_start - bwp_start, nr_mac->cset0_bwp_size, bwp_start, bwp_size, do_TCI);
+    long_cset = configure_coreset_for_mux23(scc,
+                                            nr_mac->cset0_bwp_start - bwp_start,
+                                            nr_mac->cset0_bwp_size,
+                                            bwp_start,
+                                            bwp_size,
+                                            do_TCI);
   }
+  return long_cset || bwp_size < 48;
 }
 
 /**
@@ -903,15 +910,16 @@ void nr_mac_config_scc(gNB_MAC_INST *nrmac, NR_ServingCellConfigCommon_t *scc, c
 
   find_SSB_and_RO_available(nrmac);
 
+  bool two_symb_cset = false;
   if (IS_SA_MODE(get_softmodem_params()))
-    config_sched_ctrlSIB1(nrmac);
+    two_symb_cset = config_sched_ctrlSIB1(nrmac);
 
   const nr_mac_config_t *rc = &nrmac->radio_config;
   const NR_DownlinkConfigCommon_t *dlcc = scc->downlinkConfigCommon;
   nr_rrc_config_dl_tda(dlcc->initialDownlinkBWP->pdsch_ConfigCommon->choice.setup->pdsch_TimeDomainAllocationList,
                        get_frame_type((int)*dlcc->frequencyInfoDL->frequencyBandList.list.array[0], *scc->ssbSubcarrierSpacing),
                        scc->tdd_UL_DL_ConfigurationCommon,
-                       NRRIV2BW(dlcc->initialDownlinkBWP->genericParameters.locationAndBandwidth, MAX_BWP_SIZE));
+                       two_symb_cset);
   nr_rrc_config_ul_tda(scc, rc->minRXTXTIME, rc->do_SRS);
   seq_arr_init(&nrmac->ul_tda, sizeof(NR_tda_info_t));
   init_ul_tda_info(scc->uplinkConfigCommon->initialUplinkBWP->pusch_ConfigCommon->choice.setup->pusch_TimeDomainAllocationList, &nrmac->ul_tda);
