@@ -1022,17 +1022,17 @@ void prepare_sim_uecap(NR_UE_NR_Capability_t *cap,
   }
 }
 
-void nr_rrc_config_dl_tda(struct NR_PDSCH_TimeDomainResourceAllocationList *pdsch_TimeDomainAllocationList,
+void nr_rrc_config_dl_tda(NR_PDSCH_TimeDomainResourceAllocationList_t *pdsch_TimeDomainAllocationList,
                           frame_type_t frame_type,
                           NR_TDD_UL_DL_ConfigCommon_t *tdd_UL_DL_ConfigurationCommon,
-                          int curr_bwp)
+                          bool small_bwp)
 {
   // coreset duration setting to be improved in the framework of RRC harmonization, potentially using a common function
   int len_coreset = 1;
-  if (curr_bwp < 48)
+  if (small_bwp)
     len_coreset = 2;
   // setting default TDA for DL with TDA index 0
-  struct NR_PDSCH_TimeDomainResourceAllocation *timedomainresourceallocation = CALLOC(1,sizeof(NR_PDSCH_TimeDomainResourceAllocation_t));
+  NR_PDSCH_TimeDomainResourceAllocation_t *timedomainresourceallocation = CALLOC(1, sizeof(NR_PDSCH_TimeDomainResourceAllocation_t));
   // k0: Slot offset between DCI and its scheduled PDSCH (see TS 38.214 clause 5.1.2.1) When the field is absent the UE applies the value 0.
   //timedomainresourceallocation->k0 = calloc(1,sizeof(*timedomainresourceallocation->k0));
   //*timedomainresourceallocation->k0 = 0;
@@ -1822,7 +1822,7 @@ static NR_BWP_Downlink_t *config_downlinkBWP(const NR_ServingCellConfigCommon_t 
   nr_rrc_config_dl_tda(bwp->bwp_Common->pdsch_ConfigCommon->choice.setup->pdsch_TimeDomainAllocationList,
                        get_frame_type((int)*scc->downlinkConfigCommon->frequencyInfoDL->frequencyBandList.list.array[0], *scc->ssbSubcarrierSpacing),
                        scc->tdd_UL_DL_ConfigurationCommon,
-                       bwp_size);
+                       bwp_size < 48);
 
   if (!bwp->bwp_Dedicated) {
     bwp->bwp_Dedicated=calloc(1,sizeof(*bwp->bwp_Dedicated));
@@ -2747,10 +2747,18 @@ void configure_coreset_for_mux23(const NR_ServingCellConfigCommon_t *scc,
                                  bool do_TCI)
 {
   NR_ControlResourceSet_t *coreset = get_coreset_config(5, offset, limit, bwp_start, bwp_size, get_ssb_bitmap(scc), do_TCI);
-  NR_PDCCH_ConfigCommon_t *pdcch_common = scc->downlinkConfigCommon->initialDownlinkBWP->pdcch_ConfigCommon->choice.setup;
+  NR_DownlinkConfigCommon_t *dlcc = scc->downlinkConfigCommon;
+  NR_PDCCH_ConfigCommon_t *pdcch_common = dlcc->initialDownlinkBWP->pdcch_ConfigCommon->choice.setup;
   pdcch_common->commonControlResourceSet = coreset;
-  for (int i = 0; i < pdcch_common->commonSearchSpaceList->list.count; i++) {
+  for (int i = 0; i < pdcch_common->commonSearchSpaceList->list.count; i++)
     *pdcch_common->commonSearchSpaceList->list.array[i]->controlResourceSetId = coreset->controlResourceSetId;
+  if (coreset->duration > 1 && bwp_size >= 48) {
+    ASN_STRUCT_RESET(asn_DEF_NR_PDSCH_TimeDomainResourceAllocationList,
+                     dlcc->initialDownlinkBWP->pdsch_ConfigCommon->choice.setup->pdsch_TimeDomainAllocationList);
+    nr_rrc_config_dl_tda(dlcc->initialDownlinkBWP->pdsch_ConfigCommon->choice.setup->pdsch_TimeDomainAllocationList,
+                         get_frame_type((int)*dlcc->frequencyInfoDL->frequencyBandList.list.array[0], *scc->ssbSubcarrierSpacing),
+                         scc->tdd_UL_DL_ConfigurationCommon,
+                         true);
   }
 }
 
