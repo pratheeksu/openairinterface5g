@@ -115,9 +115,9 @@ int do_nrMeasurementReport_SA(long trigger_to_measid,
                               long rs_type,
                               uint16_t Nid_cell,
                               int rsrp_index,
-                              bool neighbor_cell_valid,
-                              uint16_t neighbor_Nid_cell,
-                              int neighbor_rsrp_index,
+                              int num_neighbor_cells,
+                              const uint16_t *neighbor_Nid_cells,
+                              const int *neighbor_rsrp_indexes,
                               uint8_t *buffer,
                               size_t buffer_size);
 
