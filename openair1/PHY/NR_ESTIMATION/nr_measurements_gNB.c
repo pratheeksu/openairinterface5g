@@ -197,7 +197,7 @@ void gNB_I0_measurements(PHY_VARS_gNB *gNB, int slot, int first_symb, int num_sy
         tmp_n0_subband[aarx][rb] /= nb_symb[rb];
         // apply exponential moving average if noise on antenna/RB, otherwise
         // retain previous measurement
-        if (tmp_n0_subband[aarx][rb] != 0)
+        if (tmp_n0_subband[aarx][rb] != 0 || IS_SOFTMODEM_RFSIM)
           n0_subband_power[aarx][rb] = 0.9 * n0_subband_power[aarx][rb] + 0.1 * tmp_n0_subband[aarx][rb];
         n0_subband_power_dB[aarx][rb] = dB_fixed(n0_subband_power[aarx][rb]);
         n0_subband_tot_perPRB += n0_subband_power[aarx][rb];
