@@ -150,15 +150,6 @@ __attribute__((always_inline)) static inline void packed_cmultc(simde__m128i a, 
   *c = cpack(cre, cim);
 }
 
-__attribute__((always_inline)) static inline simde__m128i packed_cmult2(simde__m128i a, simde__m128i b, simde__m128i b2);
-
-static inline simde__m128i packed_cmult2(simde__m128i a, simde__m128i b, simde__m128i b2)
-{
-  const simde__m128i cre = simde_mm_madd_epi16(a, b);
-  const simde__m128i cim = simde_mm_madd_epi16(a, b2);
-  return (cpack(cre, cim));
-}
-
 __attribute__((always_inline)) static inline simde__m256i packed_cmult2_256(simde__m256i a, simde__m256i b, simde__m256i b2)
 {
   const simde__m256i cre = simde_mm256_madd_epi16(a, b);
@@ -7694,6 +7685,16 @@ void fill_gauss(c16_t *x, int N, double dBFS)
     x[i].i = (int16_t)(gaussZiggurat(0, 1.0) * SHRT_MAX * pow(10.0, dBFS * .05));
   }
 }
+
+__attribute__((always_inline)) static inline simde__m128i packed_cmult2(simde__m128i a, simde__m128i b, simde__m128i b2);
+
+static inline simde__m128i packed_cmult2(simde__m128i a, simde__m128i b, simde__m128i b2)
+{
+  const simde__m128i cre = simde_mm_madd_epi16(a, b);
+  const simde__m128i cim = simde_mm_madd_epi16(a, b2);
+  return (cpack(cre, cim));
+}
+
 const static int16_t tw16[24] __attribute__((aligned(32))) = { 32767,0,30272,-12540,23169 ,-23170,12539 ,-30273,
                                                   32767,0,23169,-23170,0     ,-32767,-23170,-23170,
                                                   32767,0,12539,-30273,-23170,-23170,-30273,12539
