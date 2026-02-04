@@ -647,85 +647,6 @@ static void nr_fill_indication(PHY_VARS_gNB *gNB,
   }
 }
 
-// Function to fill UL RB mask to be used for N0 measurements
-static void fill_ul_rb_mask(PHY_VARS_gNB *gNB,
-                            int frame_rx,
-                            int slot_rx,
-                            uint32_t rb_mask_ul[14][9],
-                            nfapi_nr_max_num_of_symbol_per_slot_t *slot_conf)
-{
-  for (int symbol = 0; symbol < 14; symbol++) {
-    for (int m = 0; m < 9; m++) {
-      rb_mask_ul[symbol][m] = 0;
-      for (int i = 0; i < 32; i++) {
-        int prbpos = (m * 32) + i;
-        if (prbpos > gNB->frame_parms.N_RB_UL)
-          break;
-        rb_mask_ul[symbol][m] |= (gNB->ulprbbl[prbpos] > 0 ? 1U : 0) << i;
-      }
-    }
-  }
-
-  for (int i = 0; i < gNB->max_nb_pucch; i++){
-    const NR_gNB_PUCCH_t *pucch = gNB->pucch + i;
-    if (!(pucch && pucch->active && pucch->frame == frame_rx && pucch->slot == slot_rx))
-      continue;
-    const nfapi_nr_pucch_pdu_t *pucch_pdu = &pucch->pucch_pdu;
-    const int start = pucch_pdu->start_symbol_index;
-    LOG_D(PHY,
-          "%d.%d pucch %d : start_symbol %d, nb_symbols %d, prb_size %d\n",
-          frame_rx,
-          slot_rx,
-          i,
-          start,
-          pucch_pdu->nr_of_symbols,
-          pucch_pdu->prb_size);
-    for (int symbol = start; symbol < (start + pucch_pdu->nr_of_symbols); symbol++) {
-      if (gNB->frame_parms.frame_type == FDD || (gNB->frame_parms.frame_type == TDD && slot_conf[symbol].slot_config.value == 1)) {
-        for (int rb = 0; rb < pucch_pdu->prb_size; rb++) {
-          int rb2 =
-              rb + pucch_pdu->bwp_start
-              + ((symbol < start + (pucch_pdu->nr_of_symbols >> 1)) || (pucch_pdu->freq_hop_flag == 0) ? pucch_pdu->prb_start
-                                                                                                       : pucch_pdu->second_hop_prb);
-          rb_mask_ul[symbol][rb2 >> 5] |= 1U << (rb2 & 31);
-        }
-      }
-    }
-  }
-
-  for (int ULSCH_id = 0; ULSCH_id < gNB->max_nb_pusch; ULSCH_id++) {
-    NR_gNB_ULSCH_t *ulsch = &gNB->ulsch[ULSCH_id];
-    NR_UL_gNB_HARQ_t *ulsch_harq = ulsch->harq_process;
-    AssertFatal(ulsch_harq != NULL, "harq_pid %d is not allocated\n", ulsch->harq_pid);
-    if (!(ulsch->active && ulsch->frame == frame_rx && ulsch->slot == slot_rx && !ulsch->handled))
-      continue;
-    uint8_t symbol_start = ulsch_harq->ulsch_pdu.start_symbol_index;
-    uint8_t symbol_end = symbol_start + ulsch_harq->ulsch_pdu.nr_of_symbols;
-    for (int symbol = symbol_start; symbol < symbol_end; symbol++) {
-      if (gNB->frame_parms.frame_type == FDD || (gNB->frame_parms.frame_type == TDD && slot_conf[symbol].slot_config.value == 1)) {
-        LOG_D(PHY, "symbol %d Filling rb_mask_ul rb_size %d\n", symbol, ulsch_harq->ulsch_pdu.rb_size);
-        for (int rb = 0; rb < ulsch_harq->ulsch_pdu.rb_size; rb++) {
-          int rb2 = rb + ulsch_harq->ulsch_pdu.rb_start + ulsch_harq->ulsch_pdu.bwp_start;
-          rb_mask_ul[symbol][rb2 >> 5] |= 1U << (rb2 & 31);
-        }
-      }
-    }
-  }
-
-  for (int i = 0; i < gNB->max_nb_srs; i++) {
-    NR_gNB_SRS_t *srs = &gNB->srs[i];
-    if (!(srs && srs->active && srs->frame == frame_rx && srs->slot == slot_rx))
-      continue;
-    nfapi_nr_srs_pdu_t *srs_pdu = &srs->srs_pdu;
-    const uint8_t l0 = gNB->frame_parms.symbols_per_slot - 1 - srs_pdu->time_start_position;
-    for (int symbol = 0; symbol < (1 << srs_pdu->num_symbols); symbol++) {
-      for (int rb = srs_pdu->bwp_start; rb < (srs_pdu->bwp_start + srs_pdu->bwp_size); rb++) {
-        rb_mask_ul[l0 + symbol][rb >> 5] |= 1U << (rb & 31);
-      }
-    }
-  }
-}
-
 static int fill_srs_reported_symbol(nfapi_nr_srs_reported_symbol_t *reported_symbol,
                                     const nfapi_nr_srs_pdu_t *srs_pdu,
                                     const int N_RB_UL,
@@ -1004,27 +925,7 @@ int phy_procedures_gNB_uespec_RX(PHY_VARS_gNB *gNB, int frame_rx, int slot_rx, N
   const uint8_t nb_antennas_rx = frame_parms->nb_antennas_rx;
   VCD_SIGNAL_DUMPER_DUMP_FUNCTION_BY_NAME(VCD_SIGNAL_DUMPER_FUNCTIONS_PHY_PROCEDURES_gNB_UESPEC_RX,1);
   LOG_D(PHY,"phy_procedures_gNB_uespec_RX frame %d, slot %d\n",frame_rx,slot_rx);
-  {
-    // Mask of occupied RBs, per symbol and PRB
-    uint32_t rb_mask_ul[14][9];
-    nfapi_nr_max_num_of_symbol_per_slot_t *slot_conf = NULL;
-    if (frame_parms->frame_type == TDD)
-      slot_conf = gNB->gNB_config.tdd_table.max_tdd_periodicity_list[slot_rx].max_num_of_symbol_per_slot_list;
-    fill_ul_rb_mask(gNB, frame_rx, slot_rx, rb_mask_ul, slot_conf);
-
-    int first_symb = 0, num_symb = 0;
-    if (frame_parms->frame_type == TDD)
-      for (int symbol_count = 0; symbol_count < NR_NUMBER_OF_SYMBOLS_PER_SLOT; symbol_count++) {
-        if (slot_conf[symbol_count].slot_config.value == 1) {
-          if (num_symb == 0)
-            first_symb = symbol_count;
-          num_symb++;
-        }
-      }
-    else
-      num_symb = NR_NUMBER_OF_SYMBOLS_PER_SLOT;
-    gNB_I0_measurements(gNB, slot_rx, first_symb, num_symb, rb_mask_ul);
-  }
+  gNB_I0_measurements(gNB, frame_rx, slot_rx, NULL);
 
   const int soffset = (slot_rx & 3) * nb_symb * ofdm_symbol_size;
   start_meas(&gNB->phy_proc_rx);
