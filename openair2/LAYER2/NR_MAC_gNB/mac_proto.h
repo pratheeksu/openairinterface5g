@@ -60,8 +60,8 @@ void nr_schedule_ue_spec(module_id_t module_id,
                          nfapi_nr_dl_tti_request_t *DL_req,
                          nfapi_nr_tx_data_request_t *TX_req);
 
-/* \brief default DL preprocessor init routine, returns preprocessor to call */
-nr_pp_impl_dl nr_init_dlsch_preprocessor();
+/* \brief default DL preprocessor */
+void nr_dlsch_preprocessor(gNB_MAC_INST *mac, post_process_pdsch_t *pp_pdsch);
 
 void schedule_nr_sib1(module_id_t module_idP,
                       frame_t frameP,
@@ -84,8 +84,8 @@ void schedule_nr_mib(module_id_t module_idP, frame_t frameP, slot_t slotP, nfapi
  * messages, statistics, HARQ handling, ... */
 void nr_schedule_ulsch(module_id_t module_id, frame_t frame, slot_t slot, nfapi_nr_ul_dci_request_t *ul_dci_req);
 
-/* \brief default UL preprocessor init routine, returns preprocessor to call */
-nr_pp_impl_ul nr_init_ulsch_preprocessor();
+/* \brief default UL preprocessor */
+void nr_ulsch_preprocessor(gNB_MAC_INST *nr_mac, post_process_pusch_t *pp_pusch);
 
 /////// Random Access MAC-PHY interface functions and primitives ///////
 
@@ -374,7 +374,6 @@ int get_mcs_from_SINRx10(int mcs_table, int SINRx10, int Nl);
 uint8_t get_mcs_from_cqi(int mcs_table, int cqi_table, int cqi_idx);
 
 uint8_t get_dl_nrOfLayers(const NR_UE_sched_ctrl_t *sched_ctrl, const nr_dci_format_t dci_format);
-int get_ul_nrOfLayers(const NR_UE_sched_ctrl_t *sched_ctrl, const nr_dci_format_t dci_format);
 
 void free_sched_pucch_list(NR_UE_sched_ctrl_t *sched_ctrl);
 bool add_UE_to_list(int list_size, NR_UE_info_t *list[list_size], NR_UE_info_t *UE);
@@ -425,6 +424,9 @@ bool nr_find_nb_rb(uint16_t Qm,
  * \param rbSize_ptr Pointer returning the size of the found free block of RBs
  * \return Indicates if a free block of RBs of the required size could be found and *rbStart_ptr and *rbSize_ptr are set accordingly
  */
+int find_largest_free_block(const uint16_t *vrb_map, uint16_t slbitmap,
+                            int bwp_start, int bwp_size, int *out_start);
+
 bool get_rb_alloc(int rbSize_min,
                   int rbSize_max,
                   int bwpStart,
@@ -434,11 +436,44 @@ bool get_rb_alloc(int rbSize_min,
                   int *rbStart_ptr,
                   int *rbSize_ptr);
 
-int get_mcs_from_bler(const NR_bler_options_t *bler_options,
-                      const NR_mac_dir_stats_t *stats,
-                      NR_bler_stats_t *bler_stats,
-                      int max_mcs,
-                      frame_t frame);
+/* Scalar core of the BLER -> MCS adaptation rule. Single source of truth
+ * for the activity-guard threshold and the lower/upper hysteresis. */
+int nr_adapt_mcs_from_bler(int current_mcs,
+                           int min_mcs,
+                           int max_mcs,
+                           float bler,
+                           float bler_lower,
+                           float bler_upper,
+                           int num_sched);
+
+bool update_bler_stats(const NR_bler_options_t *bler_options,
+                          const NR_mac_dir_stats_t *stats,
+                          NR_bler_stats_t *bler_stats,
+                          frame_t frame);
+
+void nr_dl_ri_pmi_select_default(const gNB_MAC_INST *mac,
+                                 nr_dl_candidate_t *candidates,
+                                 int n_candidates);
+void nr_dl_mcs_select_default(const gNB_MAC_INST *mac,
+                             nr_dl_candidate_t *candidates,
+                             int n_candidates);
+
+int nr_dl_beam_select_default(NR_beam_info_t *beam_info,
+                             const int16_t *beam_index_list,
+                             nr_dl_candidate_t *candidates,
+                             int n_candidates,
+                             frame_t frame, slot_t slot,
+                             int slots_per_frame);
+
+int nr_dl_tda_select_default(const gNB_MAC_INST *mac,
+                             nr_dl_candidate_t *candidates,
+                             int n_candidates,
+                             frame_t frame, slot_t slot);
+
+int nr_dl_proportional_fair(const nr_dl_sched_params_t *params,
+                            nr_dl_candidate_t *candidates,
+                            int *sched_indices,
+                            int n_candidates);
 
 int ul_buffer_index(int frame, int slot, int slots_per_frame, int size);
 void UL_tti_req_ahead_initialization(gNB_MAC_INST *gNB, int n, int CCid, frame_t frameP, int slotP);
@@ -506,4 +541,35 @@ void nr_mac_set_rssi_threshold(nr_power_control_t *pc, int rssi_threshold);
 void nr_mac_signal_dtx(nr_power_control_t *pc);
 int nr_mac_get_tpc(nr_power_control_t *pc);
 
+int collect_ul_candidates(gNB_MAC_INST *mac,
+                          NR_UE_info_t *UE_list[],
+                          nr_ul_candidate_t *candidates,
+                          int max_candidates,
+                          frame_t frame, slot_t slot,
+                          int sched_frame, int sched_slot);
+
+void nr_ul_ri_tpmi_select_default(gNB_MAC_INST *mac,
+                                  nr_ul_candidate_t *cands, int n_cand);
+
+int nr_ul_tda_select_default(gNB_MAC_INST *mac,
+                             nr_ul_candidate_t *cands, int n_cand,
+                             frame_t sched_frame, slot_t sched_slot, int k2);
+
+int nr_ul_beam_alloc_default(NR_beam_info_t *beam_info,
+                             const int16_t *beam_index_list,
+                             nr_ul_candidate_t *candidates,
+                             int n_candidates,
+                             frame_t frame, slot_t slot,
+                             frame_t sched_frame, slot_t sched_slot,
+                             int slots_per_frame);
+
+int nr_ul_proportional_fair(const nr_ul_sched_params_t *params,
+                             const nr_ul_candidate_t *candidates,
+                             nr_ul_alloc_t *allocs,
+                             int n_candidates);
+
+bool nr_ul_check_phr(const nr_ul_sched_params_t *params,
+                     const nr_ul_candidate_t *cand,
+                     uint16_t rbSize, uint8_t mcs,
+                     nr_ul_phr_advice_t *advice);
 #endif /*__LAYER2_NR_MAC_PROTO_H__*/
