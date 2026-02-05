@@ -736,7 +736,8 @@ static struct NR_SRS_Resource__resourceType__periodic *configure_periodic_srs(co
 static NR_SRS_ResourceSet_t *get_srs_resourceset(const int resset_id,
                                                  const int res_id,
                                                  const long usage,
-                                                 const int minRXTXTIME,
+                                                 const int offset,
+                                                 const int trig_state,
                                                  nr_srs_type_t do_srs)
 {
   NR_SRS_ResourceSet_t *srs_resset = calloc_or_fail(1, sizeof(*srs_resset));
@@ -752,11 +753,11 @@ static NR_SRS_ResourceSet_t *get_srs_resourceset(const int resset_id,
   } else {
     srs_resset->resourceType.present = NR_SRS_ResourceSet__resourceType_PR_aperiodic;
     srs_resset->resourceType.choice.aperiodic = calloc_or_fail(1, sizeof(*srs_resset->resourceType.choice.aperiodic));
-    srs_resset->resourceType.choice.aperiodic->aperiodicSRS_ResourceTrigger = 1;
+    srs_resset->resourceType.choice.aperiodic->aperiodicSRS_ResourceTrigger = trig_state;
     srs_resset->resourceType.choice.aperiodic->csi_RS = NULL;
     srs_resset->resourceType.choice.aperiodic->slotOffset =
         calloc_or_fail(1, sizeof(*srs_resset->resourceType.choice.aperiodic->slotOffset));
-    *srs_resset->resourceType.choice.aperiodic->slotOffset = minRXTXTIME;
+    *srs_resset->resourceType.choice.aperiodic->slotOffset = offset;
     srs_resset->resourceType.choice.aperiodic->ext1 = NULL;
   }
   srs_resset->usage = usage;
@@ -859,7 +860,8 @@ static NR_SRS_Resource_t *get_srs_resource(const NR_UE_NR_Capability_t *uecap,
   return srs_res;
 }
 
-static NR_SetupRelease_SRS_Config_t *get_config_srs(const NR_UE_NR_Capability_t *uecap,
+static NR_SetupRelease_SRS_Config_t *get_config_srs(const NR_ServingCellConfigCommon_t *scc,
+                                                    const NR_UE_NR_Capability_t *uecap,
                                                     const int curr_bwp,
                                                     const int uid,
                                                     const int res_id,
@@ -878,9 +880,26 @@ static NR_SetupRelease_SRS_Config_t *get_config_srs(const NR_UE_NR_Capability_t 
   asn1cSeqAdd(&srs_Config->srs_ResourceToAddModList->list, srs_res0);
 
   srs_Config->srs_ResourceSetToAddModList = calloc_or_fail(1, sizeof(*srs_Config->srs_ResourceSetToAddModList));
-  NR_SRS_ResourceSet_t *srs_resset0 = get_srs_resourceset(res_id, res_id, NR_SRS_ResourceSet__usage_codebook, minRXTXTIME, do_srs);
-  asn1cSeqAdd(&srs_Config->srs_ResourceSetToAddModList->list, srs_resset0);
-
+  int k2 = minRXTXTIME;
+  int num_reset = 1;
+  const long usage = NR_SRS_ResourceSet__usage_codebook;
+  NR_SRS_ResourceSet_t *srs_resset = get_srs_resourceset(num_reset, res_id, usage, k2, num_reset, do_srs);
+  asn1cSeqAdd(&srs_Config->srs_ResourceSetToAddModList->list, srs_resset);
+  if (do_srs == APERIODIC_SRS) {
+    NR_PUSCH_TimeDomainResourceAllocationList_t *tda_list =
+          scc->uplinkConfigCommon->initialUplinkBWP->pusch_ConfigCommon->choice.setup->pusch_TimeDomainAllocationList;
+    for (int i = 0; i < tda_list->list.count; ++i) {
+      if (k2 == *tda_list->list.array[i]->k2)
+        continue;
+      num_reset++;
+      k2 = *tda_list->list.array[i]->k2;
+      // in case of UL heavy configuration better use periodic SRS if there are more UL slots than allowed trigger states
+      AssertFatal(num_reset < 4, "Exceeded the number of allowed SRS trigger states.\n");
+      const long usage = NR_SRS_ResourceSet__usage_codebook;
+      NR_SRS_ResourceSet_t *srs_resset = get_srs_resourceset(num_reset, res_id, usage, k2, num_reset, do_srs);
+      asn1cSeqAdd(&srs_Config->srs_ResourceSetToAddModList->list, srs_resset);
+    }
+  }
   srs_Config->srs_ResourceSetToReleaseList = NULL;
   srs_Config->srs_ResourceToReleaseList = NULL;
 
@@ -1900,7 +1919,8 @@ static NR_BWP_Uplink_t *config_uplinkBWP(bool is_SA,
 
   ubwp->bwp_Dedicated->pusch_Config = config_pusch(configuration, scc, uecap);
 
-  ubwp->bwp_Dedicated->srs_Config = get_config_srs(NULL,
+  ubwp->bwp_Dedicated->srs_Config = get_config_srs(scc,
+                                                   NULL,
                                                    curr_bwp,
                                                    uid,
                                                    ubwp->bwp_Id,
@@ -3343,7 +3363,8 @@ static NR_BWP_UplinkDedicated_t *configure_initial_ul_bwp(const NR_ServingCellCo
   set_pucch_power_config(pucch_Config);
 
   initialUplinkBWP->pusch_Config = config_pusch(configuration, scc, uecap);
-  initialUplinkBWP->srs_Config = get_config_srs(uecap,
+  initialUplinkBWP->srs_Config = get_config_srs(scc,
+                                                uecap,
                                                 curr_bwp,
                                                 id,
                                                 0,
@@ -3963,7 +3984,8 @@ void update_cellGroupConfig(NR_CellGroupConfig_t *cellGroupConfig,
     *pusch_Config->maxRank = maxMIMO_Layers;
     if (configuration->do_SRS != NO_SRS) {
       ASN_STRUCT_FREE(asn_DEF_NR_SetupRelease_SRS_Config, ul_bwp_Dedicated->srs_Config);
-      ul_bwp_Dedicated->srs_Config = get_config_srs(uecap,
+      ul_bwp_Dedicated->srs_Config = get_config_srs(scc,
+                                                    uecap,
                                                     curr_bwp,
                                                     uid,
                                                     bwp_id,
@@ -4084,7 +4106,8 @@ NR_CellGroupConfig_t *get_default_secondaryCellGroup(const NR_ServingCellConfigC
   long maxMIMO_Layers = set_ul_max_layers(configuration, uecap);
   int curr_bwp = NRRIV2BW(servingcellconfigcommon->downlinkConfigCommon->initialDownlinkBWP->genericParameters.locationAndBandwidth,
                           MAX_BWP_SIZE);
-  initialUplinkBWP->srs_Config = get_config_srs(NULL,
+  initialUplinkBWP->srs_Config = get_config_srs(servingcellconfigcommon,
+                                                NULL,
                                                 curr_bwp,
                                                 uid,
                                                 0,
