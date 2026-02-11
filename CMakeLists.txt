@@ -1206,6 +1206,7 @@ set(L2_NR_SRC
   ${NR_RRC_DIR}/rrc_gNB_cuup.c
   ${NR_RRC_DIR}/rrc_gNB_du.c
   ${NR_RRC_DIR}/rrc_gNB_mobility.c
+  ${NR_RRC_DIR}/rrc_gNB_NRPPA.c
   )
 
 set(L2_SRC_UE
@@ -1875,7 +1876,7 @@ target_link_libraries(nr-softmodem PRIVATE
   ITTI ${NAS_UE_LIB} nr_rrc
   ngap s1ap L2_LTE_NR L2_NR MAC_NR_COMMON NFAPI_LIB NFAPI_VNF_LIB NFAPI_PNF_LIB NFAPI_USER_LIB SIMU
   x2ap f1ap m2ap m3ap e1ap radio_common
-  time_management softmodem_common
+  time_management softmodem_common nrppa
   -Wl,--end-group dl)
 
 target_link_libraries(nr-softmodem PRIVATE pthread m CONFIG_LIB rt)
