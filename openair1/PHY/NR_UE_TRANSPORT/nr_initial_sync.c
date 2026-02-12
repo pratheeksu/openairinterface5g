@@ -270,7 +270,7 @@ void nr_scan_ssb(void *arg)
   nr_ue_ssb_scan_t *ssbInfo = (nr_ue_ssb_scan_t *)arg;
   c16_t **rxdata = ssbInfo->rxdata;
   const NR_DL_FRAME_PARMS *fp = ssbInfo->fp;
-  LOG_I(PHY, "sync for power %d\n", signal_energy((int32_t *)(rxdata[0]), fp->samples_per_frame));
+
   // Generate PSS time signal for this GSCN.
   __attribute__((aligned(32))) c16_t pssTime[NUMBER_PSS_SEQUENCE][fp->ofdm_symbol_size];
   const int pss_sequence = get_softmodem_params()->sl_mode == 0 ? NUMBER_PSS_SEQUENCE : NUMBER_PSS_SEQUENCE_SL;
@@ -289,64 +289,43 @@ void nr_scan_ssb(void *arg)
     int detected_nid_cell = -1;
     int ssb_offset = 0;
     int freq_offset_pss = 0;
-    const int sync_pos = pss_synchro_nr((const c16_t **)rxdata,
-                                        fp,
-                                        pssTime,
-                                        frame_id,
-                                        ssbInfo->foFlag,
-                                        ssbInfo->targetNidCell,
-                                        &nid2,
-                                        &freq_offset_pss,
-                                        &ssbInfo->pssCorrPeakPower,
-                                        &ssbInfo->pssCorrAvgPower);
-    if (sync_pos < fp->nb_prefix_samples)
-      continue;
-
-    ssbInfo->ssbOffset = sync_pos - fp->nb_prefix_samples;
-
-#if 1
-    LOG_I(PHY, "Initial sync : Estimated PSS position %d, Nid2 %d, ssb offset %d\n", sync_pos, nid2, ssbInfo->ssbOffset);
-#endif
-    /* check that SSS/PBCH block is continuous inside the received buffer */
-    if (ssbInfo->ssbOffset + NR_N_SYMBOLS_SSB * (fp->ofdm_symbol_size + fp->nb_prefix_samples) >= fp->samples_per_frame) {
-      LOG_D(PHY, "Can't try to decode SSS from PSS position, will retry (PSS circular buffer wrapping): sync_pos %d\n", sync_pos);
-      continue;
-    }
-
-    // digital compensation of FFO for SSB symbols
-    if (ssbInfo->foFlag) {
-      compensate_freq_offset(rxdata, fp, freq_offset_pss, frame_id);
-    }
-
-    /* slot_fep function works for lte and takes into account begining of frame with prefix for subframe 0 */
-    /* for NR this is not the case but slot_fep is still used for computing FFT of samples */
-    /* in order to achieve correct processing for NR prefix samples is forced to 0 and then restored after function call */
-    /* symbol number are from beginning of SS/PBCH blocks as below:  */
-    /*    Signal            PSS  PBCH  SSS  PBCH                     */
-    /*    symbol number      0     1    2    3                       */
-    /* time samples in buffer rxdata are used as input of FFT -> FFT results are stored in the frequency buffer rxdataF */
-    /* rxdataF stores SS/PBCH from beginning of buffers in the same symbol order as in time domain */
-
-    const uint32_t rxdataF_sz = fp->samples_per_slot_wCP;
-    __attribute__((aligned(32))) c16_t rxdataF[fp->nb_antennas_rx][rxdataF_sz];
-    for (int i = 0; i < NR_N_SYMBOLS_SSB; i++)
-      nr_slot_fep(NULL, fp, 0, i, rxdataF, link_type_dl, frame_id * fp->samples_per_frame + ssbInfo->ssbOffset, (c16_t **)rxdata);
-
     int freq_offset_sss = 0;
+    int32_t sss_metric = 0;
+    uint8_t sss_phase = 0;
 
-    int32_t metric_tdd_ncp = 0;
-    uint8_t phase_tdd_ncp;
-    ssbInfo->syncRes.cell_detected = rx_sss_nr(fp,
-                                               nid2,
-                                               ssbInfo->targetNidCell,
-                                               freq_offset_pss,
-                                               ssbInfo->gscnInfo.ssbFirstSC,
-                                               &ssbInfo->nidCell,
-                                               &metric_tdd_ncp,
-                                               &phase_tdd_ncp,
-                                               &freq_offset_sss,
-                                               rxdataF);
-#if 1
+    nr_ssb_search_params_t search_params = {
+        .frame_parms = fp,
+        .rxdata = rxdata,
+        .rxdata_size = fp->samples_per_frame,
+        .ssb_start_subcarrier = ssbInfo->gscnInfo.ssbFirstSC,
+        .target_nid_cell = ssbInfo->targetNidCell,
+        .exclude_nid_cell = -1, // No exclusion for initial sync
+        .apply_freq_offset = ssbInfo->foFlag,
+        .search_frame_id = frame_id,
+        .fo_flag = ssbInfo->foFlag,
+        .rxdataF = rxdataF,
+        .pssTime = pssTime,
+        .detected_nid_cell = &detected_nid_cell,
+        .ssb_offset = &ssb_offset,
+        .sss_metric = &sss_metric,
+        .freq_offset_pss = &freq_offset_pss,
+        .freq_offset_sss = &freq_offset_sss,
+        .sss_phase = &sss_phase,
+        .pss_peak = &ssbInfo->pssCorrPeakPower,
+        .pss_avg = &ssbInfo->pssCorrAvgPower,
+    };
+
+    ssbInfo->syncRes.frame_id = frame_id;
+    ssbInfo->syncRes.cell_detected = nr_search_ssb_common(&search_params);
+
+    if (!ssbInfo->syncRes.cell_detected) {
+      continue;
+    }
+
+    ssbInfo->ssbOffset = ssb_offset;
+    ssbInfo->nidCell = detected_nid_cell;
+
+#ifdef DEBUG_INITIAL_SYNCH
     LOG_I(PHY,
           "TDD Normal prefix: sss detection result; %d, CellId %d metric %d, phase %d, measured offset %d\n",
           ssbInfo->syncRes.cell_detected,
