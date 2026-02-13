@@ -166,7 +166,7 @@ static void fix_benetel_setting(xran_mplane_t *xran_mplane, const uint32_t inter
     xran_mplane->iq_width = first_iq_width;
   }
 
-  xran_mplane->prach_offset = max_num_ant;
+  xran_mplane->prach_offset = (max_num_ant == 2) ? 8 : max_num_ant;
 
   if (strcasecmp(model_name, "RAN550") == 0) {
     xran_mplane->max_tx_gain = 24.0;
