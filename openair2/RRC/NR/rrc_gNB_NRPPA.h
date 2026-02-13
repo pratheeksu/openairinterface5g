@@ -7,3 +7,5 @@
 
 int rrc_gNB_process_trp_information_request(gNB_RRC_INST *rrc, const nrppa_trp_information_req_t *msg);
 int rrc_CU_process_trp_information_response(MessageDef *msg_p, instance_t instance);
+void rrc_gNB_process_positioning_information_request(gNB_RRC_INST *rrc, const nrppa_positioning_information_req_t *msg);
+void rrc_CU_process_positioning_information_response(MessageDef *msg_p, instance_t instance);
