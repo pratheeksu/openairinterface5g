@@ -300,16 +300,21 @@ static bool create_uplane_conf_v2(const ru_session_t *ru_session, const openair0
     VERIFY_SUCCESS(ret == LY_SUCCESS, "[MPLANE] Failed to create \"active\" node.\n");
   }
 
+  // this is a hack due to Benetel limitation
+  // 2x2 mode requries 2 unpair or 2 pair antennas
+  int i_rx = (num_rx_ch == 2) ? 2 : 1;
+  int i_tx = (num_tx_ch == 2) ? 2 : 1;
+
   // PUSCH & PRACH endpoints
   for (size_t i = 0; i < num_rx_ch; i++) {
     struct lyd_node *pusch_node = NULL;
-    ret = lyd_new_list(*root, NULL, "low-level-rx-endpoints", 0, &pusch_node, ru_session->ru_mplane_config.rx_endpoints.name[i]);
+    ret = lyd_new_list(*root, NULL, "low-level-rx-endpoints", 0, &pusch_node, ru_session->ru_mplane_config.rx_endpoints.name[i * i_rx]);
     VERIFY_SUCCESS(ret == LY_SUCCESS, "[MPLANE] Failed to create \"low-level-rx-endpoints\" node.\n");
     
     success = fill_uplane_ch_rx_v2(&ru_session->xran_mplane, oai, i, &pusch_node);
-    VERIFY_SUCCESS(success, "[MPLANE] Failed to fill \"low-level-rx-endpoints\" node for %s.\n", ru_session->ru_mplane_config.rx_endpoints.name[i]);
+    VERIFY_SUCCESS(success, "[MPLANE] Failed to fill \"low-level-rx-endpoints\" node for %s.\n", ru_session->ru_mplane_config.rx_endpoints.name[i * i_rx]);
 
-    const size_t prach_endpoint_name_offset = i + (ru_session->ru_mplane_config.rx_endpoints.num / 2);
+    const size_t prach_endpoint_name_offset = i * i_rx + (ru_session->ru_mplane_config.rx_endpoints.num / 2);
     struct lyd_node *prach_node = NULL;
     ret = lyd_new_list(*root, NULL, "low-level-rx-endpoints", 0, &prach_node, ru_session->ru_mplane_config.rx_endpoints.name[prach_endpoint_name_offset]);
     VERIFY_SUCCESS(ret == LY_SUCCESS, "[MPLANE] Failed to create \"low-level-rx-endpoints\" node.\n");
@@ -321,11 +326,11 @@ static bool create_uplane_conf_v2(const ru_session_t *ru_session, const openair0
   // PDSCH endpoints
   for (size_t i = 0; i < num_tx_ch; i++) {
     struct lyd_node *pdsch_node = NULL;
-    ret = lyd_new_list(*root, NULL, "low-level-tx-endpoints", 0, &pdsch_node, ru_session->ru_mplane_config.tx_endpoints.name[i]);
+    ret = lyd_new_list(*root, NULL, "low-level-tx-endpoints", 0, &pdsch_node, ru_session->ru_mplane_config.tx_endpoints.name[i * i_tx]);
     VERIFY_SUCCESS(ret == LY_SUCCESS, "[MPLANE] Failed to create \"low-level-tx-endpoints\" node.\n");
 
     success = fill_uplane_ch_tx_v2(&ru_session->xran_mplane, oai, i, &pdsch_node);
-    VERIFY_SUCCESS(success, "[MPLANE] Failed to fill \"low-level-tx-endpoints\" node for %s.\n", ru_session->ru_mplane_config.tx_endpoints.name[i]);
+    VERIFY_SUCCESS(success, "[MPLANE] Failed to fill \"low-level-tx-endpoints\" node for %s.\n", ru_session->ru_mplane_config.tx_endpoints.name[i * i_tx]);
   }
 
   // PUSCH and PRACH links
@@ -344,7 +349,7 @@ static bool create_uplane_conf_v2(const ru_session_t *ru_session, const openair0
     ret = lyd_new_term(pusch_link_node, NULL, "rx-array-carrier", ru_session->ru_mplane_config.rx_carriers.name[rx_carrier_id], 0, NULL);
     VERIFY_SUCCESS(ret == LY_SUCCESS, "[MPLANE] Failed to create \"rx-array-carrier\" node.\n");
 
-    ret = lyd_new_term(pusch_link_node, NULL, "low-level-rx-endpoint", ru_session->ru_mplane_config.rx_endpoints.name[i], 0, NULL);
+    ret = lyd_new_term(pusch_link_node, NULL, "low-level-rx-endpoint", ru_session->ru_mplane_config.rx_endpoints.name[i * i_rx], 0, NULL);
     VERIFY_SUCCESS(ret == LY_SUCCESS, "[MPLANE] Failed to create \"low-level-rx-endpoint\" node.\n");
 
     // PRACH
@@ -360,7 +365,7 @@ static bool create_uplane_conf_v2(const ru_session_t *ru_session, const openair0
     ret = lyd_new_term(prach_link_node, NULL, "rx-array-carrier", ru_session->ru_mplane_config.rx_carriers.name[rx_carrier_id], 0, NULL);
     VERIFY_SUCCESS(ret == LY_SUCCESS, "[MPLANE] Failed to create \"rx-array-carrier\" node.\n");
 
-    const size_t prach_endpoint_name_offset = i + (ru_session->ru_mplane_config.rx_endpoints.num / 2);
+    const size_t prach_endpoint_name_offset = i * i_rx + (ru_session->ru_mplane_config.rx_endpoints.num / 2);
     ret = lyd_new_term(prach_link_node, NULL, "low-level-rx-endpoint", ru_session->ru_mplane_config.rx_endpoints.name[prach_endpoint_name_offset], 0, NULL);
     VERIFY_SUCCESS(ret == LY_SUCCESS, "[MPLANE] Failed to create \"low-level-rx-endpoint\" node.\n");
   }
@@ -380,7 +385,7 @@ static bool create_uplane_conf_v2(const ru_session_t *ru_session, const openair0
     ret = lyd_new_term(pdsch_link_node, NULL, "tx-array-carrier", ru_session->ru_mplane_config.tx_carriers.name[tx_carrier_id], 0, NULL);
     VERIFY_SUCCESS(ret == LY_SUCCESS, "[MPLANE] Failed to create \"tx-array-carrier\" node.\n");
 
-    ret = lyd_new_term(pdsch_link_node, NULL, "low-level-tx-endpoint", ru_session->ru_mplane_config.tx_endpoints.name[i], 0, NULL);
+    ret = lyd_new_term(pdsch_link_node, NULL, "low-level-tx-endpoint", ru_session->ru_mplane_config.tx_endpoints.name[i * i_tx], 0, NULL);
     VERIFY_SUCCESS(ret == LY_SUCCESS, "[MPLANE] Failed to create \"low-level-tx-endpoint\" node.\n");
   }
 
