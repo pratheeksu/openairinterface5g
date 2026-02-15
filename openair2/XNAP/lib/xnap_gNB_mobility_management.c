@@ -607,3 +607,248 @@ void free_xnap_handover_request(const xnap_handover_req_t *msg)
   // Free UE history information
   free_xnap_ue_history_info_list(msg->ue_history_info, msg->num_last_visited_cells);
 }
+
+/**
+ * @brief XnAP Handover Request Acknowledge encoding
+ */
+XNAP_XnAP_PDU_t *encode_xnap_handover_request_acknowledge(xnap_handover_req_ack_t *ack)
+{
+  XNAP_XnAP_PDU_t *pdu = calloc_or_fail(1, sizeof(*pdu));
+
+  /* Message type: Successful Outcome */
+  pdu->present = XNAP_XnAP_PDU_PR_successfulOutcome;
+  asn1cCalloc(pdu->choice.successfulOutcome, succMsg);
+  succMsg->procedureCode = XNAP_ProcedureCode_id_handoverPreparation;
+  succMsg->criticality = XNAP_Criticality_reject;
+  succMsg->value.present = XNAP_SuccessfulOutcome__value_PR_HandoverRequestAcknowledge;
+
+  XNAP_HandoverRequestAcknowledge_t *out = &succMsg->value.choice.HandoverRequestAcknowledge;
+
+  /* Source NG-RAN node UE XnAP ID (M) */
+  asn1cSequenceAdd(out->protocolIEs.list, XNAP_HandoverRequestAcknowledge_IEs_t, ie1);
+  ie1->id = XNAP_ProtocolIE_ID_id_sourceNG_RANnodeUEXnAPID;
+  ie1->criticality = XNAP_Criticality_ignore;
+  ie1->value.present = XNAP_HandoverRequestAcknowledge_IEs__value_PR_NG_RANnodeUEXnAPID;
+  ie1->value.choice.NG_RANnodeUEXnAPID = ack->s_ng_node_ue_xnap_id;
+
+  /* Target NG-RAN node UE XnAP ID (M) */
+  asn1cSequenceAdd(out->protocolIEs.list, XNAP_HandoverRequestAcknowledge_IEs_t, ie2);
+  ie2->id = XNAP_ProtocolIE_ID_id_targetNG_RANnodeUEXnAPID;
+  ie2->criticality = XNAP_Criticality_ignore;
+  ie2->value.present = XNAP_HandoverRequestAcknowledge_IEs__value_PR_NG_RANnodeUEXnAPID_1;
+  ie2->value.choice.NG_RANnodeUEXnAPID_1 = ack->t_ng_node_ue_xnap_id;
+
+  /* PDU Session Resources Admitted List (M) */
+  asn1cSequenceAdd(out->protocolIEs.list, XNAP_HandoverRequestAcknowledge_IEs_t, ie3);
+  ie3->id = XNAP_ProtocolIE_ID_id_PDUSessionResourcesAdmitted_List;
+  ie3->criticality = XNAP_Criticality_ignore;
+  ie3->value.present = XNAP_HandoverRequestAcknowledge_IEs__value_PR_PDUSessionResourcesAdmitted_List;
+
+  for (int i = 0; i < ack->num_pdu_admitted; i++) {
+    const xnap_pdusession_admitted_item_t *pdu = &ack->pdusession_admitted_list[i];
+    asn1cSequenceAdd(ie3->value.choice.PDUSessionResourcesAdmitted_List.list, XNAP_PDUSessionResourcesAdmitted_Item_t, pduItem);
+
+    /* PDU Session ID */
+    pduItem->pduSessionId = pdu->pdusession_id;
+
+    /* QoS Flows Admitted List */
+    for (int j = 0; j < pdu->num_qos; j++) {
+      const xnap_qos_admitted_item_t *qos = &pdu->qos_list[j];
+      asn1cSequenceAdd(pduItem->pduSessionResourceAdmittedInfo.qosFlowsAdmitted_List.list, XNAP_QoSFlowsAdmitted_Item_t, qosItem);
+
+      /* QoS Flow Identifier */
+      qosItem->qfi = qos->qfi;
+    }
+  }
+
+  /* Target NG-RAN node To Source NG-RAN node Transparent Container (M) */
+  asn1cSequenceAdd(out->protocolIEs.list, XNAP_HandoverRequestAcknowledge_IEs_t, ie4);
+  ie4->id = XNAP_ProtocolIE_ID_id_Target2SourceNG_RANnodeTranspContainer;
+  ie4->criticality = XNAP_Criticality_ignore;
+  ie4->value.present = XNAP_HandoverRequestAcknowledge_IEs__value_PR_OCTET_STRING;
+  OCTET_STRING_fromBuf(&ie4->value.choice.OCTET_STRING, (const char *)ack->target2source.buf, ack->target2source.len);
+
+  return pdu;
+}
+
+/**
+ * @brief XnAP Handover Request Acknowledge Decoding
+ */
+bool decode_xnap_handover_request_acknowledge(xnap_handover_req_ack_t *out, const XNAP_XnAP_PDU_t *pdu)
+{
+  /* Check message type */
+  _EQ_CHECK_INT(pdu->present, XNAP_XnAP_PDU_PR_successfulOutcome);
+  AssertError(pdu->choice.successfulOutcome != NULL, return false, "successfulOutcome is NULL");
+  _EQ_CHECK_LONG(pdu->choice.successfulOutcome->procedureCode, XNAP_ProcedureCode_id_handoverPreparation);
+  _EQ_CHECK_INT(pdu->choice.successfulOutcome->value.present, XNAP_SuccessfulOutcome__value_PR_HandoverRequestAcknowledge);
+
+  XNAP_HandoverRequestAcknowledge_t *in = &pdu->choice.successfulOutcome->value.choice.HandoverRequestAcknowledge;
+  XNAP_HandoverRequestAcknowledge_IEs_t *ie;
+
+  /* Check presence of mandatory IEs */
+  XNAP_LIB_FIND_IE(XNAP_HandoverRequestAcknowledge_IEs_t,
+                   ie,
+                   &in->protocolIEs.list,
+                   XNAP_ProtocolIE_ID_id_sourceNG_RANnodeUEXnAPID,
+                   true);
+  XNAP_LIB_FIND_IE(XNAP_HandoverRequestAcknowledge_IEs_t,
+                   ie,
+                   &in->protocolIEs.list,
+                   XNAP_ProtocolIE_ID_id_targetNG_RANnodeUEXnAPID,
+                   true);
+  XNAP_LIB_FIND_IE(XNAP_HandoverRequestAcknowledge_IEs_t,
+                   ie,
+                   &in->protocolIEs.list,
+                   XNAP_ProtocolIE_ID_id_PDUSessionResourcesAdmitted_List,
+                   true);
+  XNAP_LIB_FIND_IE(XNAP_HandoverRequestAcknowledge_IEs_t,
+                   ie,
+                   &in->protocolIEs.list,
+                   XNAP_ProtocolIE_ID_id_Target2SourceNG_RANnodeTranspContainer,
+                   true);
+
+  /* Loop over all IEs */
+  for (int i = 0; i < in->protocolIEs.list.count; i++) {
+    DevAssert(in->protocolIEs.list.array[i]);
+
+    ie = in->protocolIEs.list.array[i];
+
+    switch (ie->id) {
+      case XNAP_ProtocolIE_ID_id_sourceNG_RANnodeUEXnAPID: {
+        _EQ_CHECK_INT(ie->value.present, XNAP_HandoverRequestAcknowledge_IEs__value_PR_NG_RANnodeUEXnAPID);
+        out->s_ng_node_ue_xnap_id = ie->value.choice.NG_RANnodeUEXnAPID;
+      } break;
+
+      case XNAP_ProtocolIE_ID_id_targetNG_RANnodeUEXnAPID: {
+        _EQ_CHECK_INT(ie->value.present, XNAP_HandoverRequestAcknowledge_IEs__value_PR_NG_RANnodeUEXnAPID_1);
+        out->t_ng_node_ue_xnap_id = ie->value.choice.NG_RANnodeUEXnAPID_1;
+      } break;
+
+      case XNAP_ProtocolIE_ID_id_PDUSessionResourcesAdmitted_List: {
+        _EQ_CHECK_INT(ie->value.present, XNAP_HandoverRequestAcknowledge_IEs__value_PR_PDUSessionResourcesAdmitted_List);
+
+        XNAP_PDUSessionResourcesAdmitted_List_t *pduList = &ie->value.choice.PDUSessionResourcesAdmitted_List;
+        out->num_pdu_admitted = pduList->list.count;
+
+        if (out->num_pdu_admitted > 0) {
+          out->pdusession_admitted_list = calloc_or_fail(out->num_pdu_admitted, sizeof(xnap_pdusession_admitted_item_t));
+
+          for (int j = 0; j < out->num_pdu_admitted; j++) {
+            XNAP_PDUSessionResourcesAdmitted_Item_t *pduItem = pduList->list.array[j];
+            xnap_pdusession_admitted_item_t *dst = &out->pdusession_admitted_list[j];
+
+            /* PDU Session ID */
+            dst->pdusession_id = pduItem->pduSessionId;
+
+            /* QoS Flows Admitted List */
+            dst->num_qos = pduItem->pduSessionResourceAdmittedInfo.qosFlowsAdmitted_List.list.count;
+            if (dst->num_qos > 0) {
+              dst->qos_list = calloc_or_fail(dst->num_qos, sizeof(xnap_qos_admitted_item_t));
+
+              for (int k = 0; k < dst->num_qos; k++) {
+                XNAP_QoSFlowsAdmitted_Item_t *qosItem = pduItem->pduSessionResourceAdmittedInfo.qosFlowsAdmitted_List.list.array[k];
+                dst->qos_list[k].qfi = qosItem->qfi;
+              }
+            }
+          }
+        }
+      } break;
+
+      case XNAP_ProtocolIE_ID_id_Target2SourceNG_RANnodeTranspContainer: {
+        _EQ_CHECK_INT(ie->value.present, XNAP_HandoverRequestAcknowledge_IEs__value_PR_OCTET_STRING);
+        OCTET_STRING_t *container = &ie->value.choice.OCTET_STRING;
+        out->target2source = create_byte_array(container->size, container->buf);
+      } break;
+
+      default:
+        AssertError(0, return false, "Unknown XnAP IE id %ld\n", ie->id);
+        break;
+    }
+  }
+
+  return true;
+}
+
+/**
+ * @brief Compare two QoS Flows Admitted items for equality
+ */
+static bool eq_xnap_qos_admitted_item(const xnap_qos_admitted_item_t *a, const xnap_qos_admitted_item_t *b)
+{
+  _EQ_CHECK_INT(a->qfi, b->qfi);
+  return true;
+}
+
+/**
+ * @brief Compare two PDU Session Resources Admitted items for equality
+ */
+static bool eq_xnap_pdusession_admitted_item(const xnap_pdusession_admitted_item_t *a, const xnap_pdusession_admitted_item_t *b)
+{
+  _EQ_CHECK_INT(a->pdusession_id, b->pdusession_id);
+
+  _EQ_CHECK_INT(a->num_qos, b->num_qos);
+  for (int i = 0; i < a->num_qos; i++) {
+    if (!eq_xnap_qos_admitted_item(&a->qos_list[i], &b->qos_list[i]))
+      return false;
+  }
+
+  return true;
+}
+
+/**
+ * @brief XnAP Handover Request Acknowledge equality function
+ **/
+bool eq_xnap_handover_request_acknowledge(const xnap_handover_req_ack_t *a, const xnap_handover_req_ack_t *b)
+{
+  _EQ_CHECK_UINT32(a->s_ng_node_ue_xnap_id, b->s_ng_node_ue_xnap_id);
+  _EQ_CHECK_UINT32(a->t_ng_node_ue_xnap_id, b->t_ng_node_ue_xnap_id);
+
+  _EQ_CHECK_INT(a->num_pdu_admitted, b->num_pdu_admitted);
+  for (int i = 0; i < a->num_pdu_admitted; i++) {
+    if (!eq_xnap_pdusession_admitted_item(&a->pdusession_admitted_list[i], &b->pdusession_admitted_list[i]))
+      return false;
+  }
+
+  if (!eq_byte_array(&a->target2source, &b->target2source))
+    return false;
+
+  return true;
+}
+
+/**
+ * @brief Free QoS Flows Admitted list
+ */
+static void free_xnap_qos_admitted_list(xnap_qos_admitted_item_t *qos_list)
+{
+  DevAssert(qos_list);
+
+  /* QoS admitted items have no dynamically allocated members */
+  free(qos_list);
+}
+
+/**
+ * @brief Free PDU Session Resources Admitted list
+ */
+static void free_xnap_pdusession_admitted_list(xnap_pdusession_admitted_item_t *pdu_list, uint8_t num_pdu)
+{
+  DevAssert(pdu_list && num_pdu > 0);
+
+  for (int i = 0; i < num_pdu; i++) {
+    free_xnap_qos_admitted_list(pdu_list[i].qos_list);
+  }
+  free(pdu_list);
+}
+
+/**
+ * @brief XnAP Handover Request Acknowledge memory management
+ */
+void free_xnap_handover_request_acknowledge(const xnap_handover_req_ack_t *msg)
+{
+  if (!msg)
+    return;
+
+  /* Free PDU Session Resources Admitted List */
+  free_xnap_pdusession_admitted_list((xnap_pdusession_admitted_item_t *)msg->pdusession_admitted_list, msg->num_pdu_admitted);
+
+  /* Free Target to Source transparent container */
+  free_byte_array(msg->target2source);
+}

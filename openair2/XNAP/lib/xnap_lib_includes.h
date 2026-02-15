@@ -32,5 +32,8 @@
 #include "XNAP_AllocationandRetentionPriority.h"
 #include "XNAP_LastVisitedCell-Item.h"
 
+#include "XNAP_PDUSessionResourcesAdmitted-Item.h"
+#include "XNAP_QoSFlowsAdmitted-Item.h"
+
 #endif // XNAP_LIB_INCLUDES_H
 

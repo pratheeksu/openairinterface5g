@@ -292,4 +292,33 @@ typedef struct {
   ue_history_info_t *ue_history_info;
 } xnap_handover_req_t;
 
+/* QoS Flows Admitted Item */
+typedef struct {
+  // QoS Flow Identifier
+  uint8_t qfi;
+} xnap_qos_admitted_item_t;
+
+/* 3GPP TS 38.423 9.2.1.2 – PDU Session Resources Admitted Item */
+typedef struct {
+  // PDU Session ID
+  uint8_t pdusession_id;
+  // QoS Flows Admitted List
+  uint8_t num_qos;
+  xnap_qos_admitted_item_t *qos_list;
+} xnap_pdusession_admitted_item_t;
+
+/* 3GPP TS 38.423 9.1.1.2 – Handover Request Acknowledge */
+typedef struct {
+  // Source NG-RAN node UE XnAP ID (M)
+  uint32_t s_ng_node_ue_xnap_id;
+  // Target NG-RAN node UE XnAP ID (M)
+  uint32_t t_ng_node_ue_xnap_id;
+  // PDU Session Resources Admitted List (M)
+  uint8_t num_pdu_admitted;
+  xnap_pdusession_admitted_item_t *pdusession_admitted_list;
+  // Target NG-RAN node To Source NG-RAN node Transparent Container (M)
+  // (3GPP TS 38.331 11.2.2 HandoverCommand message )
+  byte_array_t target2source;
+} xnap_handover_req_ack_t;
+
 #endif /* XNAP_MESSAGES_TYPES_H_ */
