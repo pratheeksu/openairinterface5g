@@ -321,4 +321,12 @@ typedef struct {
   byte_array_t target2source;
 } xnap_handover_req_ack_t;
 
+/* 3GPP TS 38.423 9.1.1.3 – Handover Preparation Failure */
+typedef struct {
+  // Source NG-RAN node UE XnAP ID (M) //
+  uint32_t s_ng_node_ue_xnap_id;
+  // Cause (M)
+  xnap_cause_t cause;
+} xnap_handover_preparation_failure_t;
+
 #endif /* XNAP_MESSAGES_TYPES_H_ */

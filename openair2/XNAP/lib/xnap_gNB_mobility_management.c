@@ -852,3 +852,106 @@ void free_xnap_handover_request_acknowledge(const xnap_handover_req_ack_t *msg)
   /* Free Target to Source transparent container */
   free_byte_array(msg->target2source);
 }
+
+/**
+ * @brief XnAP Handover Preparation Failure encoding
+ */
+XNAP_XnAP_PDU_t *encode_xnap_handover_preparation_failure(xnap_handover_preparation_failure_t *failure)
+{
+  XNAP_XnAP_PDU_t *pdu = calloc_or_fail(1, sizeof(*pdu));
+
+  /* Message type: Unsuccessful Outcome */
+  pdu->present = XNAP_XnAP_PDU_PR_unsuccessfulOutcome;
+  asn1cCalloc(pdu->choice.unsuccessfulOutcome, unsuccMsg);
+  unsuccMsg->procedureCode = XNAP_ProcedureCode_id_handoverPreparation;
+  unsuccMsg->criticality = XNAP_Criticality_reject;
+  unsuccMsg->value.present = XNAP_UnsuccessfulOutcome__value_PR_HandoverPreparationFailure;
+
+  XNAP_HandoverPreparationFailure_t *out = &unsuccMsg->value.choice.HandoverPreparationFailure;
+
+  /* Source NG-RAN node UE XnAP ID (M) */
+  asn1cSequenceAdd(out->protocolIEs.list, XNAP_HandoverPreparationFailure_IEs_t, ie1);
+  ie1->id = XNAP_ProtocolIE_ID_id_sourceNG_RANnodeUEXnAPID;
+  ie1->criticality = XNAP_Criticality_ignore;
+  ie1->value.present = XNAP_HandoverPreparationFailure_IEs__value_PR_NG_RANnodeUEXnAPID;
+  ie1->value.choice.NG_RANnodeUEXnAPID = failure->s_ng_node_ue_xnap_id;
+
+  /* Cause (M) */
+  asn1cSequenceAdd(out->protocolIEs.list, XNAP_HandoverPreparationFailure_IEs_t, ie2);
+  ie2->id = XNAP_ProtocolIE_ID_id_Cause;
+  ie2->criticality = XNAP_Criticality_ignore;
+  ie2->value.present = XNAP_HandoverPreparationFailure_IEs__value_PR_Cause;
+  xnap_gNB_set_cause(&ie2->value.choice.Cause, &failure->cause);
+
+  return pdu;
+}
+
+/**
+ * @brief XnAP Handover Preparation Failure decoding
+ */
+bool decode_xnap_handover_preparation_failure(xnap_handover_preparation_failure_t *out, const XNAP_XnAP_PDU_t *pdu)
+{
+  /* Check message type */
+  _EQ_CHECK_INT(pdu->present, XNAP_XnAP_PDU_PR_unsuccessfulOutcome);
+  AssertError(pdu->choice.unsuccessfulOutcome != NULL, return false, "unsuccessfulOutcome is NULL");
+  _EQ_CHECK_LONG(pdu->choice.unsuccessfulOutcome->procedureCode, XNAP_ProcedureCode_id_handoverPreparation);
+  _EQ_CHECK_INT(pdu->choice.unsuccessfulOutcome->value.present, XNAP_UnsuccessfulOutcome__value_PR_HandoverPreparationFailure);
+
+  XNAP_HandoverPreparationFailure_t *in = &pdu->choice.unsuccessfulOutcome->value.choice.HandoverPreparationFailure;
+  XNAP_HandoverPreparationFailure_IEs_t *ie;
+
+  /* Check presence of mandatory IEs */
+  XNAP_LIB_FIND_IE(XNAP_HandoverPreparationFailure_IEs_t,
+                   ie,
+                   &in->protocolIEs.list,
+                   XNAP_ProtocolIE_ID_id_sourceNG_RANnodeUEXnAPID,
+                   true);
+  XNAP_LIB_FIND_IE(XNAP_HandoverPreparationFailure_IEs_t, ie, &in->protocolIEs.list, XNAP_ProtocolIE_ID_id_Cause, true);
+
+  /* Loop over all IEs */
+  for (int i = 0; i < in->protocolIEs.list.count; i++) {
+    DevAssert(in->protocolIEs.list.array[i]);
+    ie = in->protocolIEs.list.array[i];
+
+    switch (ie->id) {
+      case XNAP_ProtocolIE_ID_id_sourceNG_RANnodeUEXnAPID: {
+        _EQ_CHECK_INT(ie->value.present, XNAP_HandoverPreparationFailure_IEs__value_PR_NG_RANnodeUEXnAPID);
+        out->s_ng_node_ue_xnap_id = ie->value.choice.NG_RANnodeUEXnAPID;
+      } break;
+
+      case XNAP_ProtocolIE_ID_id_Cause: {
+        _EQ_CHECK_INT(ie->value.present, XNAP_HandoverPreparationFailure_IEs__value_PR_Cause);
+        out->cause = decode_xnap_cause(&ie->value.choice.Cause);
+      } break;
+
+      default:
+        AssertError(0, return false, "Unknown XnAP IE id %ld\n", ie->id);
+        break;
+    }
+  }
+
+  return true;
+}
+
+/**
+ * @brief XnAP Handover Preparation Failure equality function
+ */
+bool eq_xnap_handover_preparation_failure(const xnap_handover_preparation_failure_t *a,
+                                          const xnap_handover_preparation_failure_t *b)
+{
+  _EQ_CHECK_UINT32(a->s_ng_node_ue_xnap_id, b->s_ng_node_ue_xnap_id);
+
+  if (!eq_xnap_cause(&a->cause, &b->cause))
+    return false;
+
+  return true;
+}
+
+/**
+ * @brief XnAP Handover Preparation Failure memory management
+ */
+void free_xnap_handover_preparation_failure(const xnap_handover_preparation_failure_t *msg)
+{
+  // nothing to free
+  UNUSED(msg);
+}
