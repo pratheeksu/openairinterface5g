@@ -1743,7 +1743,7 @@ static bool allocate_ul_retransmission(gNB_MAC_INST *nrmac,
   new_sched.bwp_info = bwp_info;
   DevAssert(new_sched.ul_harq_pid == harq_pid);
 
-  bool reuse_old_tda = retInfo->tda_info.k2 == tda_info->k2;
+  bool reuse_old_tda = (retInfo->tda_info.startSymbolIndex == tda_info->startSymbolIndex) && (retInfo->tda_info.nrOfSymbols <= tda_info->nrOfSymbols);
   if (reuse_old_tda && nrOfLayers == retInfo->nrOfLayers) {
     /* Check the resource is enough for retransmission */
     const uint16_t slbitmap = SL_to_bitmap(retInfo->tda_info.startSymbolIndex, retInfo->tda_info.nrOfSymbols);
