@@ -11,18 +11,22 @@ typedef struct XNAP_XnAP_PDU XNAP_XnAP_PDU_t;
 XNAP_XnAP_PDU_t *encode_xnap_handover_request(xnap_handover_req_t *xnap_handover_req);
 XNAP_XnAP_PDU_t *encode_xnap_handover_request_acknowledge(xnap_handover_req_ack_t *xnap_handover_req_ack);
 XNAP_XnAP_PDU_t *encode_xnap_handover_preparation_failure(xnap_handover_preparation_failure_t *failure);
+XNAP_XnAP_PDU_t *encode_xnap_sn_status_transfer(xnap_sn_status_transfer_t *sn_status);
 
 bool decode_xnap_handover_request(xnap_handover_req_t *req, const XNAP_XnAP_PDU_t *pdu);
 bool decode_xnap_handover_request_acknowledge(xnap_handover_req_ack_t *out, const XNAP_XnAP_PDU_t *pdu);
 bool decode_xnap_handover_preparation_failure(xnap_handover_preparation_failure_t *out, const XNAP_XnAP_PDU_t *pdu);
+bool decode_xnap_sn_status_transfer(xnap_sn_status_transfer_t *out, const XNAP_XnAP_PDU_t *pdu);
 
 bool eq_xnap_handover_request(const xnap_handover_req_t *a, const xnap_handover_req_t *b);
 bool eq_xnap_handover_request_acknowledge(const xnap_handover_req_ack_t *a, const xnap_handover_req_ack_t *b);
 bool eq_xnap_handover_preparation_failure(const xnap_handover_preparation_failure_t *a,
                                           const xnap_handover_preparation_failure_t *b);
+bool eq_xnap_sn_status_transfer(const xnap_sn_status_transfer_t *a, const xnap_sn_status_transfer_t *b);
 
 void free_xnap_handover_request(const xnap_handover_req_t *msg);
 void free_xnap_handover_request_acknowledge(const xnap_handover_req_ack_t *msg);
 void free_xnap_handover_preparation_failure(const xnap_handover_preparation_failure_t *msg);
+void free_xnap_sn_status_transfer(const xnap_sn_status_transfer_t *msg);
 
 #endif // XNAP_GNB_MOBILITY_MANAGEMENT_H_

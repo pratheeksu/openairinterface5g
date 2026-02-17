@@ -955,3 +955,237 @@ void free_xnap_handover_preparation_failure(const xnap_handover_preparation_fail
   // nothing to free
   UNUSED(msg);
 }
+
+/**
+ * @brief XnAP SN Status Transfer encoding
+ */
+XNAP_XnAP_PDU_t *encode_xnap_sn_status_transfer(xnap_sn_status_transfer_t *sn_status)
+{
+  XNAP_XnAP_PDU_t *pdu = calloc_or_fail(1, sizeof(*pdu));
+
+  /* Message type */
+  pdu->present = XNAP_XnAP_PDU_PR_initiatingMessage;
+  asn1cCalloc(pdu->choice.initiatingMessage, initMsg);
+  initMsg->procedureCode = XNAP_ProcedureCode_id_sNStatusTransfer;
+  initMsg->criticality = XNAP_Criticality_ignore;
+  initMsg->value.present = XNAP_InitiatingMessage__value_PR_SNStatusTransfer;
+
+  XNAP_SNStatusTransfer_t *out = &initMsg->value.choice.SNStatusTransfer;
+
+  /* Source NG-RAN node UE XnAP ID (M) */
+  asn1cSequenceAdd(out->protocolIEs.list, XNAP_SNStatusTransfer_IEs_t, ie1);
+  ie1->id = XNAP_ProtocolIE_ID_id_sourceNG_RANnodeUEXnAPID;
+  ie1->criticality = XNAP_Criticality_reject;
+  ie1->value.present = XNAP_SNStatusTransfer_IEs__value_PR_NG_RANnodeUEXnAPID;
+  ie1->value.choice.NG_RANnodeUEXnAPID = sn_status->s_ng_node_ue_xnap_id;
+
+  /* Target NG-RAN node UE XnAP ID (M) */
+  asn1cSequenceAdd(out->protocolIEs.list, XNAP_SNStatusTransfer_IEs_t, ie2);
+  ie2->id = XNAP_ProtocolIE_ID_id_targetNG_RANnodeUEXnAPID;
+  ie2->criticality = XNAP_Criticality_reject;
+  ie2->value.present = XNAP_SNStatusTransfer_IEs__value_PR_NG_RANnodeUEXnAPID_1;
+  ie2->value.choice.NG_RANnodeUEXnAPID_1 = sn_status->t_ng_node_ue_xnap_id;
+
+  /* DRBs Subject To Status Transfer List (M) */
+  asn1cSequenceAdd(out->protocolIEs.list, XNAP_SNStatusTransfer_IEs_t, ie3);
+  ie3->id = XNAP_ProtocolIE_ID_id_DRBsSubjectToStatusTransfer_List;
+  ie3->criticality = XNAP_Criticality_ignore;
+  ie3->value.present = XNAP_SNStatusTransfer_IEs__value_PR_DRBsSubjectToStatusTransfer_List;
+
+  XNAP_DRBsSubjectToStatusTransfer_List_t *container = &ie3->value.choice.DRBsSubjectToStatusTransfer_List;
+
+  for (int i = 0; i < sn_status->ran_status.nb_drb; i++) {
+    const xnap_drb_status_t *s = &sn_status->ran_status.drb_status_list[i];
+    asn1cSequenceAdd(container->list, XNAP_DRBsSubjectToStatusTransfer_Item_t, drb_item);
+
+    /* DRB ID */
+    drb_item->drbID = s->drb_id;
+
+    /* UL COUNT */
+    if (s->ul_count.sn_len == XNAP_SN_LENGTH_18) {
+      drb_item->pdcpStatusTransfer_UL.present = XNAP_DRBBStatusTransferChoice_PR_pdcp_sn_18bits;
+      asn1cCalloc(drb_item->pdcpStatusTransfer_UL.choice.pdcp_sn_18bits, ul18);
+      ul18->cOUNTValue.pdcp_SN18 = s->ul_count.pdcp_sn;
+      ul18->cOUNTValue.hfn_PDCP_SN18 = s->ul_count.hfn;
+    } else {
+      drb_item->pdcpStatusTransfer_UL.present = XNAP_DRBBStatusTransferChoice_PR_pdcp_sn_12bits;
+      asn1cCalloc(drb_item->pdcpStatusTransfer_UL.choice.pdcp_sn_12bits, ul12);
+      ul12->cOUNTValue.pdcp_SN12 = s->ul_count.pdcp_sn;
+      ul12->cOUNTValue.hfn_PDCP_SN12 = s->ul_count.hfn;
+    }
+
+    /* DL COUNT */
+    if (s->dl_count.sn_len == XNAP_SN_LENGTH_18) {
+      drb_item->pdcpStatusTransfer_DL.present = XNAP_DRBBStatusTransferChoice_PR_pdcp_sn_18bits;
+      asn1cCalloc(drb_item->pdcpStatusTransfer_DL.choice.pdcp_sn_18bits, dl18);
+      dl18->cOUNTValue.pdcp_SN18 = s->dl_count.pdcp_sn;
+      dl18->cOUNTValue.hfn_PDCP_SN18 = s->dl_count.hfn;
+    } else {
+      drb_item->pdcpStatusTransfer_DL.present = XNAP_DRBBStatusTransferChoice_PR_pdcp_sn_12bits;
+      asn1cCalloc(drb_item->pdcpStatusTransfer_DL.choice.pdcp_sn_12bits, dl12);
+      dl12->cOUNTValue.pdcp_SN12 = s->dl_count.pdcp_sn;
+      dl12->cOUNTValue.hfn_PDCP_SN12 = s->dl_count.hfn;
+    }
+  }
+
+  return pdu;
+}
+
+/**
+ * @brief XnAP SN Status Transfer decoding
+ */
+bool decode_xnap_sn_status_transfer(xnap_sn_status_transfer_t *out, const XNAP_XnAP_PDU_t *pdu)
+{
+  /* Check message type */
+  _EQ_CHECK_INT(pdu->present, XNAP_XnAP_PDU_PR_initiatingMessage);
+  AssertError(pdu->choice.initiatingMessage != NULL, return false, "initiatingMessage is NULL");
+  _EQ_CHECK_LONG(pdu->choice.initiatingMessage->procedureCode, XNAP_ProcedureCode_id_sNStatusTransfer);
+  _EQ_CHECK_INT(pdu->choice.initiatingMessage->value.present, XNAP_InitiatingMessage__value_PR_SNStatusTransfer);
+
+  XNAP_SNStatusTransfer_t *in = &pdu->choice.initiatingMessage->value.choice.SNStatusTransfer;
+  XNAP_SNStatusTransfer_IEs_t *ie;
+
+  /* Check presence of mandatory IEs */
+  XNAP_LIB_FIND_IE(XNAP_SNStatusTransfer_IEs_t, ie, &in->protocolIEs.list, XNAP_ProtocolIE_ID_id_sourceNG_RANnodeUEXnAPID, true);
+  XNAP_LIB_FIND_IE(XNAP_SNStatusTransfer_IEs_t, ie, &in->protocolIEs.list, XNAP_ProtocolIE_ID_id_targetNG_RANnodeUEXnAPID, true);
+  XNAP_LIB_FIND_IE(XNAP_SNStatusTransfer_IEs_t,
+                   ie,
+                   &in->protocolIEs.list,
+                   XNAP_ProtocolIE_ID_id_DRBsSubjectToStatusTransfer_List,
+                   true);
+
+  /* Loop over all IEs */
+  for (int i = 0; i < in->protocolIEs.list.count; i++) {
+    DevAssert(in->protocolIEs.list.array[i]);
+    ie = in->protocolIEs.list.array[i];
+
+    switch (ie->id) {
+      case XNAP_ProtocolIE_ID_id_sourceNG_RANnodeUEXnAPID: {
+        _EQ_CHECK_INT(ie->value.present, XNAP_SNStatusTransfer_IEs__value_PR_NG_RANnodeUEXnAPID);
+        out->s_ng_node_ue_xnap_id = ie->value.choice.NG_RANnodeUEXnAPID;
+      } break;
+
+      case XNAP_ProtocolIE_ID_id_targetNG_RANnodeUEXnAPID: {
+        _EQ_CHECK_INT(ie->value.present, XNAP_SNStatusTransfer_IEs__value_PR_NG_RANnodeUEXnAPID_1);
+        out->t_ng_node_ue_xnap_id = ie->value.choice.NG_RANnodeUEXnAPID_1;
+      } break;
+
+      case XNAP_ProtocolIE_ID_id_DRBsSubjectToStatusTransfer_List: {
+        _EQ_CHECK_INT(ie->value.present, XNAP_SNStatusTransfer_IEs__value_PR_DRBsSubjectToStatusTransfer_List);
+
+        XNAP_DRBsSubjectToStatusTransfer_List_t *drb_list = &ie->value.choice.DRBsSubjectToStatusTransfer_List;
+        out->ran_status.nb_drb = drb_list->list.count;
+
+        for (int j = 0; j < out->ran_status.nb_drb; j++) {
+          XNAP_DRBsSubjectToStatusTransfer_Item_t *item = drb_list->list.array[j];
+          xnap_drb_status_t *dst = &out->ran_status.drb_status_list[j];
+
+          /* DRB ID */
+          dst->drb_id = item->drbID;
+
+          /* UL COUNT */
+          switch (item->pdcpStatusTransfer_UL.present) {
+            case XNAP_DRBBStatusTransferChoice_PR_pdcp_sn_18bits:
+              dst->ul_count.sn_len = XNAP_SN_LENGTH_18;
+              dst->ul_count.pdcp_sn = item->pdcpStatusTransfer_UL.choice.pdcp_sn_18bits->cOUNTValue.pdcp_SN18;
+              dst->ul_count.hfn = item->pdcpStatusTransfer_UL.choice.pdcp_sn_18bits->cOUNTValue.hfn_PDCP_SN18;
+              break;
+            case XNAP_DRBBStatusTransferChoice_PR_pdcp_sn_12bits:
+              dst->ul_count.sn_len = XNAP_SN_LENGTH_12;
+              dst->ul_count.pdcp_sn = item->pdcpStatusTransfer_UL.choice.pdcp_sn_12bits->cOUNTValue.pdcp_SN12;
+              dst->ul_count.hfn = item->pdcpStatusTransfer_UL.choice.pdcp_sn_12bits->cOUNTValue.hfn_PDCP_SN12;
+              break;
+            default:
+              PRINT_ERROR("Unknown pdcpStatusTransfer_UL.present=%d\n", item->pdcpStatusTransfer_UL.present);
+              return false;
+          }
+
+          /* DL COUNT */
+          switch (item->pdcpStatusTransfer_DL.present) {
+            case XNAP_DRBBStatusTransferChoice_PR_pdcp_sn_18bits:
+              dst->dl_count.sn_len = XNAP_SN_LENGTH_18;
+              dst->dl_count.pdcp_sn = item->pdcpStatusTransfer_DL.choice.pdcp_sn_18bits->cOUNTValue.pdcp_SN18;
+              dst->dl_count.hfn = item->pdcpStatusTransfer_DL.choice.pdcp_sn_18bits->cOUNTValue.hfn_PDCP_SN18;
+              break;
+            case XNAP_DRBBStatusTransferChoice_PR_pdcp_sn_12bits:
+              dst->dl_count.sn_len = XNAP_SN_LENGTH_12;
+              dst->dl_count.pdcp_sn = item->pdcpStatusTransfer_DL.choice.pdcp_sn_12bits->cOUNTValue.pdcp_SN12;
+              dst->dl_count.hfn = item->pdcpStatusTransfer_DL.choice.pdcp_sn_12bits->cOUNTValue.hfn_PDCP_SN12;
+              break;
+            default:
+              PRINT_ERROR("Unknown pdcpStatusTransfer_DL.present=%d\n", item->pdcpStatusTransfer_DL.present);
+              return false;
+          }
+        }
+      } break;
+
+      default:
+        AssertError(0, return false, "Unknown XnAP IE id %ld\n", ie->id);
+        break;
+    }
+  }
+
+  return true;
+}
+
+/**
+ * @brief Compare two DRB count values for equality
+ */
+static bool eq_xnap_drb_count_value(const xnap_drb_count_value_t *a, const xnap_drb_count_value_t *b)
+{
+  _EQ_CHECK_UINT32(a->pdcp_sn, b->pdcp_sn);
+  _EQ_CHECK_UINT32(a->hfn, b->hfn);
+  _EQ_CHECK_INT(a->sn_len, b->sn_len);
+  return true;
+}
+
+/**
+ * @brief Compare two DRB status items for equality
+ */
+static bool eq_xnap_drb_status(const xnap_drb_status_t *a, const xnap_drb_status_t *b)
+{
+  _EQ_CHECK_INT(a->drb_id, b->drb_id);
+  if (!eq_xnap_drb_count_value(&a->ul_count, &b->ul_count))
+    return false;
+  if (!eq_xnap_drb_count_value(&a->dl_count, &b->dl_count))
+    return false;
+
+  return true;
+}
+
+/**
+ * @brief Compare two RAN status containers for equality
+ */
+static bool eq_xnap_ran_status_container(const xnap_ran_status_container_t *a, const xnap_ran_status_container_t *b)
+{
+  _EQ_CHECK_INT(a->nb_drb, b->nb_drb);
+
+  for (int i = 0; i < a->nb_drb; i++) {
+    if (!eq_xnap_drb_status(&a->drb_status_list[i], &b->drb_status_list[i]))
+      return false;
+  }
+
+  return true;
+}
+
+/**
+ * @brief XnAP SN Status Transfer equality function
+ */
+bool eq_xnap_sn_status_transfer(const xnap_sn_status_transfer_t *a, const xnap_sn_status_transfer_t *b)
+{
+  _EQ_CHECK_UINT32(a->s_ng_node_ue_xnap_id, b->s_ng_node_ue_xnap_id);
+  _EQ_CHECK_UINT32(a->t_ng_node_ue_xnap_id, b->t_ng_node_ue_xnap_id);
+  if (!eq_xnap_ran_status_container(&a->ran_status, &b->ran_status))
+    return false;
+
+  return true;
+}
+
+/**
+ * @brief XnAP SN Status Transfer memory management
+ */
+void free_xnap_sn_status_transfer(const xnap_sn_status_transfer_t *msg)
+{
+  // Nothing to free
+  UNUSED(msg);
+}

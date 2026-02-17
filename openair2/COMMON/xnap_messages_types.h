@@ -8,6 +8,7 @@
 #include "common/5g_platform_types.h"
 #include "common/utils/ds/byte_array.h"
 #include "common/platform_types.h"
+#include "common/platform_constants.h"
 
 typedef struct {
   // PLMN Identity (M)
@@ -328,5 +329,49 @@ typedef struct {
   // Cause (M)
   xnap_cause_t cause;
 } xnap_handover_preparation_failure_t;
+
+/** 3GPP TS 38.423 – 9.1.1.4 SN Status Transfer 
+ * COUNT value used for both UL and DL PDCP SN + HFN (12-bit or 18-bit SN) */
+
+// Indicates PDCP SN length
+typedef enum { XNAP_SN_LENGTH_12 = 0, XNAP_SN_LENGTH_18 = 1 } xnap_sn_length_t;
+
+/* 3GPP TS 38.423 9.2.3.37 – COUNT Value for PDCP */
+typedef struct {
+  // PDCP Sequence Number (M)
+  uint32_t pdcp_sn;
+  // Hyper Frame Number (M)
+  uint32_t hfn;
+  // SN length
+  xnap_sn_length_t sn_len;
+} xnap_drb_count_value_t;
+
+/* 3GPP TS 38.423 9.2.1.14 – DRBs Subject To Status Transfer Item */
+typedef struct {
+  // DRB ID (M)
+  uint8_t drb_id;
+  // UL COUNT value (M)
+  xnap_drb_count_value_t ul_count;
+  // DL COUNT value (M)
+  xnap_drb_count_value_t dl_count;
+} xnap_drb_status_t;
+
+/* DRBs Subject To Status Transfer List */
+typedef struct {
+  // Number of DRBs in the list
+  uint8_t nb_drb;
+  // DRB Status List
+  xnap_drb_status_t drb_status_list[MAX_DRBS_PER_UE];
+} xnap_ran_status_container_t;
+
+/* 3GPP TS 38.423 9.1.1.4 – SN Status Transfer */
+typedef struct {
+  // Source NG-RAN node UE XnAP ID (M)
+  uint32_t s_ng_node_ue_xnap_id;
+  // Target NG-RAN node UE XnAP ID (M)
+  uint32_t t_ng_node_ue_xnap_id;
+  // DRBs Subject To Status Transfer List (M)
+  xnap_ran_status_container_t ran_status;
+} xnap_sn_status_transfer_t;
 
 #endif /* XNAP_MESSAGES_TYPES_H_ */

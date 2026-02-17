@@ -35,5 +35,9 @@
 #include "XNAP_PDUSessionResourcesAdmitted-Item.h"
 #include "XNAP_QoSFlowsAdmitted-Item.h"
 
+#include "XNAP_DRBsSubjectToStatusTransfer-Item.h"
+#include "XNAP_DRBBStatusTransfer18bitsSN.h"
+#include "XNAP_DRBBStatusTransfer12bitsSN.h"
+
 #endif // XNAP_LIB_INCLUDES_H
 

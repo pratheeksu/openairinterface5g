@@ -532,6 +532,96 @@ static void test_xn_handover_preparation_failure(void)
   printf("%s() successful \n", __func__);
 }
 
+/**
+ * 7. XnAP SN Status Transfer Testing
+ */
+static void test_xn_sn_status_transfer(void)
+{
+  /* ---------- create message ---------- */
+  xnap_sn_status_transfer_t orig = {
+      .s_ng_node_ue_xnap_id = 123456,
+      .t_ng_node_ue_xnap_id = 789012,
+      .ran_status =
+          {
+              .nb_drb = 3,
+              .drb_status_list =
+                  {
+                      /* DRB 1 - 12-bit PDCP SN */
+                      {
+                          .drb_id = 1,
+                          .ul_count =
+                              {
+                                  .pdcp_sn = 2048,
+                                  .hfn = 15,
+                                  .sn_len = XNAP_SN_LENGTH_12,
+                              },
+                          .dl_count =
+                              {
+                                  .pdcp_sn = 3072,
+                                  .hfn = 20,
+                                  .sn_len = XNAP_SN_LENGTH_12,
+                              },
+                      },
+                      /* DRB 2 - 18-bit PDCP SN */
+                      {
+                          .drb_id = 5,
+                          .ul_count =
+                              {
+                                  .pdcp_sn = 131072,
+                                  .hfn = 100,
+                                  .sn_len = XNAP_SN_LENGTH_18,
+                              },
+                          .dl_count =
+                              {
+                                  .pdcp_sn = 200000,
+                                  .hfn = 150,
+                                  .sn_len = XNAP_SN_LENGTH_18,
+                              },
+                      },
+                      /* DRB 3 - Mixed: 12-bit UL, 18-bit DL */
+                      {
+                          .drb_id = 9,
+                          .ul_count =
+                              {
+                                  .pdcp_sn = 1024,
+                                  .hfn = 5,
+                                  .sn_len = XNAP_SN_LENGTH_12,
+                              },
+                          .dl_count =
+                              {
+                                  .pdcp_sn = 100000,
+                                  .hfn = 75,
+                                  .sn_len = XNAP_SN_LENGTH_18,
+                              },
+                      },
+                  },
+          },
+  };
+
+  /* ---------- encode ---------- */
+  XNAP_XnAP_PDU_t *xnenc = encode_xnap_sn_status_transfer(&orig);
+  AssertFatal(xnenc != NULL, "encode_xnap_sn_status_transfer failed");
+
+  XNAP_XnAP_PDU_t *xndec = xnap_encode_decode(xnenc);
+  xnap_msg_free(xnenc);
+
+  /* ---------- decode ---------- */
+  xnap_sn_status_transfer_t decoded = {0};
+  bool ret = decode_xnap_sn_status_transfer(&decoded, xndec);
+  AssertFatal(ret, "decode_xnap_sn_status_transfer failed");
+  xnap_msg_free(xndec);
+
+  /* ---------- equality ---------- */
+  ret = eq_xnap_sn_status_transfer(&orig, &decoded);
+  AssertFatal(ret, "XnAP SN Status Transfer mismatch\n");
+
+  /* ---------- cleanup ---------- */
+  free_xnap_sn_status_transfer(&decoded);
+  free_xnap_sn_status_transfer(&orig);
+
+  printf("%s() successful \n", __func__);
+}
+
 int main() {
   printf("Starting XnAP Library Unit Tests...\n");
 
@@ -544,6 +634,7 @@ int main() {
   test_xn_handover_request();
   test_xn_handover_request_acknowledge();
   test_xn_handover_preparation_failure();
+  test_xn_sn_status_transfer();
 
   printf("All XnAP tests passed!\n");
   return 0;
