@@ -1,8 +1,18 @@
 #ifndef CALIB_SCOPE_H
 #define CALIB_SCOPE_H
-static const int DFT = 8 * 1024;
 
 typedef struct {
+  uint tx;
+  uint rx;
+  uint freq;
+  uint chirp;
+  uint amplitude;
+  uint sinus_freq;
+  uint dft;
+} config_t;
+
+typedef struct {
+  config_t *c;
   openair0_device_t *rfdevice;
   int antennas;
   int dft_sz;
