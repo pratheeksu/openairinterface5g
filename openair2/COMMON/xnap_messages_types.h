@@ -374,4 +374,12 @@ typedef struct {
   xnap_ran_status_container_t ran_status;
 } xnap_sn_status_transfer_t;
 
+/* 3GPP TS 38.423 9.1.1.5 – UE CONTEXT RELEASE */
+typedef struct {
+  /* Source NG-RAN node UE XnAP ID (M) */
+  uint32_t s_ng_node_ue_xnap_id;
+  /* Target NG-RAN node UE XnAP ID (M) */
+  uint32_t t_ng_node_ue_xnap_id;
+} xnap_ue_context_release_t;
+
 #endif /* XNAP_MESSAGES_TYPES_H_ */

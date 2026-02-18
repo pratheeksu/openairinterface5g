@@ -622,6 +622,41 @@ static void test_xn_sn_status_transfer(void)
   printf("%s() successful \n", __func__);
 }
 
+/**
+ * 8. XnAP UE Context Release Testing
+ */
+static void test_xn_ue_context_release(void)
+{
+  /* ---------- create message ---------- */
+  xnap_ue_context_release_t orig = {
+      .s_ng_node_ue_xnap_id = 123456,
+      .t_ng_node_ue_xnap_id = 789012,
+  };
+
+  /* ---------- encode ---------- */
+  XNAP_XnAP_PDU_t *xnenc = encode_xnap_ue_context_release(&orig);
+  AssertFatal(xnenc != NULL, "encode_xnap_ue_context_release failed");
+
+  XNAP_XnAP_PDU_t *xndec = xnap_encode_decode(xnenc);
+  xnap_msg_free(xnenc);
+
+  /* ---------- decode ---------- */
+  xnap_ue_context_release_t decoded = {0};
+  bool ret = decode_xnap_ue_context_release(&decoded, xndec);
+  AssertFatal(ret, "decode_xnap_ue_context_release failed");
+  xnap_msg_free(xndec);
+
+  /* ---------- equality ---------- */
+  ret = eq_xnap_ue_context_release(&orig, &decoded);
+  AssertFatal(ret, "XnAP UE Context Release mismatch\n");
+
+  /* ---------- cleanup ---------- */
+  free_xnap_ue_context_release(&decoded);
+  free_xnap_ue_context_release(&orig);
+
+  printf("%s() successful \n", __func__);
+}
+
 int main() {
   printf("Starting XnAP Library Unit Tests...\n");
 
@@ -635,6 +670,7 @@ int main() {
   test_xn_handover_request_acknowledge();
   test_xn_handover_preparation_failure();
   test_xn_sn_status_transfer();
+  test_xn_ue_context_release();
 
   printf("All XnAP tests passed!\n");
   return 0;
