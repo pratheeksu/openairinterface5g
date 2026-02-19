@@ -1,11 +1,13 @@
 #ifndef CALIB_SCOPE_H
 #define CALIB_SCOPE_H
 
+enum e_pattern_scheme { e_CHIRP = 0, e_QAM_256, e_SINUS, e_MAX_PATT_SCHEME };
+
 typedef struct {
   uint tx;
   uint rx;
   uint freq;
-  uint chirp;
+  enum e_pattern_scheme tx_pattern;
   uint amplitude;
   uint sinus_freq;
   uint dft;
