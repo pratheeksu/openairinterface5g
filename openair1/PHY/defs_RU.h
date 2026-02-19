@@ -184,8 +184,7 @@ typedef struct RU_proc_t_s {
   /// subframe to act upon for reception of prach BL/CE UEs
   int subframe_prach_br;
   /// frame to act upon for reception
-  // int frame_rx;
-  volatile int frame_rx;
+  int frame_rx;
   /// frame to act upon for transmission
   int frame_tx;
   /// unwrapped frame count
@@ -626,9 +625,10 @@ typedef struct RU_t_s {
   int *delayindexlist;
   cf_t *cirMIMO_simulmatrix; // (nb_tx * nb_rx  * channel_length) => (nb_tx, nb_rx*channel_length)
   cf_t **noise_array;
-  cf_t pathLossLinear;    // TODO: use float here instead of cf_t
-  cf_t noise_per_sample;  // TODO: use float here instead of cf_t
+  float pathLossLinear;
+  float noise_per_sample;
   int32_t channel_length;
+  uint32_t noise_index;
 } RU_t;
 
 

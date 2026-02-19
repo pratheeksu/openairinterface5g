@@ -35,47 +35,65 @@ void init_cir_variables(void *param)
   fptr = fopen(cir_conf_file, "r");
   if (fptr) {
     // pathLossLinear
-    fgets(str, sizeof(str), fptr);
-    sscanf(str, "%f", &path_loss_dB.r);
+    if (fgets(str, sizeof(str), fptr) != NULL) {
+      sscanf(str, "%f", &path_loss_dB.r);
+    } else {
+      LOG_E(NR_PHY, "Error reading path_loss_dB from cir_conf.txt\n");
+    }
+
     // amp_gain_dB
-    fgets(str, sizeof(str), fptr);
-    sscanf(str, "%f", &amp_gain_dB);
+    if (fgets(str, sizeof(str), fptr) != NULL) {
+      sscanf(str, "%f", &amp_gain_dB);
+    } else {
+      LOG_E(NR_PHY, "Error reading amp_gain_dB from cir_conf.txt\n");
+    }
+
     // noise_per_sample
-    fgets(str, sizeof(str), fptr);
-    sscanf(str, "%f", &noise_power_dB.r);
+    if (fgets(str, sizeof(str), fptr) != NULL) {
+      sscanf(str, "%f", &noise_power_dB.r);
+    } else {
+      LOG_E(NR_PHY, "Error reading noise_power_dB from cir_conf.txt\n");
+    }
+
     // num of taps
-    fgets(str, sizeof(str), fptr);
-    sscanf(str, "%d", &channel_length);
+    if (fgets(str, sizeof(str), fptr) != NULL) {
+      sscanf(str, "%d", &channel_length);
+    } else {
+      LOG_E(NR_PHY, "Error reading channel_length from cir_conf.txt\n");
+    }
+
     fclose(fptr);
   } else {
-    printf("error: cir_conf.txt\n");
+    LOG_E(NR_PHY, "error: cir_conf.txt\n");
     fflush(stdout);
   }
 
   // write params
   pthread_mutex_lock(&ru->proc.mutex_mimo);
-  ru->pathLossLinear.r = pow(10, (path_loss_dB.r + amp_gain_dB) / 20.0);
-  ru->pathLossLinear.i = 0.0;
-  ru->noise_per_sample.r = pow(10, noise_power_dB.r / 20.0) * 256; // TODO: check formula
-  ru->noise_per_sample.i = 0.0; // TODO: check formula
+  ru->pathLossLinear = pow(10, (path_loss_dB.r + amp_gain_dB) / 20.0);
+  ru->noise_per_sample = pow(10, noise_power_dB.r / 20.0) * 256; // TODO: check formula
   ru->channel_length = channel_length;
   pthread_mutex_unlock(&ru->proc.mutex_mimo);
 
   // read cir data
   cf_t cir_buffer[channel_length * ru->nb_tx * ru->nb_rx];
   memset(cir_buffer, 0, sizeof(cir_buffer));
-  ru->cirMIMO_simulmatrix = (cf_t *)aligned_alloc(64, ru->nb_tx * ru->nb_rx * channel_length * sizeof(cf_t));
+  ru->cirMIMO_simulmatrix = malloc16_clear(ru->nb_tx * ru->nb_rx * channel_length * sizeof(cf_t));
   sprintf(cir_file_path, "%s0000.b", cir_file_template);
   fptr = fopen(cir_file_path, "rb");
   if (fptr) {
-    fread(cir_buffer, sizeof(cir_buffer), 1, fptr);
+    if (fread(cir_buffer, sizeof(cir_buffer), 1, fptr) != 1)
+      LOG_D(NR_PHY, "Error reading cir_buffer from file\n");
     fclose(fptr);
     pthread_mutex_lock(&ru->proc.mutex_mimo);
     for (int l = 0; l < channel_length; l++) {
       for (int a_tx = 0; a_tx < ru->nb_tx; a_tx++) {
         for (int a_rx = 0; a_rx < ru->nb_rx; a_rx++) {
-            ru->cirMIMO_simulmatrix[a_rx*channel_length*ru->nb_tx + l*ru->nb_rx + a_tx].r = cir_buffer[l*ru->nb_tx*ru->nb_rx + ru->nb_rx*a_tx + a_rx].r;
-            ru->cirMIMO_simulmatrix[a_rx*channel_length*ru->nb_tx + l*ru->nb_rx + a_tx].i = cir_buffer[l*ru->nb_tx*ru->nb_rx + ru->nb_rx*a_tx + a_rx].i;
+          ru->cirMIMO_simulmatrix[a_rx * channel_length * ru->nb_tx + l * ru->nb_rx + a_tx].r =
+              cir_buffer[l * ru->nb_tx * ru->nb_rx + ru->nb_rx * a_tx + a_rx].r;
+
+          ru->cirMIMO_simulmatrix[a_rx * channel_length * ru->nb_tx + l * ru->nb_rx + a_tx].i =
+              cir_buffer[l * ru->nb_tx * ru->nb_rx + ru->nb_rx * a_tx + a_rx].i;
         }
       }
     }
@@ -85,11 +103,12 @@ void init_cir_variables(void *param)
   // read delay index list
   int delayindexlist_tmp[channel_length];
   memset(delayindexlist_tmp, 0, sizeof(delayindexlist_tmp));
-  ru->delayindexlist = (int *)aligned_alloc(64, channel_length*sizeof(int));
+  ru->delayindexlist = malloc16_clear(channel_length * sizeof(int));
   sprintf(delayindexlist_path, "%s0000.b", delayindexlist_template);
   fptr = fopen(delayindexlist_path, "rb");
   if (fptr) {
-    fread(delayindexlist_tmp, sizeof(delayindexlist_tmp), 1, fptr);
+    if (fread(delayindexlist_tmp, sizeof(delayindexlist_tmp), 1, fptr) != 1)
+      LOG_D(NR_PHY, "Error reading delayindexlist from file\n");
     fclose(fptr);
     pthread_mutex_lock(&ru->proc.mutex_mimo);
     for (int l = 0; l < channel_length; l++) {
@@ -103,18 +122,18 @@ void init_noise(void *param)
 {
   RU_t *ru = (RU_t *)param;
   NR_DL_FRAME_PARMS *fp = ru->nr_frame_parms;
-  int siglen = get_samples_per_slot(0, fp);
-  int i, a;
+  int samples_per_slot = get_samples_per_slot(0, fp) + ru->sf_extension;
 
   randominit();
 
   // init noise_array
-  ru->noise_array = aligned_alloc(64, sizeof(cf_t) * ru->nb_tx);
-  for (a = 0; a < ru->nb_tx; a++) ru->noise_array[a] = aligned_alloc(64, sizeof(cf_t) * siglen);
+  ru->noise_array = malloc16_clear(ru->nb_tx * sizeof(cf_t));
+  for (int a = 0; a < ru->nb_tx; a++)
+    ru->noise_array[a] = malloc16_clear(samples_per_slot * sizeof(cf_t));
 
   // set noise -> noise_array
-  for (a = 0; a < ru->nb_tx; a++) {
-    for (i = 0; i < siglen; i++) {
+  for (int a = 0; a < ru->nb_tx; a++) {
+    for (int i = 0; i < samples_per_slot; i++) {
       pthread_mutex_lock(&ru->proc.mutex_noise);
       ru->noise_array[a][i].r = (float)gaussZiggurat(0.0, 1.0);
       ru->noise_array[a][i].i = (float)gaussZiggurat(0.0, 1.0);
@@ -228,21 +247,18 @@ void nr_phy_init_RU(RU_t *ru)
   init_noise(ru); // init: noise array
 
   ru->common.buffboundary = 0;
-  ru->common.circular_buff_size = fp->samples_per_slot0 * 20;
+  ru->common.circular_buff_size = fp->samples_per_frame;
 
-  ru->common.circular_buff = (cf_t **)aligned_alloc(64, ru->nb_rx * sizeof(cf_t));
+  ru->common.circular_buff = malloc16_clear(ru->nb_rx * sizeof(cf_t));
   for (int a = 0; a < ru->nb_rx; a++) {
-    ru->common.circular_buff[a] = (cf_t *)aligned_alloc(64, ru->common.circular_buff_size * sizeof(cf_t));
-    memset(&ru->common.circular_buff[a][0], 0, sizeof(cf_t) * ru->common.circular_buff_size);
+    ru->common.circular_buff[a] = malloc16_clear(ru->common.circular_buff_size * sizeof(cf_t));
   }
 
-  ru->common.noise_array = (cf_t *)aligned_alloc(64, ru->nb_rx * fp->samples_per_slot0 * sizeof(cf_t));
+  int samples_per_slot = fp->samples_per_slot0 + ru->sf_extension;
+  ru->common.noise_array = malloc16_clear(ru->nb_rx * samples_per_slot * sizeof(cf_t));
 
   // allocate MIMO temporary store fields
-  ru->common.simul_input = (cf_t *)aligned_alloc(
-    64,
-    ru->nb_tx * ru->channel_length * fp->samples_per_slot0 * sizeof(cf_t) // TODO: ru->nb_tx -> UE->nb_tx
-    ); // (nb_tx*channel_length * nsamps)
+  ru->common.simul_input = malloc16_clear(ru->nb_tx * ru->channel_length * samples_per_slot * sizeof(cf_t));
 #endif // DEVELOP_CIR
 }
 
