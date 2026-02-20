@@ -199,6 +199,11 @@ bool manage_ru(ru_session_t *ru_session, const openair0_config_t *oai, const siz
   while (1) {
     sleep(5);
     if (!ru_session->ru_notif.ptp_state && !ru_session->ru_notif.hardware.oper_state && !ru_session->ru_notif.hardware.admin_state && !ru_session->ru_notif.hardware.avail_state) {
+      /* We cannot use NC_RPC_EDIT_DFLTOP_MERGE if NETCONF client wants to
+       * change the existing U-plane configuration (MIMO mode or number of Tx/Rx carriers). */
+      success = get_running_u_plane_config(ru_session);
+      AssertError(success, return false, "[MPLANE] Unable to get running U-plane configuration.\n");
+
       char *content = NULL;
       success = configure_ru_from_yang(ru_session, oai, num_rus, &content);
       AssertError(success, return false, "[MPLANE] Unable to create content for <edit-config> RPC for start-up procedure.\n");

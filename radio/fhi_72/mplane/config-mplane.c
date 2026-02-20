@@ -94,3 +94,31 @@ bool edit_val_commmit_rpc(ru_session_t *ru_session, const char *content, const N
 
   return success;
 }
+
+bool get_running_u_plane_config(ru_session_t *ru_session)
+{
+  bool success = false;
+
+  int timeout = CLI_RPC_REPLY_TIMEOUT;
+  struct nc_rpc *rpc;
+  NC_WD_MODE wd = NC_WD_ALL;
+  NC_PARAMTYPE param = NC_PARAMTYPE_CONST;
+  NC_DATASTORE target = NC_DATASTORE_RUNNING;
+
+  MP_LOG_I("RPC request to RU \"%s\" = <get-config> running datastore.\n", ru_session->ru_ip_add);
+  rpc = nc_rpc_getconfig(target, "/o-ran-uplane-conf:user-plane-configuration", wd, param);
+  AssertError(rpc != NULL, return false, "[MPLANE] <get-config> RPC creation failed.\n");
+  char *cur_u_plane_config = NULL;
+  success = rpc_send_recv((struct nc_session *)ru_session->session, rpc, wd, timeout, &cur_u_plane_config);
+  AssertError(success, return false, "[MPLANE] Failed to get running datastore.\n");
+  MP_LOG_I("Current U-plane configuration of RU \"%s\":\n%s\n", ru_session->ru_ip_add, cur_u_plane_config);
+  // delete any current U-plane configuration whether exists or not
+  const char *delete_u_plane_config = "<user-plane-configuration xmlns=\"urn:o-ran:uplane-conf:1.0\">\n\
+</user-plane-configuration>";
+  success = edit_val_commmit_rpc(ru_session, delete_u_plane_config, NC_RPC_EDIT_DFLTOP_REPLACE);
+  AssertError(success, return false, "[MPLANE] Unable to continue.\n");
+
+  free(cur_u_plane_config);
+
+  return success;
+}
