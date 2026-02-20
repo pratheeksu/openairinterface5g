@@ -7,16 +7,14 @@
 #include "common/utils/assertions.h"
 
 #include <libyang/libyang.h>
-#include <nc_client.h>
 
-static bool edit_config_mplane(ru_session_t *ru_session, const char *content)
+static bool edit_config_mplane(ru_session_t *ru_session, const char *content, const NC_RPC_EDIT_DFLTOP op)
 {
   int timeout = CLI_RPC_REPLY_TIMEOUT;
   struct nc_rpc *rpc;
   NC_WD_MODE wd = NC_WD_ALL;
   NC_PARAMTYPE param = NC_PARAMTYPE_CONST;
   NC_DATASTORE target = NC_DATASTORE_CANDIDATE;
-  NC_RPC_EDIT_DFLTOP op = NC_RPC_EDIT_DFLTOP_MERGE;
   NC_RPC_EDIT_TESTOPT test = NC_RPC_EDIT_TESTOPT_UNKNOWN;
   NC_RPC_EDIT_ERROPT err = NC_RPC_EDIT_ERROPT_UNKNOWN;
 
@@ -81,11 +79,11 @@ static bool commit_config_mplane(ru_session_t *ru_session)
   return true;
 }
 
-bool edit_val_commmit_rpc(ru_session_t *ru_session, const char *content)
+bool edit_val_commmit_rpc(ru_session_t *ru_session, const char *content, const NC_RPC_EDIT_DFLTOP op)
 {
   bool success = false;
 
-  success = edit_config_mplane(ru_session, content);
+  success = edit_config_mplane(ru_session, content, op);
   AssertError(success, return false, "[MPLANE] Unable to edit the RU configuration.\n");
 
   success = validate_config_mplane(ru_session);
