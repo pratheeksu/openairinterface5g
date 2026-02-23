@@ -26,5 +26,6 @@ void dl_rrc_message_transfer(const f1ap_dl_rrc_message_t *dl_rrc);
 void trp_information_request(const f1ap_trp_information_req_t *req);
 void positioning_information_request(const f1ap_positioning_information_req_t *req);
 void positioning_activation_request(const f1ap_positioning_activation_req_t *req);
+void positioning_measurement_request(const f1ap_positioning_measurement_req_t *req);
 
 #endif /* MAC_RRC_DL_HANDLER_H */
