@@ -825,13 +825,13 @@ static void nr_ue_dlsch_procedures(PHY_VARS_NR_UE *ue,
 
 }
 
-static bool check_meas_to_perform(PHY_VARS_NR_UE *ue, int nr_slot_rx)
+static bool check_neighboring_cells_task(PHY_VARS_NR_UE *ue, int nr_slot_rx, bool task_pending)
 {
   if (nr_slot_rx != 0) {
     return false;
   }
 
-  if (ue->measurements.meas_request_pending == true) {
+  if (task_pending == true) {
     return false;
   }
 
@@ -1114,6 +1114,25 @@ static int pbch_process(PHY_VARS_NR_UE *UE,
   return sampleShift;
 }
 
+static nr_meas_task_args_t *create_meas_task_args(const UE_nr_rxtx_proc_t *proc, PHY_VARS_NR_UE *ue)
+{
+  NR_DL_FRAME_PARMS *fp = &ue->frame_parms;
+  // The functions that will use this will use at most fp->samples_per_frame + 2 * fp->ofdm_symbol_size,
+  // and then use a size from fp->ofdm_symbol_size.
+  uint32_t rxdata_size = fp->samples_per_frame + 3 * fp->ofdm_symbol_size;
+  size_t total_size = sizeof(nr_meas_task_args_t) + fp->nb_antennas_rx * rxdata_size * sizeof(c16_t);
+  nr_meas_task_args_t *args = malloc_or_fail(total_size);
+  args->proc = *proc;
+  args->ue = ue;
+  args->rxdata_size = rxdata_size;
+  args->rxdata = malloc_or_fail(fp->nb_antennas_rx * sizeof(*args->rxdata));
+  for (int i = 0; i < fp->nb_antennas_rx; i++) {
+    args->rxdata[i] = &args->rxdata_ant[i * rxdata_size];
+    memcpy(args->rxdata[i], ue->common_vars.rxdata[i], rxdata_size * sizeof(c16_t));
+  }
+  return args;
+}
+
 int pbch_processing(PHY_VARS_NR_UE *ue, const UE_nr_rxtx_proc_t *proc, nr_phy_data_t *phy_data)
 {
   TracyCZone(ctx, true);
@@ -1169,24 +1188,20 @@ int pbch_processing(PHY_VARS_NR_UE *ue, const UE_nr_rxtx_proc_t *proc, nr_phy_da
   } // for gNB_id
 
   PHY_NR_MEASUREMENTS *measurements = &ue->measurements;
-  if (check_meas_to_perform(ue, nr_slot_rx)) {
+
+  // Measurements on known neighboring cells
+  if (check_neighboring_cells_task(ue, nr_slot_rx, measurements->meas_request_pending)) {
     measurements->meas_request_pending = true;
-
-    // Copy rxdata
-    uint32_t rxdata_size = (2 * (fp->samples_per_frame) + fp->ofdm_symbol_size);
-    size_t total_size = sizeof(nr_meas_task_args_t) + fp->nb_antennas_rx * rxdata_size * sizeof(c16_t);
-    nr_meas_task_args_t *args = malloc_or_fail(total_size);
-    args->proc = *proc;
-    args->ue = ue;
-    args->rxdata_size = rxdata_size;
-    args->rxdata = malloc_or_fail(fp->nb_antennas_rx * sizeof(*args->rxdata));
-
-    for (int i = 0; i < fp->nb_antennas_rx; i++) {
-      args->rxdata[i] = &args->rxdata_ant[i * rxdata_size];
-      memcpy(args->rxdata[i], ue->common_vars.rxdata[i], rxdata_size * sizeof(c16_t));
-    }
-
+    nr_meas_task_args_t *args = create_meas_task_args(proc, ue);
     task_t t = {.func = nr_ue_meas_neighboring_cell, .args = args};
+    pushTpool(&get_nrUE_params()->Tpool, t);
+  }
+
+  // Search for unknown neighboring cells
+  if (check_neighboring_cells_task(ue, nr_slot_rx, measurements->search_new_cells_pending)) {
+    measurements->search_new_cells_pending = true;
+    nr_meas_task_args_t *args = create_meas_task_args(proc, ue);
+    task_t t = {.func = nr_ue_search_new_neighboring_cell, .args = args};
     pushTpool(&get_nrUE_params()->Tpool, t);
   }
 

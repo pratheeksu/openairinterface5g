@@ -1528,6 +1528,17 @@ static void extract_neighbor_cells_from_measObject(NR_MeasObjectNR_t *obj_nr,
       (*num_neighbors)++;
     }
   }
+
+  // 3GPP TS 38.133
+  // 9.2 NR intra-frequency measurements - 9.2.1 Introduction
+  // The UE shall be able to identify new intra-frequency cells (...) even if no explicit neighbour list with physical layer cell
+  // identities is provided
+  if (*num_neighbors == 0) {
+    neighbor_cells[*num_neighbors].Nid_cell = -1;
+    neighbor_cells[*num_neighbors].ssb_freq = ssb_freq;
+    neighbor_cells[*num_neighbors].active = 1;
+    (*num_neighbors)++;
+  }
 }
 
 static void handle_measid_addmod(rrcPerNB_t *rrc,

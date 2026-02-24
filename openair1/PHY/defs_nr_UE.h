@@ -151,6 +151,7 @@ typedef struct {
   /// Info about neighboring cells to perform the measurements
   neighboring_cell_info_t neighboring_cell_info[NUMBER_OF_NEIGHBORING_CELLS_MAX];
   bool meas_request_pending;
+  bool search_new_cells_pending;
 } PHY_NR_MEASUREMENTS;
 
 typedef struct {
@@ -492,7 +493,8 @@ typedef struct {
   uint32_t rxdata_size;
   int ssb_start_subcarrier;
   int target_nid_cell; // -1 for blind search, specific PCI for targeted search
-  int exclude_nid_cell; // -1 for no exclusion, or serving cell PCI to exclude
+  const uint16_t *exclude_nid_cells; // PCIs to exclude (serving cell + already discovered neighboring cells)
+  int num_exclude_nid_cells; // Number of PCIs in exclude_nid_cells array
   bool apply_freq_offset; // whether to compensate frequency offset
   int search_frame_id; // Frame index to search (0, 1, 2...) within rxdata buffer
   bool fo_flag; // frequency offset estimation flag for pss_synchro_nr()

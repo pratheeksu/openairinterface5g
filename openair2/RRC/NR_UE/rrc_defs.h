@@ -46,7 +46,7 @@
 #define MAX_MEAS_CONFIG 64
 #define MAX_MEAS_ID 64
 #define MAX_QUANTITY_CONFIG 2
-#define NUMBER_OF_NEIGHBORING_CELLS_MAX 1
+#define NUMBER_OF_NEIGHBORING_CELLS_MAX 8
 
 typedef enum {
   nr_SecondaryCellGroupConfig_r15=0,
