@@ -3677,6 +3677,23 @@ int get_beam_from_ssbidx(gNB_MAC_INST *mac, int ssb_idx)
   return beam_idx;
 }
 
+/** @brief Maximum number of SS/PBCH block positions (L_max)
+ * @param scc ServingCellConfigCommon for which to determine L_max from ssb-PositionsInBurst (TS 38.331).
+ * @return L_max: shortBitmap: 4; mediumBitmap: 8; longBitmap: 64. */
+int get_max_ssbs(const NR_ServingCellConfigCommon_t *scc)
+{
+  switch (scc->ssb_PositionsInBurst->present) {
+    case NR_ServingCellConfigCommon__ssb_PositionsInBurst_PR_shortBitmap:
+      return 4;
+    case NR_ServingCellConfigCommon__ssb_PositionsInBurst_PR_mediumBitmap:
+      return 8;
+    case NR_ServingCellConfigCommon__ssb_PositionsInBurst_PR_longBitmap:
+      return 64;
+    default:
+      AssertFatal(false, "Invalid SSB configuration\n");
+  }
+}
+
 uint64_t get_ssb_bitmap_and_len(const NR_ServingCellConfigCommon_t *scc, uint8_t *len)
 {
   switch (scc->ssb_PositionsInBurst->present) {

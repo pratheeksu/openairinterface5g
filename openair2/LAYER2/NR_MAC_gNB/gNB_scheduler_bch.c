@@ -89,25 +89,6 @@ static int encode_mib(NR_BCCH_BCH_Message_t *mib, frame_t frame, uint8_t *buffer
   return encode_size;
 }
 
-int get_max_ssbs(const NR_ServingCellConfigCommon_t *scc)
-{
-  int L_max = 0;
-  switch (scc->ssb_PositionsInBurst->present) {
-    case NR_ServingCellConfigCommon__ssb_PositionsInBurst_PR_shortBitmap:
-      L_max = 4;
-      break;
-    case NR_ServingCellConfigCommon__ssb_PositionsInBurst_PR_mediumBitmap:
-      L_max = 8;
-      break;
-    case NR_ServingCellConfigCommon__ssb_PositionsInBurst_PR_longBitmap:
-      L_max = 64;
-      break;
-    default:
-      AssertFatal(false, "Invalid SSB configuration\n");
-  }
-  return L_max;
-}
-
 bool is_ssb_configured(const NR_ServingCellConfigCommon_t *scc, int ssb_index)
 {
   const BIT_STRING_t *shortBitmap = &scc->ssb_PositionsInBurst->choice.shortBitmap;
@@ -457,17 +438,15 @@ static bool check_sib1_tda(gNB_MAC_INST *gNB_mac,
   }
 }
 
-static bool check_frame_sib1(NR_ServingCellConfigCommon_t *scc, NR_Type0_PDCCH_CSS_config_t *type0, int frame)
+/** @brief Returns true if @param frame contains a Type0-PDCCH CSS monitoring occasion (TS 38.213 Clause 13). */
+static bool check_frame_sib1(const NR_ServingCellConfigCommon_t *scc, const NR_Type0_PDCCH_CSS_config_t *type0, int frame)
 {
   if (type0->type0_pdcch_ss_mux_pattern == 1)
-    return frame % 2 == type0->sfn_c;
-  else {
-    long ssb_period = *scc->ssb_periodicityServingCell;
-    int ssb_frame_periodicity = 1;  // every how many frames SSB are generated
-    if (ssb_period > 1) // 0 is every half frame
-      ssb_frame_periodicity = 1 << (ssb_period -1);
-    return frame % ssb_frame_periodicity == 0;
-  }
+    return (frame % 2) == type0->sfn_c;
+  DevAssert(scc->ssb_periodicityServingCell);
+  long ssb_period = *scc->ssb_periodicityServingCell; // every how many frames SSB are generated
+  int ssb_frame_periodicity = (ssb_period > 1) ? (1 << (ssb_period - 1)) : 1; // 0 is every half frame
+  return (frame % ssb_frame_periodicity) == 0;
 }
 
 void schedule_nr_sib1(module_id_t module_idP,
