@@ -3694,6 +3694,26 @@ int get_max_ssbs(const NR_ServingCellConfigCommon_t *scc)
   }
 }
 
+/** @brief Returns true if @param frame contains a Type0-PDCCH CSS monitoring occasion (TS 38.213 Clause 13). */
+static bool check_frame_type0(const NR_ServingCellConfigCommon_t *scc, const NR_Type0_PDCCH_CSS_config_t *type0, int frame)
+{
+  if (type0->type0_pdcch_ss_mux_pattern == 1)
+    return (frame % 2) == type0->sfn_c;
+  DevAssert(scc->ssb_periodicityServingCell);
+  long ssb_period = *scc->ssb_periodicityServingCell; // every how many frames SSB are generated
+  int ssb_frame_periodicity = (ssb_period > 1) ? (1 << (ssb_period - 1)) : 1; // 0 is every half frame
+  return (frame % ssb_frame_periodicity) == 0;
+}
+
+/** @brief True if @param frame, @param slot is the Type0-PDCCH CSS monitoring occasion
+ * for @param type0 (TS 38.213 Clause 13). Used by SIB1 and paging (SearchSpaceId = 0) scheduling. */
+bool is_type0_occasion(NR_ServingCellConfigCommon_t *scc, const NR_Type0_PDCCH_CSS_config_t *type0, int frame, uint32_t slot)
+{
+  DevAssert(scc);
+  DevAssert(type0);
+  return type0->active && (slot == type0->slot) && check_frame_type0(scc, type0, frame);
+}
+
 uint64_t get_ssb_bitmap_and_len(const NR_ServingCellConfigCommon_t *scc, uint8_t *len)
 {
   switch (scc->ssb_PositionsInBurst->present) {

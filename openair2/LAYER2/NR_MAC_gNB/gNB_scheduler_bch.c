@@ -438,17 +438,6 @@ static bool check_sib1_tda(gNB_MAC_INST *gNB_mac,
   }
 }
 
-/** @brief Returns true if @param frame contains a Type0-PDCCH CSS monitoring occasion (TS 38.213 Clause 13). */
-static bool check_frame_sib1(const NR_ServingCellConfigCommon_t *scc, const NR_Type0_PDCCH_CSS_config_t *type0, int frame)
-{
-  if (type0->type0_pdcch_ss_mux_pattern == 1)
-    return (frame % 2) == type0->sfn_c;
-  DevAssert(scc->ssb_periodicityServingCell);
-  long ssb_period = *scc->ssb_periodicityServingCell; // every how many frames SSB are generated
-  int ssb_frame_periodicity = (ssb_period > 1) ? (1 << (ssb_period - 1)) : 1; // 0 is every half frame
-  return (frame % ssb_frame_periodicity) == 0;
-}
-
 void schedule_nr_sib1(module_id_t module_idP,
                       frame_t frameP,
                       slot_t slotP,
@@ -467,11 +456,7 @@ void schedule_nr_sib1(module_id_t module_idP,
 
     NR_Type0_PDCCH_CSS_config_t *type0_PDCCH_CSS_config = &gNB_mac->type0_PDCCH_CSS_config[i];
 
-    if(check_frame_sib1(scc, type0_PDCCH_CSS_config, frameP) &&
-       (slotP == type0_PDCCH_CSS_config->slot) &&
-       (type0_PDCCH_CSS_config->num_rbs > 0) &&
-       (type0_PDCCH_CSS_config->active == true)) {
-
+    if (is_type0_occasion(scc, type0_PDCCH_CSS_config, frameP, slotP) && type0_PDCCH_CSS_config->num_rbs > 0) {
       AssertFatal(is_dl_slot(slotP, &gNB_mac->frame_structure),
                   "Trying to schedule SIB1 for SSB %d in slot %d which is not DL. Check searchSpaceZero configuration.\n",
                   type0_PDCCH_CSS_config->ssb_index,
