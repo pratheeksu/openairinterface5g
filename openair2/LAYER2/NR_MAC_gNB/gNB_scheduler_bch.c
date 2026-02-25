@@ -461,20 +461,7 @@ void schedule_nr_sib1(module_id_t module_idP,
   gNB_MAC_INST *gNB_mac = RC.nrmac[module_idP];
   NR_COMMON_channels_t *cc = &gNB_mac->common_channels[CC_id];
   NR_ServingCellConfigCommon_t *scc = cc->ServingCellConfigCommon;
-  int L_max;
-  switch (scc->ssb_PositionsInBurst->present) {
-    case 1:
-      L_max = 4;
-      break;
-    case 2:
-      L_max = 8;
-      break;
-    case 3:
-      L_max = 64;
-      break;
-    default:
-      AssertFatal(false, "SSB bitmap size value %d undefined (allowed values 1,2,3)\n", scc->ssb_PositionsInBurst->present);
-  }
+  const int L_max = get_max_ssbs(scc);
 
   for (int i = 0; i < L_max; i++) {
 
