@@ -86,14 +86,13 @@ void nrLDPC_bnProcPc_BG1_generator_AVX2(const char *dir, int R)
     fprintf(fd,"        simde__m128i* p_bnProcBuf; \n");
     fprintf(fd,"        simde__m128i* p_llrProcBuf;\n");
     fprintf(fd,"        simde__m256i* p_llrRes; \n");
-  //  fprintf(fd,"        simde__m256i* p_bnProcBufRes; \n");
-//    fprintf(fd,"        simde__m256i* p_llrProcBuf256; \n");
+    fprintf(fd, "        simde__m256i* p_bnProcBufRes; \n");
+    fprintf(fd, "        simde__m256i* p_llrProcBuf256; \n");
     fprintf(fd,"         uint32_t M ;\n");
 
 
     fprintf(fd,  "// Process group with 1 CNs \n");
 
-/*
  // Process group with 1 CNs
 
    // if (lut_numBnInBnGroups[0] > 0)
@@ -109,9 +108,9 @@ void nrLDPC_bnProcPc_BG1_generator_AVX2(const char *dir, int R)
 
         // Set pointers to start of group 2
         fprintf(fd,"    p_bnProcBuf     = (simde__m128i*) &bnProcBuf    [%d];\n",lut_startAddrBnGroups[idxBnGroup]);
-       // fprintf(fd,"    p_bnProcBufRes     = (simde__m256i*) &bnProcBufRes    [%d];\n",lut_startAddrBnGroups[idxBnGroup]);
+        fprintf(fd, "    p_bnProcBufRes     = (simde__m256i*) &bnProcBufRes    [%d];\n", lut_startAddrBnGroups[idxBnGroup]);
         fprintf(fd,"    p_llrProcBuf    = (simde__m128i*) &llrProcBuf   [%d];\n",lut_startAddrBnGroupsLlr[idxBnGroup]);
-       //  fprintf(fd,"   p_llrProcBuf256   = (simde__m256i*) &llrProcBuf   [%d];\n",lut_startAddrBnGroupsLlr[idxBnGroup]);
+        fprintf(fd, "   p_llrProcBuf256   = (simde__m256i*) &llrProcBuf   [%d];\n", lut_startAddrBnGroupsLlr[idxBnGroup]);
         fprintf(fd,"    p_llrRes        = (simde__m256i*) &llrRes       [%d];\n",lut_startAddrBnGroupsLlr[idxBnGroup]);
 
         // Loop over BNs
@@ -138,65 +137,60 @@ void nrLDPC_bnProcPc_BG1_generator_AVX2(const char *dir, int R)
 
 
         fprintf(fd,"}\n");
-    //}
-*/  
-    // =====================================================================
-    // Process group with 2 CNs
+        //}
+        // =====================================================================
+        // Process group with 2 CNs
 
+        fprintf(fd, "// Process group with 2 CNs \n");
 
-fprintf(fd,  "// Process group with 2 CNs \n");
+        // Process group with 2 CNs
 
- // Process group with 2 CNs
+        if (lut_numBnInBnGroups[1] > 0) {
+          // If elements in group move to next address
+          idxBnGroup++;
 
-    if (lut_numBnInBnGroups[1] > 0)
-    {
-        // If elements in group move to next address
-        idxBnGroup++;
+          // Number of groups of 32 BNs for parallel processing
+          fprintf(fd, " M = (%d*Z + 31)>>5;\n", lut_numBnInBnGroups[1]);
 
-        // Number of groups of 32 BNs for parallel processing
-        fprintf(fd," M = (%d*Z + 31)>>5;\n",lut_numBnInBnGroups[1] );
+          // Set the offset to each CN within a group in terms of 16 Byte
+          cnOffsetInGroup = (lut_numBnInBnGroups[1] * NR_LDPC_ZMAX) >> 4;
 
-        // Set the offset to each CN within a group in terms of 16 Byte
-        cnOffsetInGroup = (lut_numBnInBnGroups[1]*NR_LDPC_ZMAX)>>4;
+          // Set pointers to start of group 2
+          fprintf(fd, "    p_bnProcBuf     = (simde__m128i*) &bnProcBuf    [%u];\n", lut_startAddrBnGroups[idxBnGroup]);
+          fprintf(fd, "    p_llrProcBuf    = (simde__m128i*) &llrProcBuf   [%d];\n", lut_startAddrBnGroupsLlr[idxBnGroup]);
+          fprintf(fd, "    p_llrRes        = (simde__m256i*) &llrRes       [%d];\n", lut_startAddrBnGroupsLlr[idxBnGroup]);
 
-        // Set pointers to start of group 2
-        fprintf(fd,"    p_bnProcBuf     = (simde__m128i*) &bnProcBuf    [%u];\n",lut_startAddrBnGroups[idxBnGroup]);
-        fprintf(fd,"    p_llrProcBuf    = (simde__m128i*) &llrProcBuf   [%d];\n",lut_startAddrBnGroupsLlr[idxBnGroup]);
-        fprintf(fd,"    p_llrRes        = (simde__m256i*) &llrRes       [%d];\n",lut_startAddrBnGroupsLlr[idxBnGroup]);
+          // Loop over BNs
+          fprintf(fd, "            for (int i=0,j=0;i<M;i++,j+=2) {\n");
+          // First 16 LLRs of first CN
+          fprintf(fd, "            ymmRes0 = simde_mm256_cvtepi8_epi16(p_bnProcBuf [j]);\n");
+          fprintf(fd, "            ymmRes1 = simde_mm256_cvtepi8_epi16(p_bnProcBuf[j + 1]);\n");
 
-        // Loop over BNs
-        fprintf(fd,"            for (int i=0,j=0;i<M;i++,j+=2) {\n");
-            // First 16 LLRs of first CN
-        fprintf(fd,"            ymmRes0 = simde_mm256_cvtepi8_epi16(p_bnProcBuf [j]);\n");
-        fprintf(fd,"            ymmRes1 = simde_mm256_cvtepi8_epi16(p_bnProcBuf[j + 1]);\n");
+          // Loop over CNs
+          for (k = 1; k < 2; k++) {
+            fprintf(fd, "            ymm0 = simde_mm256_cvtepi8_epi16(p_bnProcBuf[%u + j]);\n", k * cnOffsetInGroup);
+            fprintf(fd, "            ymmRes0 = simde_mm256_adds_epi16(ymmRes0, ymm0);\n");
 
-            // Loop over CNs
-        for (k=1; k<2; k++)
-        {
-        fprintf(fd,"            ymm0 = simde_mm256_cvtepi8_epi16(p_bnProcBuf[%u + j]);\n", k*cnOffsetInGroup);
-        fprintf(fd,"            ymmRes0 = simde_mm256_adds_epi16(ymmRes0, ymm0);\n");
+            fprintf(fd, "            ymm1 = simde_mm256_cvtepi8_epi16(p_bnProcBuf[%u + j +1]);\n", k * cnOffsetInGroup);
 
-        fprintf(fd,"            ymm1 = simde_mm256_cvtepi8_epi16(p_bnProcBuf[%u + j +1]);\n", k*cnOffsetInGroup);
+            fprintf(fd, "           ymmRes1 = simde_mm256_adds_epi16(ymmRes1, ymm1); \n");
+          }
 
-        fprintf(fd, "           ymmRes1 = simde_mm256_adds_epi16(ymmRes1, ymm1); \n");
+          // Add LLR from receiver input
+          fprintf(fd, "            ymm0    = simde_mm256_cvtepi8_epi16(p_llrProcBuf[j]);\n");
+          fprintf(fd, "            ymmRes0 = simde_mm256_adds_epi16(ymmRes0, ymm0);\n");
+
+          fprintf(fd, "            ymm1    = simde_mm256_cvtepi8_epi16(p_llrProcBuf[j +1 ]);\n");
+          fprintf(fd, "            ymmRes1 = simde_mm256_adds_epi16(ymmRes1, ymm1);\n");
+
+          // Pack results back to epi8
+          fprintf(fd, "            ymm0 = simde_mm256_packs_epi16(ymmRes0, ymmRes1);\n");
+          // ymm0     = [ymmRes1[255:128] ymmRes0[255:128] ymmRes1[127:0] ymmRes0[127:0]]
+          // p_llrRes = [ymmRes1[255:128] ymmRes1[127:0] ymmRes0[255:128] ymmRes0[127:0]]
+          fprintf(fd, "            p_llrRes[i] = simde_mm256_permute4x64_epi64(ymm0, 0xD8);\n");
+
+          fprintf(fd, "}\n");
         }
-
-            // Add LLR from receiver input
-        fprintf(fd,"            ymm0    = simde_mm256_cvtepi8_epi16(p_llrProcBuf[j]);\n");
-        fprintf(fd,"            ymmRes0 = simde_mm256_adds_epi16(ymmRes0, ymm0);\n");
-
-        fprintf(fd,"            ymm1    = simde_mm256_cvtepi8_epi16(p_llrProcBuf[j +1 ]);\n");
-        fprintf(fd,"            ymmRes1 = simde_mm256_adds_epi16(ymmRes1, ymm1);\n");
-
-            // Pack results back to epi8
-        fprintf(fd,"            ymm0 = simde_mm256_packs_epi16(ymmRes0, ymmRes1);\n");
-            // ymm0     = [ymmRes1[255:128] ymmRes0[255:128] ymmRes1[127:0] ymmRes0[127:0]]
-            // p_llrRes = [ymmRes1[255:128] ymmRes1[127:0] ymmRes0[255:128] ymmRes0[127:0]]
-        fprintf(fd,"            p_llrRes[i] = simde_mm256_permute4x64_epi64(ymm0, 0xD8);\n");
-
-
-        fprintf(fd,"}\n");
-    }
 
     // =====================================================================
     // Process group with 3 CNs

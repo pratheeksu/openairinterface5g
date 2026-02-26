@@ -111,7 +111,7 @@ static inline void nrLDPC_llr2llrProcBuf(t_nrLDPC_lut* p_lut, int8_t* llr, int8_
   }
 
   // First 2 columns might be set to zero directly if it's true they always belong to the groups with highest number of connected CNs...
-  for (int i = 0; i < startColParity; i++) {
+  for (uint i = 0; i < startColParity; i++) {
     const int idxBn = lut_llr2llrProcBufAddr[i] + lut_llr2llrProcBufBnPos[i] * Z;
     memcpy(&llrProcBuf[idxBn], llr, Z);
     llr += Z;
@@ -150,7 +150,7 @@ static inline void nrLDPC_llr2CnProcBuf_BG1(t_nrLDPC_lut* p_lut, int8_t* llr, in
   // =====================================================================
   // CN group with BNs
   int BNs[] = {3, 4, 5, 6, 7, 8, 9, 10, 19};
-  for (int bn = 1; bn < sizeofArray(BNs); bn++) {
+  for (uint bn = 1; bn < sizeofArray(BNs); bn++) {
     bitOffsetInGroup = lut_numCnInCnGroups_BG1_R13[bn] * NR_LDPC_ZMAX;
     for (int j = 0; j < BNs[bn]; j++) {
       int8_t* p_cnProcBuf = &cnProcBuf[lut_startAddrCnGroups[bn] + j * bitOffsetInGroup];
@@ -200,7 +200,7 @@ static inline void nrLDPC_llr2CnProcBuf_BG2(t_nrLDPC_lut* p_lut, int8_t* llr, in
   // =====================================================================
   // CN group with  BNs
   int BNs[] = {3, 4, 5, 6, 8, 10};
-  for (int bn = 0; bn < sizeofArray(BNs); bn++) {
+  for (uint bn = 0; bn < sizeofArray(BNs); bn++) {
     bitOffsetInGroup = lut_numCnInCnGroups_BG2_R15[bn] * NR_LDPC_ZMAX;
 
     for (int j = 0; j < BNs[bn]; j++) {
@@ -233,7 +233,7 @@ static inline void nrLDPC_cn2bnProcBuf_BG2(t_nrLDPC_lut* p_lut, int8_t* cnProcBu
     // =====================================================================
     // CN group with 3 BNs
     int BNs[] = {3, 4, 5, 6, 8, 10};
-    for (int bn = 0; bn < sizeofArray(BNs); bn++) {
+    for (uint bn = 0; bn < sizeofArray(BNs); bn++) {
       bitOffsetInGroup = lut_numCnInCnGroups_BG2_R15[bn] * NR_LDPC_ZMAX;
 
       for (int j = 0; j < BNs[bn]; j++) {
@@ -279,7 +279,7 @@ static inline void nrLDPC_cn2bnProcBuf_BG1(t_nrLDPC_lut* p_lut, int8_t* cnProcBu
     // CN group with 4 BNs
     // CN group with 3 BNs
     int BNs[] = {3, 4, 5, 6, 7, 8, 9, 10, 19};
-    for (int bn = 1; bn < sizeofArray(BNs); bn++) {
+    for (uint bn = 1; bn < sizeofArray(BNs); bn++) {
       bitOffsetInGroup = lut_numCnInCnGroups_BG1_R13[bn] * NR_LDPC_ZMAX;
 
       for (int j = 0; j < BNs[bn]; j++) {
@@ -315,8 +315,8 @@ static inline void nrLDPC_bn2cnProcBuf_BG2(t_nrLDPC_lut* p_lut, int8_t* bnProcBu
 
     // =====================================================================
     // CN group with 3 BNs
-    int BNs[] = {2, 3, 4, 5, 8, 10};
-    for (int bn = 0; bn < sizeofArray(BNs); bn++) {
+    int BNs[] = {3, 4, 5, 6, 8, 10};
+    for (uint bn = 0; bn < sizeofArray(BNs); bn++) {
       bitOffsetInGroup = lut_numCnInCnGroups_BG2_R15[bn] * NR_LDPC_ZMAX;
 
       for (int j = 0; j < BNs[bn]; j++) {
@@ -355,7 +355,7 @@ static inline void nrLDPC_bn2cnProcBuf_BG1(t_nrLDPC_lut* p_lut, int8_t* bnProcBu
 
     bitOffsetInGroup = lut_numCnInCnGroups_BG1_R13[0]*NR_LDPC_ZMAX;
 
-    for (int j = 0; j < 2; j++) {
+    for (int j = 0; j < 3; j++) {
       const uint16_t* lut_circShift_CNG3 = arrPos(p_lut->circShift[0], j);
       const uint32_t* lut_startAddrBnProcBuf_CNG3 = arrPos(p_lut->startAddrBnProcBuf[0], j);
       int8_t* p_cnProcBuf = &cnProcBuf[lut_startAddrCnGroups[0] + j * bitOffsetInGroup];
@@ -364,8 +364,8 @@ static inline void nrLDPC_bn2cnProcBuf_BG1(t_nrLDPC_lut* p_lut, int8_t* bnProcBu
 
     // =====================================================================
     // CN group with 4 BNs
-    int BNs[] = {2, 3, 4, 5, 6, 7, 8, 9, 19};
-    for (int bn = 1; bn < sizeofArray(BNs); bn++) {
+    int BNs[] = {4, 5, 6, 7, 8, 9, 10, 19};
+    for (uint bn = 1; bn < sizeofArray(BNs); bn++) {
       bitOffsetInGroup = lut_numCnInCnGroups_BG1_R13[bn] * NR_LDPC_ZMAX;
 
       for (int j = 0; j < BNs[bn]; j++) {
@@ -408,7 +408,7 @@ static inline void nrLDPC_llrRes2llrOut(t_nrLDPC_lut* p_lut, int8_t* llrOut, int
     memcpy(&llrOut[colG1], llrRes, numBn2CnG1 * Z);
   }
 
-  for (int i = 0; i < startColParity; i++) {
+  for (uint i = 0; i < startColParity; i++) {
     const int idxBn = lut_llr2llrProcBufAddr[i] + lut_llr2llrProcBufBnPos[i] * Z;
     memcpy(p_llrOut, &llrRes[idxBn], Z);
     p_llrOut += Z;
