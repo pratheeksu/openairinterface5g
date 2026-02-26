@@ -35,7 +35,7 @@
 #include "nrLDPC_bnProc.h"
 #include "openair1/PHY/CODING/coding_defs.h"
 #include "openair1/PHY/CODING/nrLDPC_decoder/nrLDPC_cnProc.h"
-// #define  UNROLL_CN_PROC
+#define UNROLL_CN_PROC
 #ifdef UNROLL_CN_PROC
 /*----------------------------------------------------------------------
   |                  cn processing files -->AVX512
@@ -43,7 +43,7 @@
 
 //BG1-------------------------------------------------------------------
 #if defined(__AVX512BW__)
-
+#define suffix(a, b, v) nrLDPC_##a##_BG##b##_R##v##_AVX512
 #include "cnProc_avx512/nrLDPC_cnProc_BG1_R13_AVX512.h"
 #include "cnProc_avx512/nrLDPC_cnProc_BG1_R23_AVX512.h"
 #include "cnProc_avx512/nrLDPC_cnProc_BG1_R89_AVX512.h"
@@ -53,7 +53,7 @@
 #include "cnProc_avx512/nrLDPC_cnProc_BG2_R23_AVX512.h"
 
 #elif defined(__AVX2__)
-
+#define suffix(a, b, v) nrLDPC_##a##_BG##b##_R##v##_AVX2
 /*----------------------------------------------------------------------
   |                  cn Processing files -->AVX2
   /----------------------------------------------------------------------*/
@@ -68,7 +68,7 @@
 #include "cnProc/nrLDPC_cnProc_BG2_R23_AVX2.h"
 
 #else
-
+#define suffix(a, b, v) nrLDPC_##a##_BG##b##_R##v##_128
 //BG1------------------------------------------------------------------
 #include "cnProc128/nrLDPC_cnProc_BG1_R13_128.h"
 #include "cnProc128/nrLDPC_cnProc_BG1_R23_128.h"
@@ -202,6 +202,11 @@ int32_t LDPCdecoder(t_nrLDPC_dec_params* p_decParams,
    \param p_decParamsnrLDPC decoder parameters
    \param p_profilernrLDPC profiler statistics
 */
+#define CASE(N, B, V)                        \
+  case V:                                    \
+    suffix(N, B, V)(procBuf, procBufRes, Z); \
+    break;
+
 static inline uint32_t nrLDPC_decoder_core(int8_t* p_llr,
                                            int8_t* p_out,
                                            uint32_t numLLR,
@@ -254,38 +259,9 @@ static inline uint32_t nrLDPC_decoder_core(int8_t* p_llr,
     nrLDPC_cnProc_BG1(p_lut, procBuf, procBufRes, Z);
 #else
     switch (R) {
-      case 13: {
-#if defined(__AVX512BW__)
-        nrLDPC_cnProc_BG1_R13_AVX512(procBuf, procBufRes, Z);
-#elif defined(__AVX2__)
-        nrLDPC_cnProc_BG1_R13_AVX2(procBuf, procBufRes, Z);
-#else
-        nrLDPC_cnProc_BG1_R13_128(procBuf, procBufRes, Z);
-#endif
-        break;
-      }
-
-      case 23: {
-#if defined(__AVX512BW__)
-        nrLDPC_cnProc_BG1_R23_AVX512(procBuf, procBufRes, Z);
-#elif defined(__AVX2__)
-        nrLDPC_cnProc_BG1_R23_AVX2(procBuf, procBufRes, Z);
-#else
-        nrLDPC_cnProc_BG1_R23_128(procBuf, procBufRes, Z);
-#endif
-        break;
-      }
-
-      case 89: {
-#if defined(__AVX512BW__)
-        nrLDPC_cnProc_BG1_R89_AVX512(procBuf, procBufRes, Z);
-#elif defined(__AVX2__)
-        nrLDPC_cnProc_BG1_R89_AVX2(procBuf, procBufRes, Z);
-#else
-        nrLDPC_cnProc_BG1_R89_128(procBuf, procBufRes, Z);
-#endif
-        break;
-      }
+#define FOREACH_V(V) V(cnProc, 1, 13) V(cnProc, 1, 23) V(cnProc, 1, 89)
+      FOREACH_V(CASE)
+#undef FOREACH_V
     }
 #endif
   } else {
@@ -293,36 +269,9 @@ static inline uint32_t nrLDPC_decoder_core(int8_t* p_llr,
     nrLDPC_cnProc_BG2(p_lut, procBuf, procBufRes, Z);
 #else
     switch (R) {
-      case 15: {
-#if defined(__AVX512BW__)
-        nrLDPC_cnProc_BG2_R15_AVX512(procBuf, procBufRes, Z);
-#elif defined(__AVX2__)
-        nrLDPC_cnProc_BG2_R15_AVX2(procBuf, procBufRes, Z);
-#else
-        nrLDPC_cnProc_BG2_R15_128(procBuf, procBufRes, Z);
-#endif
-        break;
-      }
-      case 13: {
-#if defined(__AVX512BW__)
-        nrLDPC_cnProc_BG2_R13_AVX512(procBuf, procBufRes, Z);
-#elif defined(__AVX2__)
-        nrLDPC_cnProc_BG2_R13_AVX2(procBuf, procBufRes, Z);
-#else
-        nrLDPC_cnProc_BG2_R13_128(procBuf, procBufRes, Z);
-#endif
-        break;
-      }
-      case 23: {
-#if defined(__AVX512BW__)
-        nrLDPC_cnProc_BG2_R23_AVX512(procBuf, procBufRes, Z);
-#elif defined(__AVX2__)
-        nrLDPC_cnProc_BG2_R23_AVX2(procBuf, procBufRes, Z);
-#else
-        nrLDPC_cnProc_BG2_R23_128(procBuf, procBufRes, Z);
-#endif
-        break;
-      }
+#define FOREACH_V(V) V(cnProc, 2, 15) V(cnProc, 2, 13) V(cnProc, 2, 23)
+      FOREACH_V(CASE)
+#undef FOREACH_V
     }
 #endif
   }
@@ -346,58 +295,15 @@ static inline uint32_t nrLDPC_decoder_core(int8_t* p_llr,
 #else
   if (BG == 1) {
     switch (R) {
-      case 13: {
-#ifdef __AVX2__
-        nrLDPC_bnProcPc_BG1_R13_AVX2(bnProcBuf, procBuf, llrRes, llrProcBuf, Z);
-#else
-        nrLDPC_bnProcPc_BG1_R13_128(bnProcBuf, procBuf, llrRes, llrProcBuf, Z);
-#endif
-        break;
-      }
-      case 23: {
-#ifdef __AVX2__
-        nrLDPC_bnProcPc_BG1_R23_AVX2(bnProcBuf, procBuf, llrRes, llrProcBuf, Z);
-#else
-        nrLDPC_bnProcPc_BG1_R23_128(bnProcBuf, procBuf, llrRes, llrProcBuf, Z);
-#endif
-        break;
-      }
-      case 89: {
-#ifdef __AVX2__
-        nrLDPC_bnProcPc_BG1_R89_AVX2(bnProcBuf, procBuf, llrRes, llrProcBuf, Z);
-#else
-        nrLDPC_bnProcPc_BG1_R89_128(bnProcBuf, procBuf, llrRes, llrProcBuf, Z);
-#endif
-        break;
-      }
+#define FOREACH_V(V) V(bnProcPc, 1, 13) V(bnProcPc, 1, 23) V(bnProcPc, 1, 89)
+      FOREACH_V(CASE)
+#undef FOREACH_V
     }
   } else {
     switch (R) {
-      case 15: {
-#ifdef __AVX2__
-        nrLDPC_bnProcPc_BG2_R15_AVX2(bnProcBuf, procBuf, llrRes, llrProcBuf, Z);
-#else
-        nrLDPC_bnProcPc_BG2_R15_128(bnProcBuf, procBuf, llrRes, llrProcBuf, Z);
-#endif
-        break;
-      }
-      case 13: {
-#ifdef __AVX2__
-        nrLDPC_bnProcPc_BG2_R13_AVX2(bnProcBuf, procBuf, llrRes, llrProcBuf, Z);
-#else
-        nrLDPC_bnProcPc_BG2_R13_128(bnProcBuf, procBuf, llrRes, llrProcBuf, Z);
-#endif
-        break;
-      }
-
-      case 23: {
-#ifdef __AVX2__
-        nrLDPC_bnProcPc_BG2_R23_AVX2(bnProcBuf, procBuf, llrRes, llrProcBuf, Z);
-#else
-        nrLDPC_bnProcPc_BG2_R23_128(bnProcBuf, procBuf, llrRes, llrProcBuf, Z);
-#endif
-        break;
-      }
+#define FOREACH_V(V) V(bnProcPc, 2, 15) V(bnProcPc, 2, 13) V(bnProcPc, 2, 23)
+      FOREACH_V(CASE)
+#undef FOREACH_V
     }
   }
 #endif
@@ -411,88 +317,27 @@ static inline uint32_t nrLDPC_decoder_core(int8_t* p_llr,
 
   NR_LDPC_PROFILER_DETAIL(start_meas(&p_profiler->bnProc));
 
-#ifndef UNROLL_BN_PROC
-#else
+#ifdef UNROLL_BN_PROC
   if (BG == 1) {
     switch (R) {
-      case 13: {
-#if defined(__AVX512BW__)
-        nrLDPC_bnProc_BG1_R13_AVX512(procBuf, procBufRes, llrRes, Z);
-#elif defined(__AVX2__)
-        nrLDPC_bnProc_BG1_R13_AVX2(procBuf, procBufRes, llrRes, Z);
-#else
-        nrLDPC_bnProc_BG1_R13_128(procBuf, procBufRes, llrRes, Z);
-#endif
-        break;
-      }
-      case 23: {
-#if defined(__AVX512BW__)
-        nrLDPC_bnProc_BG1_R23_AVX512(procBuf, procBufRes, llrRes, Z);
-#elif defined(__AVX2__)
-        nrLDPC_bnProc_BG1_R23_AVX2(procBuf, procBufRes, llrRes, Z);
-#else
-        nrLDPC_bnProc_BG1_R23_128(procBuf, procBufRes, llrRes, Z);
-#endif
-        break;
-      }
-      case 89: {
-#if defined(__AVX512BW__)
-        nrLDPC_bnProc_BG1_R89_AVX512(procBuf, procBufRes, llrRes, Z);
-#elif defined(__AVX2__)
-        nrLDPC_bnProc_BG1_R89_AVX2(procBuf, procBufRes, llrRes, Z);
-#else
-        nrLDPC_bnProc_BG1_R89_128(procBuf, procBufRes, llrRes, Z);
-#endif
-        break;
-      }
+#define FOREACH_V(V) V(bnProc, 1, 13) V(bnProc, 1, 23) V(bnProc, 1, 89)
+      FOREACH_V(CASE)
+#undef FOREACH_V
     }
   } else {
     switch (R) {
-      case 15: {
-#if defined(__AVX512BW__)
-        nrLDPC_bnProc_BG2_R15_AVX512(procBuf, procBufRes, llrRes, Z);
-#elif defined(__AVX2__)
-        nrLDPC_bnProc_BG2_R15_AVX2(procBuf, procBufRes, llrRes, Z);
-#else
-        nrLDPC_bnProc_BG2_R15_128(procBuf, procBufRes, llrRes, Z);
-#endif
-        break;
-      }
-      case 13: {
-#if defined(__AVX512BW__)
-        nrLDPC_bnProc_BG2_R13_AVX512(procBuf, procBufRes, llrRes, Z);
-#elif defined(__AVX2__)
-        nrLDPC_bnProc_BG2_R13_AVX2(procBuf, procBufRes, llrRes, Z);
-#else
-        nrLDPC_bnProc_BG2_R13_128(procBuf, procBufRes, llrRes, Z);
-#endif
-        break;
-      }
-
-      case 23: {
-#if defined(__AVX512BW__)
-        nrLDPC_bnProc_BG2_R23_AVX512(procBuf, procBufRes, llrRes, Z);
-#elif defined(__AVX2__)
-        nrLDPC_bnProc_BG2_R23_AVX2(procBuf, procBufRes, llrRes, Z);
-#else
-        nrLDPC_bnProc_BG2_R23_128(procBuf, procBufRes, llrRes, Z);
-#endif
-        break;
-      }
+#define FOREACH_V(V) V(bnProc, 2, 15) V(bnProc, 2, 13) V(bnProc, 2, 23)
+      FOREACH_V(CASE)
+#undef FOREACH_V
     }
   }
 #endif
 
-#ifdef NR_LDPC_PROFILER_DETAIL
-  stop_meas(&p_profiler->bnProc);
-#endif
+  NR_LDPC_PROFILER_DETAIL(stop_meas(&p_profiler->bnProc));
 
 #ifdef NR_LDPC_DEBUG_MODE
   nrLDPC_debug_initBuffer2File(nrLDPC_buffers_BN_PROC_RES);
   nrLDPC_debug_writeBuffer2File(nrLDPC_buffers_BN_PROC_RES, procBuf);
-#endif
-
-#ifdef NR_LDPC_DEBUG_MODE
   nrLDPC_debug_writeBuffer2File(nrLDPC_buffers_CN_PROC, procBuf);
 #endif
 
@@ -509,44 +354,15 @@ static inline uint32_t nrLDPC_decoder_core(int8_t* p_llr,
       break;
     }
     // CN processing
-#ifdef NR_LDPC_PROFILER_DETAIL
-    start_meas(&p_profiler->cnProc);
-#endif
+    NR_LDPC_PROFILER_DETAIL(start_meas(&p_profiler->cnProc));
     if (BG == 1) {
 #ifndef UNROLL_CN_PROC
       nrLDPC_cnProc_BG1(p_lut, procBuf, procBufRes, Z);
 #else
       switch (R) {
-        case 13: {
-#if defined(__AVX512BW__)
-          nrLDPC_cnProc_BG1_R13_AVX512(procBuf, procBufRes, Z);
-#elif defined(__AVX2__)
-          nrLDPC_cnProc_BG1_R13_AVX2(procBuf, procBufRes, Z);
-#else
-          nrLDPC_cnProc_BG1_R13_128(procBuf, procBufRes, Z);
-#endif
-          break;
-        }
-        case 23: {
-#if defined(__AVX512BW__)
-          nrLDPC_cnProc_BG1_R23_AVX512(procBuf, procBufRes, Z);
-#elif defined(__AVX2__)
-          nrLDPC_cnProc_BG1_R23_AVX2(procBuf, procBufRes, Z);
-#else
-          nrLDPC_cnProc_BG1_R23_128(procBuf, procBufRes, Z);
-#endif
-          break;
-        }
-        case 89: {
-#if defined(__AVX512BW__)
-          nrLDPC_cnProc_BG1_R89_AVX512(procBuf, procBufRes, Z);
-#elif defined(__AVX2__)
-          nrLDPC_cnProc_BG1_R89_AVX2(procBuf, procBufRes, Z);
-#else
-          nrLDPC_cnProc_BG1_R89_128(procBuf, procBufRes, Z);
-#endif
-          break;
-        }
+#define FOREACH_V(V) V(cnProc, 1, 13) V(cnProc, 1, 23) V(cnProc, 1, 89)
+        FOREACH_V(CASE)
+#undef FOREACH_V
       }
 #endif
     } else {
@@ -554,48 +370,16 @@ static inline uint32_t nrLDPC_decoder_core(int8_t* p_llr,
       nrLDPC_cnProc_BG2(p_lut, procBuf, procBufRes, Z);
 #else
       switch (R) {
-        case 15: {
-#if defined(__AVX512BW__)
-          nrLDPC_cnProc_BG2_R15_AVX512(procBuf, procBufRes, Z);
-#elif defined(__AVX2__)
-          nrLDPC_cnProc_BG2_R15_AVX2(procBuf, procBufRes, Z);
-#else
-          nrLDPC_cnProc_BG2_R15_128(procBuf, procBufRes, Z);
-#endif
-          break;
-        }
-        case 13: {
-#if defined(__AVX512BW__)
-          nrLDPC_cnProc_BG2_R13_AVX512(procBuf, procBufRes, Z);
-#elif defined(__AVX2__)
-          nrLDPC_cnProc_BG2_R13_AVX2(procBuf, procBufRes, Z);
-#else
-          nrLDPC_cnProc_BG2_R13_128(procBuf, procBufRes, Z);
-#endif
-          break;
-        }
-        case 23: {
-#if defined(__AVX512BW__)
-          nrLDPC_cnProc_BG2_R23_AVX512(procBuf, procBufRes, Z);
-#elif defined(__AVX2__)
-          nrLDPC_cnProc_BG2_R23_AVX2(procBuf, procBufRes, Z);
-#else
-          nrLDPC_cnProc_BG2_R23_128(procBuf, procBufRes, Z);
-#endif
-          break;
-        }
+#define FOREACH_V(V) V(cnProc, 2, 15) V(cnProc, 2, 13) V(cnProc, 2, 23)
+        FOREACH_V(CASE)
+#undef FOREACH_V
       }
 #endif
     }
-#ifdef NR_LDPC_PROFILER_DETAIL
-    stop_meas(&p_profiler->cnProc);
-#endif
+    NR_LDPC_PROFILER_DETAIL(stop_meas(&p_profiler->cnProc));
 
 #ifdef NR_LDPC_DEBUG_MODE
     nrLDPC_debug_writeBuffer2File(nrLDPC_buffers_CN_PROC_RES, procBufRes);
-#endif
-
-#ifdef NR_LDPC_DEBUG_MODE
     nrLDPC_debug_writeBuffer2File(nrLDPC_buffers_BN_PROC, bnProcBuf);
 #endif
 
@@ -607,57 +391,15 @@ static inline uint32_t nrLDPC_decoder_core(int8_t* p_llr,
 #else
     if (BG == 1) {
       switch (R) {
-        case 13: {
-#ifdef __AVX2__
-          nrLDPC_bnProcPc_BG1_R13_AVX2(bnProcBuf, procBuf, llrRes, llrProcBuf, Z);
-#else
-          nrLDPC_bnProcPc_BG1_R13_128(bnProcBuf, procBuf, llrRes, llrProcBuf, Z);
-#endif
-          break;
-        }
-        case 23: {
-#ifdef __AVX2__
-          nrLDPC_bnProcPc_BG1_R23_AVX2(bnProcBuf, procBuf, llrRes, llrProcBuf, Z);
-#else
-          nrLDPC_bnProcPc_BG1_R23_128(bnProcBuf, procBuf, llrRes, llrProcBuf, Z);
-#endif
-          break;
-        }
-        case 89: {
-#ifdef __AVX2__
-          nrLDPC_bnProcPc_BG1_R89_AVX2(bnProcBuf, procBuf, llrRes, llrProcBuf, Z);
-#else
-          nrLDPC_bnProcPc_BG1_R89_128(bnProcBuf, procBuf, llrRes, llrProcBuf, Z);
-#endif
-          break;
-        }
+#define FOREACH_V(V) V(bnProcPc, 1, 15) V(bnProcPc, 1, 13) V(bnProcPc, 1, 23)
+        FOREACH_V(CASE)
+#undef FOREACH_V
       }
     } else {
       switch (R) {
-        case 15: {
-#ifdef __AVX2__
-          nrLDPC_bnProcPc_BG2_R15_AVX2(bnProcBuf, procBuf, llrRes, llrProcBuf, Z);
-#else
-          nrLDPC_bnProcPc_BG2_R15_128(bnProcBuf, procBuf, llrRes, llrProcBuf, Z);
-#endif
-          break;
-        }
-        case 13: {
-#ifdef __AVX2__
-          nrLDPC_bnProcPc_BG2_R13_AVX2(bnProcBuf, procBuf, llrRes, llrProcBuf, Z);
-#else
-          nrLDPC_bnProcPc_BG2_R13_128(bnProcBuf, procBuf, llrRes, llrProcBuf, Z);
-#endif
-          break;
-        }
-        case 23: {
-#ifdef __AVX2__
-          nrLDPC_bnProcPc_BG2_R23_AVX2(bnProcBuf, procBuf, llrRes, llrProcBuf, Z);
-#else
-          nrLDPC_bnProcPc_BG2_R23_128(bnProcBuf, procBuf, llrRes, llrProcBuf, Z);
-#endif
-          break;
-        }
+#define FOREACH_V(V) V(bnProcPc, 2, 15) V(bnProcPc, 2, 13) V(bnProcPc, 2, 23)
+        FOREACH_V(CASE)
+#undef FOREACH_V
       }
     }
 #endif
@@ -668,73 +410,18 @@ static inline uint32_t nrLDPC_decoder_core(int8_t* p_llr,
 #endif
 
     NR_LDPC_PROFILER_DETAIL(start_meas(&p_profiler->bnProc));
-#ifndef UNROLL_BN_PROC
-#else
+#ifdef UNROLL_BN_PROC
     if (BG == 1) {
       switch (R) {
-        case 13: {
-#if defined(__AVX512BW__)
-          nrLDPC_bnProc_BG1_R13_AVX512(procBuf, procBufRes, llrRes, Z);
-#elif defined(__AVX2__)
-          nrLDPC_bnProc_BG1_R13_AVX2(procBuf, procBufRes, llrRes, Z);
-#else
-          nrLDPC_bnProc_BG1_R13_128(procBuf, procBufRes, llrRes, Z);
-#endif
-          break;
-        }
-        case 23: {
-#if defined(__AVX512BW__)
-          nrLDPC_bnProc_BG1_R23_AVX512(procBuf, procBufRes, llrRes, Z);
-#elif defined(__AVX2__)
-          nrLDPC_bnProc_BG1_R23_AVX2(procBuf, procBufRes, llrRes, Z);
-#else
-          nrLDPC_bnProc_BG1_R23_128(procBuf, procBufRes, llrRes, Z);
-#endif
-          break;
-        }
-        case 89: {
-#if defined(__AVX512BW__)
-          nrLDPC_bnProc_BG1_R89_AVX512(procBuf, procBufRes, llrRes, Z);
-#elif defined(__AVX2__)
-          nrLDPC_bnProc_BG1_R89_AVX2(procBuf, procBufRes, llrRes, Z);
-#else
-          nrLDPC_bnProc_BG1_R89_128(procBuf, procBufRes, llrRes, Z);
-#endif
-          break;
-        }
+#define FOREACH_V(V) V(bnProc, 1, 13) V(bnProc, 1, 23) V(bnProc, 1, 89)
+        FOREACH_V(CASE)
+#undef FOREACH_V
       }
     } else {
       switch (R) {
-        case 15: {
-#if defined(__AVX512BW__)
-          nrLDPC_bnProc_BG2_R15_AVX512(procBuf, procBufRes, llrRes, Z);
-#elif defined(__AVX2__)
-          nrLDPC_bnProc_BG2_R15_AVX2(procBuf, procBufRes, llrRes, Z);
-#else
-          nrLDPC_bnProc_BG2_R15_128(procBuf, procBufRes, llrRes, Z);
-#endif
-          break;
-        }
-        case 13: {
-#if defined(__AVX512BW__)
-          nrLDPC_bnProc_BG2_R13_AVX512(procBuf, procBufRes, llrRes, Z);
-#elif defined(__AVX2__)
-          nrLDPC_bnProc_BG2_R13_AVX2(procBuf, procBufRes, llrRes, Z);
-#else
-          nrLDPC_bnProc_BG2_R13_128(procBuf, procBufRes, llrRes, Z);
-#endif
-          break;
-        }
-        case 23: {
-#if defined(__AVX512BW__)
-          nrLDPC_bnProc_BG2_R23_AVX512(procBuf, procBufRes, llrRes, Z);
-#elif defined(__AVX2__)
-          nrLDPC_bnProc_BG2_R23_AVX2(procBuf, procBufRes, llrRes, Z);
-#else
-          nrLDPC_bnProc_BG2_R23_128(procBuf, procBufRes, llrRes, Z);
-#endif
-          break;
-        }
+#define FOREACH_V(V) V(bnProc, 2, 15) V(bnProc, 2, 13) V(bnProc, 2, 23)
+        FOREACH_V(CASE)
+#undef FOREACH_V
       }
     }
 #endif
