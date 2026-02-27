@@ -3988,17 +3988,15 @@ void nr_mac_trigger_reconfiguration(const gNB_MAC_INST *nrmac, NR_UE_info_t *UE,
   DevAssert(UE->CellGroup != NULL);
   NR_CellGroupConfig_t *cellGroup_for_UE = NULL;
   if (new_beam) {
-      UE->sc_info.csi_MeasConfig = NULL;  // to avoid segfault when freeing csi_MeasConfig in configDedicated
-      NR_UE_UL_BWP_t *current_BWP = &UE->current_UL_BWP;
-      current_BWP->srs_Config = NULL;
-      int ssb_index = nrmac->common_channels[0].ssb_index[UE->UE_beam_index];
-      cellGroup_for_UE = update_cellGroupConfig_for_beam_switch(UE->CellGroup,
-                                                               &nrmac->radio_config,
-                                                               UE->capability,
-                                                               nrmac->common_channels[0].ServingCellConfigCommon,
-                                                               UE->uid,
-                                                               UE->current_DL_BWP.bwp_id,
-                                                               ssb_index);
+    UE->sc_info.csi_MeasConfig = NULL; // to avoid segfault when freeing csi_MeasConfig in configDedicated
+    int ssb_index = nrmac->common_channels[0].ssb_index[UE->UE_beam_index];
+    cellGroup_for_UE = update_cellGroupConfig_for_beam_switch(UE->CellGroup,
+                                                              &nrmac->radio_config,
+                                                              UE->capability,
+                                                              nrmac->common_channels[0].ServingCellConfigCommon,
+                                                              UE->uid,
+                                                              UE->current_DL_BWP.bwp_id,
+                                                              ssb_index);
   } else {
     if (new_bwp_id >= 0) {
       AssertFatal(UE->current_DL_BWP.bwp_id == UE->current_UL_BWP.bwp_id, "We only support same BWP for UL and DL\n");
@@ -4009,13 +4007,13 @@ void nr_mac_trigger_reconfiguration(const gNB_MAC_INST *nrmac, NR_UE_info_t *UE,
         UE->local_bwp_id = new_bwp_id;
         int ssb_index = nrmac->common_channels[0].ssb_index[UE->UE_beam_index];
         cellGroup_for_UE = update_cellGroupConfig_for_BWP_switch(UE->CellGroup,
-                                                                &nrmac->radio_config,
-                                                                UE->capability,
-                                                                nrmac->common_channels[0].ServingCellConfigCommon,
-                                                                UE->uid,
-                                                                UE->current_DL_BWP.bwp_id,
-                                                                new_bwp_id,
-                                                                ssb_index);
+                                                                 &nrmac->radio_config,
+                                                                 UE->capability,
+                                                                 nrmac->common_channels[0].ServingCellConfigCommon,
+                                                                 UE->uid,
+                                                                 UE->current_DL_BWP.bwp_id,
+                                                                 new_bwp_id,
+                                                                 ssb_index);
       }
     }
   }

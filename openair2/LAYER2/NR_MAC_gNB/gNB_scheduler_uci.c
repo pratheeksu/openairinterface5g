@@ -810,7 +810,7 @@ static void extract_pucch_csi_report(NR_CSI_MeasConfig_t *csi_MeasConfig,
       }
     }
   }
-  if ((new_bf_index !=-1) && !nrmac->radio_config.do_TCI)
+  if ((new_bf_index != -1) && !nrmac->radio_config.do_TCI)
     // Trigger RRCReconfiguration. Need to be out of the for loop as it may modify csi_MeasConfig
     beam_switching_procedure(nrmac, UE, new_bf_index);
 }
