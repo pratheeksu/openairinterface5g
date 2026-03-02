@@ -981,15 +981,25 @@ dci_pdu_rel15_t prepare_dci_dl_payload(const gNB_MAC_INST *gNB_mac,
     dci_payload.system_info_indicator = !is_sib1;
     return dci_payload;
   }
+
   if (rnti_type == TYPE_RA_RNTI_) {
     dci_payload.tb_scaling = tb_scaling;
     return dci_payload;
   }
 
-  const NR_UE_sched_ctrl_t *sched_ctrl = &UE->UE_sched_ctrl;
+  if (rnti_type == TYPE_P_RNTI_) {
+    /* Paging DCI 1_0: P-RNTI has no UE-specific HARQ fields. */
+    dci_payload.tb_scaling = tb_scaling;
+    dci_payload.short_messages_indicator = 1;
+    dci_payload.short_messages = 0;
+    return dci_payload;
+  }
+
   dci_payload.dmrs_sequence_initialization.val = pdsch_pdu->SCID;
   dci_payload.antenna_ports.val = sched_pdsch->dmrs_parms.dmrs_ports_id;
   dci_payload.tpc = tpc;
+
+  const NR_UE_sched_ctrl_t *sched_ctrl = &UE->UE_sched_ctrl;
   const NR_UE_harq_t *harq = &sched_ctrl->harq_processes[harq_pid];
   AssertFatal(harq, "HARQ process should be available for DCI with RNTI %s\n", rnti_types(rnti_type));
   dci_payload.harq_pid.val = harq_pid;
