@@ -1,0 +1,1186 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>nrLDPC_cuda.md</title>
+<meta http-equiv="Content-type" content="text/html;charset=UTF-8">
+
+<style>
+/* https://github.com/microsoft/vscode/blob/master/extensions/markdown-language-features/media/markdown.css */
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+body {
+	font-family: var(--vscode-markdown-font-family, -apple-system, BlinkMacSystemFont, "Segoe WPC", "Segoe UI", "Ubuntu", "Droid Sans", sans-serif);
+	font-size: var(--vscode-markdown-font-size, 14px);
+	padding: 0 26px;
+	line-height: var(--vscode-markdown-line-height, 22px);
+	word-wrap: break-word;
+}
+
+#code-csp-warning {
+	position: fixed;
+	top: 0;
+	right: 0;
+	color: white;
+	margin: 16px;
+	text-align: center;
+	font-size: 12px;
+	font-family: sans-serif;
+	background-color:#444444;
+	cursor: pointer;
+	padding: 6px;
+	box-shadow: 1px 1px 1px rgba(0,0,0,.25);
+}
+
+#code-csp-warning:hover {
+	text-decoration: none;
+	background-color:#007acc;
+	box-shadow: 2px 2px 2px rgba(0,0,0,.25);
+}
+
+body.scrollBeyondLastLine {
+	margin-bottom: calc(100vh - 22px);
+}
+
+body.showEditorSelection .code-line {
+	position: relative;
+}
+
+body.showEditorSelection .code-active-line:before,
+body.showEditorSelection .code-line:hover:before {
+	content: "";
+	display: block;
+	position: absolute;
+	top: 0;
+	left: -12px;
+	height: 100%;
+}
+
+body.showEditorSelection li.code-active-line:before,
+body.showEditorSelection li.code-line:hover:before {
+	left: -30px;
+}
+
+.vscode-light.showEditorSelection .code-active-line:before {
+	border-left: 3px solid rgba(0, 0, 0, 0.15);
+}
+
+.vscode-light.showEditorSelection .code-line:hover:before {
+	border-left: 3px solid rgba(0, 0, 0, 0.40);
+}
+
+.vscode-light.showEditorSelection .code-line .code-line:hover:before {
+	border-left: none;
+}
+
+.vscode-dark.showEditorSelection .code-active-line:before {
+	border-left: 3px solid rgba(255, 255, 255, 0.4);
+}
+
+.vscode-dark.showEditorSelection .code-line:hover:before {
+	border-left: 3px solid rgba(255, 255, 255, 0.60);
+}
+
+.vscode-dark.showEditorSelection .code-line .code-line:hover:before {
+	border-left: none;
+}
+
+.vscode-high-contrast.showEditorSelection .code-active-line:before {
+	border-left: 3px solid rgba(255, 160, 0, 0.7);
+}
+
+.vscode-high-contrast.showEditorSelection .code-line:hover:before {
+	border-left: 3px solid rgba(255, 160, 0, 1);
+}
+
+.vscode-high-contrast.showEditorSelection .code-line .code-line:hover:before {
+	border-left: none;
+}
+
+img {
+	max-width: 100%;
+	max-height: 100%;
+}
+
+a {
+	text-decoration: none;
+}
+
+a:hover {
+	text-decoration: underline;
+}
+
+a:focus,
+input:focus,
+select:focus,
+textarea:focus {
+	outline: 1px solid -webkit-focus-ring-color;
+	outline-offset: -1px;
+}
+
+hr {
+	border: 0;
+	height: 2px;
+	border-bottom: 2px solid;
+}
+
+h1 {
+	padding-bottom: 0.3em;
+	line-height: 1.2;
+	border-bottom-width: 1px;
+	border-bottom-style: solid;
+}
+
+h1, h2, h3 {
+	font-weight: normal;
+}
+
+table {
+	border-collapse: collapse;
+}
+
+table > thead > tr > th {
+	text-align: left;
+	border-bottom: 1px solid;
+}
+
+table > thead > tr > th,
+table > thead > tr > td,
+table > tbody > tr > th,
+table > tbody > tr > td {
+	padding: 5px 10px;
+}
+
+table > tbody > tr + tr > td {
+	border-top: 1px solid;
+}
+
+blockquote {
+	margin: 0 7px 0 5px;
+	padding: 0 16px 0 10px;
+	border-left-width: 5px;
+	border-left-style: solid;
+}
+
+code {
+	font-family: Menlo, Monaco, Consolas, "Droid Sans Mono", "Courier New", monospace, "Droid Sans Fallback";
+	font-size: 1em;
+	line-height: 1.357em;
+}
+
+body.wordWrap pre {
+	white-space: pre-wrap;
+}
+
+pre:not(.hljs),
+pre.hljs code > div {
+	padding: 16px;
+	border-radius: 3px;
+	overflow: auto;
+}
+
+pre code {
+	color: var(--vscode-editor-foreground);
+	tab-size: 4;
+}
+
+/** Theming */
+
+.vscode-light pre {
+	background-color: rgba(220, 220, 220, 0.4);
+}
+
+.vscode-dark pre {
+	background-color: rgba(10, 10, 10, 0.4);
+}
+
+.vscode-high-contrast pre {
+	background-color: rgb(0, 0, 0);
+}
+
+.vscode-high-contrast h1 {
+	border-color: rgb(0, 0, 0);
+}
+
+.vscode-light table > thead > tr > th {
+	border-color: rgba(0, 0, 0, 0.69);
+}
+
+.vscode-dark table > thead > tr > th {
+	border-color: rgba(255, 255, 255, 0.69);
+}
+
+.vscode-light h1,
+.vscode-light hr,
+.vscode-light table > tbody > tr + tr > td {
+	border-color: rgba(0, 0, 0, 0.18);
+}
+
+.vscode-dark h1,
+.vscode-dark hr,
+.vscode-dark table > tbody > tr + tr > td {
+	border-color: rgba(255, 255, 255, 0.18);
+}
+
+</style>
+
+<style>
+/* Tomorrow Theme */
+/* http://jmblog.github.com/color-themes-for-google-code-highlightjs */
+/* Original theme - https://github.com/chriskempson/tomorrow-theme */
+
+/* Tomorrow Comment */
+.hljs-comment,
+.hljs-quote {
+	color: #8e908c;
+}
+
+/* Tomorrow Red */
+.hljs-variable,
+.hljs-template-variable,
+.hljs-tag,
+.hljs-name,
+.hljs-selector-id,
+.hljs-selector-class,
+.hljs-regexp,
+.hljs-deletion {
+	color: #c82829;
+}
+
+/* Tomorrow Orange */
+.hljs-number,
+.hljs-built_in,
+.hljs-builtin-name,
+.hljs-literal,
+.hljs-type,
+.hljs-params,
+.hljs-meta,
+.hljs-link {
+	color: #f5871f;
+}
+
+/* Tomorrow Yellow */
+.hljs-attribute {
+	color: #eab700;
+}
+
+/* Tomorrow Green */
+.hljs-string,
+.hljs-symbol,
+.hljs-bullet,
+.hljs-addition {
+	color: #718c00;
+}
+
+/* Tomorrow Blue */
+.hljs-title,
+.hljs-section {
+	color: #4271ae;
+}
+
+/* Tomorrow Purple */
+.hljs-keyword,
+.hljs-selector-tag {
+	color: #8959a8;
+}
+
+.hljs {
+	display: block;
+	overflow-x: auto;
+	color: #4d4d4c;
+	padding: 0.5em;
+}
+
+.hljs-emphasis {
+	font-style: italic;
+}
+
+.hljs-strong {
+	font-weight: bold;
+}
+</style>
+
+<style>
+/*
+ * Markdown PDF CSS
+ */
+
+ body {
+	font-family: -apple-system, BlinkMacSystemFont, "Segoe WPC", "Segoe UI", "Ubuntu", "Droid Sans", sans-serif, "Meiryo";
+	padding: 0 12px;
+}
+
+pre {
+	background-color: #f8f8f8;
+	border: 1px solid #cccccc;
+	border-radius: 3px;
+	overflow-x: auto;
+	white-space: pre-wrap;
+	overflow-wrap: break-word;
+}
+
+pre:not(.hljs) {
+	padding: 23px;
+	line-height: 19px;
+}
+
+blockquote {
+	background: rgba(127, 127, 127, 0.1);
+	border-color: rgba(0, 122, 204, 0.5);
+}
+
+.emoji {
+	height: 1.4em;
+}
+
+code {
+	font-size: 14px;
+	line-height: 19px;
+}
+
+/* for inline code */
+:not(pre):not(.hljs) > code {
+	color: #C9AE75; /* Change the old color so it seems less like an error */
+	font-size: inherit;
+}
+
+/* Page Break : use <div class="page"/> to insert page break
+-------------------------------------------------------- */
+.page {
+	page-break-after: always;
+}
+
+</style>
+
+<script src="https://unpkg.com/mermaid/dist/mermaid.min.js"></script>
+</head>
+<body>
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: document.body.classList.contains('vscode-dark') || document.body.classList.contains('vscode-high-contrast')
+          ? 'dark'
+          : 'default'
+    });
+  </script>
+<hr>
+<h1 id="oai-nrldpc-gpu-decoder-architecture">OAI nrLDPC GPU Decoder Architecture</h1>
+<p><strong>Author:</strong> PAN Qizhi</p>
+<h2 id="0-scope--supported-configurations">0. Scope &amp; Supported Configurations</h2>
+<p>This document describes the architecture and parallelization strategies of the GPU-accelerated LDPC decoder implemented via CUDA.</p>
+<blockquote>
+<p><strong>Note on Algorithm Baseline:</strong> The current CUDA implementation is strictly <strong>bit-exact and algorithm-exact</strong> with the existing OAI <a href="OAI/openairinterface5g/openair1/PHY/CODING/nrLDPC_decoder/doc/nrLDPC/nrLDPC.tex">CPU baseline</a>. It focuses purely on throughput acceleration, hardware offloading, and architectural refactoring. It does not introduce any algorithmic modifications to the underlying error correction mathematical model. Therefore, it is expected to yield the exact same BLER performance as the <a href="OAI/openairinterface5g/openair1/PHY/CODING/nrLDPC_decoder/doc/nrLDPC/nrLDPC.tex">CPU baseline</a></p>
+</blockquote>
+<h3 id="currently-supported-parameters">Currently Supported Parameters</h3>
+<table>
+<thead>
+<tr>
+<th style="text-align:left">Parameter</th>
+<th style="text-align:left">Supported Configuration</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left"><strong>Base Graph (BG)</strong></td>
+<td style="text-align:left">1</td>
+</tr>
+<tr>
+<td style="text-align:left"><strong>Lifting Size (Z)</strong></td>
+<td style="text-align:left">≥ 128</td>
+</tr>
+<tr>
+<td style="text-align:left"><strong>Code Rate (R)</strong></td>
+<td style="text-align:left">1/3, 2/3, 8/9</td>
+</tr>
+</tbody>
+</table>
+<hr>
+<h2 id="1-overall-architecture">1. Overall Architecture</h2>
+<p><img src="file:///home/panq/OAI/openairinterface5g/openair1/PHY/CODING/nrLDPC_decoder/doc/nrLDPC/img/decoder_cuda_pipeline.svg" alt="Pipeline Overview"></p>
+<p>The OAI nrLDPC GPU decoder consists of four main kernels: <code>llrPreProc_kernel</code>, <code>cnProc_kernel</code>, <code>bnProc_kernel</code>, and <code>output_kernel</code>.</p>
+<p>Functionally, the GPU version is strictly aligned with the CPU baseline. Each CUDA kernel is essentially a consolidation of multiple specific functions from the CPU decoder. The exact mapping is as follows:</p>
+<ul>
+<li><strong><code>llrPreProc_kernel</code></strong>: Combines <code>llr2llrProcBuf</code> and <code>llr2CnProcBuf</code>.</li>
+<li><strong><code>cnProc_kernel</code></strong>: Combines <code>cnProc</code> and <code>cn2bnProcBuf</code>.</li>
+<li><strong><code>bnProc_kernel</code></strong>: Combines <code>bnProcPc</code>, <code>bnProc</code>, and <code>bn2cnProcBuf</code>.</li>
+<li><strong><code>output_kernel</code></strong>: Combines <code>llrRes2llrOut</code> and <code>llr2bit</code>.</li>
+</ul>
+<h2 id="2-message-passing-in-ldpc-decoding">2. Message Passing in LDPC Decoding</h2>
+<p>In this section, we briefly describe the behavior of <code>cnProc</code> (Check Node processing) and <code>bnProc</code> (Bit Node processing) during decoding. This high-level understanding will help clarify the overall parallelism design discussed later.</p>
+<p>In LDPC decoding, the task of a Check Node (CN) in <code>cnProc</code> is to generate and send update messages to its connected Bit Nodes (BNs). For example, a degree-4 CN (a CN connected to 4 BNs) needs to generate 4 distinct messages—typically using min-sum operations—and send each message back to the corresponding connected BN. Each of these messages corresponds to one edge in the bipartite graph.</p>
+<p><img src="file:///home/panq/OAI/openairinterface5g/openair1/PHY/CODING/nrLDPC_decoder/doc/nrLDPC/img/cnProc_behavior.svg" alt="cnProc message passing"></p>
+<p>Conversely, the task of a BN in <code>bnProc</code> is to gather all the messages from its connected CNs and send updated messages back. This involves accumulation and subtraction operations. For example, a degree-3 BN (a BN connected to 3 CNs) generates 3 messages by first accumulating the 3 incoming messages from the connected CNs along with its original intrinsic LLR, then subtracting each CN's specific value, and sending the newly updated message back to the corresponding CN.</p>
+<p><img src="file:///home/panq/OAI/openairinterface5g/openair1/PHY/CODING/nrLDPC_decoder/doc/nrLDPC/img/bnProc_behavior.svg" alt="bnProc message passing"></p>
+<p>The entire decoding process is executed by iteratively alternating between these two behaviors.</p>
+<h2 id="3-memory-management--buffer-layout">3. Memory Management &amp; Buffer Layout</h2>
+<h3 id="31-memory-management">3.1 Memory Management</h3>
+<p>In the current implementation, all relevant buffers reside entirely in GPU memory (Device memory). By keeping the entire receiver processing pipeline's buffers on the GPU, we completely eliminate the overhead of Host-to-Device (H2D) and Device-to-Host (D2H) memory transfers between individual kernels.</p>
+<p>The following table summarizes the key data buffers and their read/write access patterns across the kernels:</p>
+<table>
+<thead>
+<tr>
+<th style="text-align:left">Buffer Name</th>
+<th style="text-align:left">Description</th>
+<th style="text-align:left">Written By</th>
+<th style="text-align:left">Read By</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left"><code>p_llr</code></td>
+<td style="text-align:left">Output from the rate matching module (raw input LLRs).</td>
+<td style="text-align:left"><em>(Previous module)</em></td>
+<td style="text-align:left"><code>llrPreProc_kernel</code></td>
+</tr>
+<tr>
+<td style="text-align:left"><code>p_out</code></td>
+<td style="text-align:left">Final hard-decision decoded output bits.</td>
+<td style="text-align:left"><code>output_kernel</code></td>
+<td style="text-align:left"><em>(Next module)</em></td>
+</tr>
+<tr>
+<td style="text-align:left"><code>cnProcBuf_dev</code></td>
+<td style="text-align:left">Stores BN-to-CN messages. Initialized with intrinsic LLRs before the first iteration.</td>
+<td style="text-align:left"><code>llrPreProc_kernel</code> (init), <code>bnProc_kernel</code></td>
+<td style="text-align:left"><code>cnProc_kernel</code></td>
+</tr>
+<tr>
+<td style="text-align:left"><code>bnProcBuf_dev</code></td>
+<td style="text-align:left">Stores CN-to-BN messages updated during check node processing.</td>
+<td style="text-align:left"><code>cnProc_kernel</code></td>
+<td style="text-align:left"><code>bnProc_kernel</code></td>
+</tr>
+<tr>
+<td style="text-align:left"><code>llrRes_dev</code></td>
+<td style="text-align:left">Stores the posterior LLRs (a posteriori information) accumulated during the final iteration.</td>
+<td style="text-align:left"><code>bnProc_kernel</code> (last iter)</td>
+<td style="text-align:left"><code>output_kernel</code></td>
+</tr>
+<tr>
+<td style="text-align:left"><code>llrProcBuf_dev</code></td>
+<td style="text-align:left">Stores the rearranged intrinsic LLRs to be added back during BN updates, preventing belief drift.</td>
+<td style="text-align:left"><code>llrPreProc_kernel</code></td>
+<td style="text-align:left"><code>bnProc_kernel</code></td>
+</tr>
+</tbody>
+</table>
+<h3 id="32-buffer-layout">3.2 Buffer Layout</h3>
+<p>All buffers here follow the exact same layout as the CPU version, especially the two most critical buffers in the decoding process: <code>cnProcBuf_dev</code> and <code>bnProcBuf_dev</code>.</p>
+<p>The OAI decoder implementation groups the Check Nodes (CNs) and Bit Nodes (BNs) based on their degree (the number of connected nodes).
+While their layouts are rigorously described using mathematical notation in <a href="OAI/openairinterface5g/openair1/PHY/CODING/nrLDPC_decoder/doc/nrLDPC/nrLDPC.tex"><code>doc/nrLDPC/nrLDPC.tex</code></a>, this section provides a more intuitive description of their structures in memory.</p>
+<p><code>cnProcBuf_dev</code> stores the messages that a CN needs to process, which are sent by its connected BNs. For example, a degree-4 CN needs to process 4 incoming messages. However, in the current buffer layout design, these 4 messages belonging to the same CN are <strong>not contiguous</strong> in memory.</p>
+<p>To illustrate, consider BG1 (Rate 1/3), which contains 5 CNs with a degree of 4. The actual memory layout groups the same message index across all CNs in that specific group, as depicted below:</p>
+<p><img src="file:///home/panq/OAI/openairinterface5g/openair1/PHY/CODING/nrLDPC_decoder/doc/nrLDPC/img/cnProcBuf_layout.svg" alt="cnProcBuf layout"></p>
+<p>Similarly, <code>bnProcBuf_dev</code> follows this exact same interleaved layout strategy.</p>
+<p>This specific Structure of Arrays (SoA) interleaving was historically designed to maximize CPU SIMD (e.g., AVX-512) vectorization efficiency. By clustering the same message indices together across multiple CNs, it avoids complex cross-lane shuffles and boundary alignment issues within vector registers.</p>
+<p>For the CUDA implementation, we retain this legacy layout. It imposes no performance penalty on the GPU—since global memory coalescing is already naturally guaranteed by the innermost lifting size ($Z_c$) dimension, and it perfectly fulfills the alignment requirements for the SIMD4 operations used in our GPU implementation.</p>
+<h2 id="4-flat-message-indexing">4. Flat Message Indexing</h2>
+<p>The fundamental computational elements in our LDPC decoder are the individual messages passed along the edges of the bipartite graph (either CN-to-BN or BN-to-CN). To specify their behaviors during parallel decoding, each message must be mapped to a unique memory address, a destination buffer address, and a specific circular shift value.</p>
+<p>Instead of relying on nested loops and complex multi-dimensional pointers, we introduce a <strong>Flat Message Indexing</strong> strategy. We assign a deterministic, global 1D index to every single message (edge) in the Base Graph.</p>
+<h3 id="41-total-message-calculation">4.1 Total Message Calculation</h3>
+<p>The total number of messages is calculated based on the degree distribution of the Check Nodes in BG1. By multiplying the number of connected BNs (<code>numBnInCnGroups</code>) with the number of corresponding CNs (<code>numCnInCnGroups</code>), we obtain the exact number of edges for each Code Rate (R):</p>
+<ul>
+<li><strong>Degrees (<code>numBnInCnGroups</code>)</strong>: {3, 4, 5, 6, 7, 8, 9, 10, 19}</li>
+<li><strong>R 1/3 CN Counts</strong>: {1, 5, 18, 8, 5, 2, 2, 1, 4} $\rightarrow$ Total Messages = $3(1) + 4(5) + 5(18) + \dots + 19(4) = \mathbf{316}$</li>
+<li><strong>R 2/3 CN Counts</strong>: {1, 0, 0, 0, 3, 2, 2, 1, 4} $\rightarrow$ Total Messages = $\mathbf{144}$</li>
+<li><strong>R 8/9 CN Counts</strong>: {1, 0, 0, 0, 0, 0, 0, 0, 4} $\rightarrow$ Total Messages = $\mathbf{79}$</li>
+</ul>
+<h3 id="42-linear-index-mapping">4.2 Linear Index Mapping</h3>
+<p>By flattening the structure, the messages are linearized sequentially. The 1D index effectively acts as a universal coordinate <code>(CN/BN_Degree, CN/BN_Instance_ID, Local_Message_ID)</code>.</p>
+<p>We use the indexing from CN side as an example, the mappings for the supported code rates are as follows:</p>
+<pre class="hljs"><code><div>[Rate 1/3 Message Index Map - Total 316]
+Idx 0   : CN3-0-Msg0
+Idx 1   : CN3-0-Msg1
+Idx 2   : CN3-0-Msg2
+Idx 3   : CN4-0-Msg0
+Idx 4   : CN4-0-Msg1
+Idx 5   : CN4-0-Msg2
+Idx 6   : CN4-0-Msg3
+Idx 7   : CN4-1-Msg0
+...
+Idx 314 : CN19-3-Msg17
+Idx 315 : CN19-3-Msg18
+
+[Rate 2/3 Message Index Map - Total 144]
+Idx 0   : CN3-0-Msg0
+Idx 1   : CN3-0-Msg1
+Idx 2   : CN3-0-Msg2
+Idx 3   : CN7-0-Msg0
+Idx 4   : CN7-0-Msg1
+Idx 5   : CN7-0-Msg2
+Idx 6   : CN7-0-Msg3
+Idx 7   : CN7-0-Msg4
+...
+Idx 142 : CN19-3-Msg17
+Idx 143 : CN19-3-Msg18
+
+[Rate 8/9 Message Index Map - Total 79]
+Idx 0   : CN3-0-Msg0
+Idx 1   : CN3-0-Msg1
+Idx 2   : CN3-0-Msg2
+Idx 3   : CN19-0-Msg0
+Idx 4   : CN19-0-Msg1
+Idx 5   : CN19-0-Msg2
+Idx 6   : CN19-0-Msg3
+Idx 7   : CN19-0-Msg4
+...
+Idx 77  : CN19-3-Msg17
+Idx 78  : CN19-3-Msg18
+</div></code></pre>
+<p>The indexing from BN side follows the same strategy.</p>
+<p>This 1D indexing maps to specific offset LUTs, seamlessly guiding the threads to calculate the exact memory addresses on the interleaved buffer layout described in Section 3.2.</p>
+<p>To support other code rates or base graphs in the future (for example, a potential BG3 in 6G), basically, we just need to design new indexings and LUTs accordingly.</p>
+<h2 id="5-parallelism-strategies">5. Parallelism Strategies</h2>
+<h3 id="51-edge-based-parallelism">5.1 Edge-Based Parallelism</h3>
+<p>To extract the absolute maximum concurrency from the GPU hardware, the most intuitive approach is to compute every single message (edge) in the bipartite graph simultaneously. We refer to this approach as <strong>Edge-Based Parallelism</strong>.</p>
+<h4 id="511-thread-organization">5.1.1 Thread Organization</h4>
+<p>In this strategy, we map the computation of messages directly to the CUDA execution grid. To maximize memory throughput and instruction efficiency, we utilize 32-bit vectorized memory accesses (<code>simd4</code>).</p>
+<p>The thread organization follows this 2D grid/block topology:</p>
+<ul>
+<li><strong>X-Dimension (Lifting Size &amp; Messages):</strong> Since we process 4 elements per thread, the block's X-dimension is scaled to $Z_c / 4$ (<code>Z_c &gt;&gt; 2</code>). To further increase block-level occupancy, the block's Y-dimension is set to 4, processing 4 messages concurrently within a single block. Consequently, the grid's X-dimension represents the total number of messages divided by 4.</li>
+<li><strong>Y-Dimension (Segments):</strong> The grid's Y-dimension directly maps to the number of Transport Block segments (<code>n_segments</code>), allowing multiple code blocks to be decoded completely in parallel.</li>
+</ul>
+<p>The precise kernel launch configurations for the supported code rates in BG1 are formulated as follows:</p>
+<pre class="hljs"><code><div><span class="hljs-comment">// BG1 Rate 1/3 (num_TotalBlocks_BG1_R13_Edge = 316)</span>
+<span class="hljs-function">dim3 <span class="hljs-title">R13_block</span><span class="hljs-params">(Z_c &gt;&gt; <span class="hljs-number">2</span>, <span class="hljs-number">4</span>, <span class="hljs-number">1</span>)</span></span>;
+<span class="hljs-function">dim3 <span class="hljs-title">R13_grid</span><span class="hljs-params">(num_TotalBlocks_BG1_R13_Edge &gt;&gt; <span class="hljs-number">2</span>, n_segments, <span class="hljs-number">1</span>)</span></span>;
+</div></code></pre>
+<pre class="hljs"><code><div><span class="hljs-comment">// BG1 Rate 2/3 (num_TotalBlocks_BG1_R23_Edge = 144)</span>
+<span class="hljs-function">dim3 <span class="hljs-title">R23_block</span><span class="hljs-params">(Z_c &gt;&gt; <span class="hljs-number">2</span>, <span class="hljs-number">4</span>, <span class="hljs-number">1</span>)</span></span>;
+<span class="hljs-function">dim3 <span class="hljs-title">R23_grid</span><span class="hljs-params">(num_TotalBlocks_BG1_R23_Edge &gt;&gt; <span class="hljs-number">2</span>, n_segments, <span class="hljs-number">1</span>)</span></span>;
+</div></code></pre>
+<pre class="hljs"><code><div><span class="hljs-comment">// BG1 Rate 8/9 (num_TotalBlocks_BG1_R89_Edge = 79)</span>
+<span class="hljs-comment">// Note: 79 is not strictly divisible by 4; padding (+3) ensures ceiling division.</span>
+<span class="hljs-function">dim3 <span class="hljs-title">R89_block</span><span class="hljs-params">(Z_c &gt;&gt; <span class="hljs-number">2</span>, <span class="hljs-number">4</span>, <span class="hljs-number">1</span>)</span></span>;
+<span class="hljs-function">dim3 <span class="hljs-title">R89_grid</span><span class="hljs-params">((num_TotalBlocks_BG1_R89_Edge + <span class="hljs-number">3</span>) &gt;&gt; <span class="hljs-number">2</span>, n_segments, <span class="hljs-number">1</span>)</span></span>;
+</div></code></pre>
+<h4 id="512-cnprockernel">5.1.2 cnProc_kernel</h4>
+<p>For the Check Node processing, we implemented specific kernels for each supported code rate with these namings:</p>
+<ul>
+<li><code>cnProcKernel_BG1_R13_int8_Edge</code></li>
+<li><code>cnProcKernel_BG1_R23_int8_Edge</code></li>
+<li><code>cnProcKernel_BG1_R89_int8_Edge</code></li>
+</ul>
+<p>We use BG1 R13 as an example. The global kernel acts as a dispatcher. Based on the Check Node degree (<code>groupIdx</code>), it routes the thread to a specific unrolled device function:</p>
+<pre class="hljs"><code><div><span class="hljs-function">__global__ <span class="hljs-keyword">void</span> <span class="hljs-title">cnProcKernel_BG1_R13_int8_Edge</span><span class="hljs-params">(<span class="hljs-keyword">const</span> <span class="hljs-keyword">int8_t</span> *__restrict__ d_cnBufAll,
+                                               <span class="hljs-keyword">int8_t</span> *__restrict__ d_bnBufAll,
+                                               <span class="hljs-keyword">uint32_t</span> Zc,
+                                               <span class="hljs-keyword">uint32_t</span> ZcIdx)</span>
+</span>{
+  <span class="hljs-keyword">uint32_t</span> lane = threadIdx.x;
+  <span class="hljs-comment">// Compute the global 1D flat index (row) for the current message</span>
+  <span class="hljs-keyword">uint32_t</span> row = (blockIdx.x &lt;&lt; <span class="hljs-number">2</span>) + threadIdx.y;
+  <span class="hljs-keyword">uint32_t</span> segIdx = blockIdx.y;
+
+  <span class="hljs-keyword">if</span> (row &gt;= num_TotalBlocks_BG1_R13_Edge)
+    <span class="hljs-keyword">return</span>;
+
+  <span class="hljs-comment">// LUT Lookups: Fetch node degree, instance ID, and message ID</span>
+  <span class="hljs-keyword">uint32_t</span> groupIdx = lut_CnGrpIdx_BG1_R13_Edge[row] - <span class="hljs-number">1</span>;
+  <span class="hljs-keyword">uint32_t</span> CnIdx = lut_CnIdx_BG1_R13_Edge[row] - <span class="hljs-number">1</span>;
+  <span class="hljs-keyword">uint32_t</span> MsgIdx = lut_CnMsgIdx_BG1_R13_Edge[row] - <span class="hljs-number">1</span>;
+  
+  <span class="hljs-comment">// Calculate exact memory offsets</span>
+  <span class="hljs-keyword">uint32_t</span> InnerOffset = d_lut_startAddrCnGroups_BG1[groupIdx] + NR_LDPC_ZMAX * CnIdx;
+  <span class="hljs-keyword">uint32_t</span> idxBn = cn_bn_map_BG1_Z_R13[row][<span class="hljs-number">0</span>];
+  <span class="hljs-keyword">uint32_t</span> circShift = cn_bn_map_BG1_Z_R13[row][ZcIdx];
+
+  <span class="hljs-keyword">const</span> <span class="hljs-keyword">int8_t</span> *p_cnProcBuf = (<span class="hljs-keyword">const</span> <span class="hljs-keyword">int8_t</span> *)(d_cnBufAll + segIdx * NR_LDPC_SIZE_CN_PROC_BUF + InnerOffset);
+  <span class="hljs-keyword">int8_t</span> *p_bnProcBuf = (<span class="hljs-keyword">int8_t</span> *)(d_bnBufAll + segIdx * NR_LDPC_SIZE_BN_PROC_BUF);
+
+  <span class="hljs-comment">// Dispatch to the degree-specific device function (Branchless execution inside)</span>
+  <span class="hljs-keyword">switch</span> (groupIdx) {
+    <span class="hljs-keyword">case</span> <span class="hljs-number">0</span>: cnProcKernel_BG1_int8_G3(p_cnProcBuf, p_bnProcBuf, MsgIdx, lane, idxBn, circShift, Zc); 
+        <span class="hljs-keyword">break</span>;
+    <span class="hljs-keyword">case</span> <span class="hljs-number">1</span>: cnProcKernel_BG1_int8_G4(p_cnProcBuf, p_bnProcBuf, MsgIdx, lane, idxBn, circShift, Zc); 
+        <span class="hljs-keyword">break</span>;
+    <span class="hljs-keyword">case</span> <span class="hljs-number">2</span>: cnProcKernel_BG1_int8_G5(p_cnProcBuf, p_bnProcBuf, MsgIdx, lane, idxBn, circShift, Zc); 
+        <span class="hljs-keyword">break</span>;
+    <span class="hljs-keyword">case</span> <span class="hljs-number">3</span>: cnProcKernel_BG1_int8_G6(p_cnProcBuf, p_bnProcBuf, MsgIdx, lane, idxBn, circShift, Zc); 
+        <span class="hljs-keyword">break</span>;
+    <span class="hljs-keyword">case</span> <span class="hljs-number">4</span>: cnProcKernel_BG1_int8_G7(p_cnProcBuf, p_bnProcBuf, MsgIdx, lane, idxBn, circShift, Zc); 
+        <span class="hljs-keyword">break</span>;
+    <span class="hljs-keyword">case</span> <span class="hljs-number">5</span>: cnProcKernel_BG1_int8_G8(p_cnProcBuf, p_bnProcBuf, MsgIdx, lane, idxBn, circShift, Zc); 
+        <span class="hljs-keyword">break</span>;
+    <span class="hljs-keyword">case</span> <span class="hljs-number">6</span>: cnProcKernel_BG1_int8_G9(p_cnProcBuf, p_bnProcBuf, MsgIdx, lane, idxBn, circShift, Zc); 
+        <span class="hljs-keyword">break</span>;
+    <span class="hljs-keyword">case</span> <span class="hljs-number">7</span>: cnProcKernel_BG1_int8_G10(p_cnProcBuf, p_bnProcBuf, MsgIdx, lane, idxBn, circShift, Zc); 
+        <span class="hljs-keyword">break</span>;
+    <span class="hljs-keyword">case</span> <span class="hljs-number">8</span>: cnProcKernel_BG1_int8_G19(p_cnProcBuf, p_bnProcBuf, MsgIdx, lane, idxBn, circShift, Zc); 
+        <span class="hljs-keyword">break</span>;
+  }
+}
+
+</div></code></pre>
+<p>Inside the device functions, we heavily utilize <code>SIMD4</code> operations and PTX intrinsics to perform the Min-Sum algorithm concurrently on 4 elements per thread. Taking the Degree-5 CN (<code>G5</code>) as an example:</p>
+<pre class="hljs"><code><div><span class="hljs-function">__device__ __forceinline__ <span class="hljs-keyword">void</span> <span class="hljs-title">cnProcKernel_BG1_int8_G5</span><span class="hljs-params">(<span class="hljs-keyword">const</span> <span class="hljs-keyword">int8_t</span> *__restrict__ p_cnProcBuf,
+                                                         <span class="hljs-keyword">int8_t</span> *__restrict__ p_bnProcBuf,
+                                                         <span class="hljs-keyword">uint32_t</span> row,
+                                                         <span class="hljs-keyword">uint32_t</span> lane,
+                                                         <span class="hljs-keyword">uint32_t</span> idxBn,
+                                                         <span class="hljs-keyword">uint32_t</span> circShift,
+                                                         <span class="hljs-keyword">uint32_t</span> Zc)</span>
+</span>{
+  <span class="hljs-keyword">uint32_t</span> ymm0, sgn, min;
+  <span class="hljs-keyword">const</span> <span class="hljs-keyword">uint32_t</span> ones = <span class="hljs-number">0x01010101</span>;
+
+  <span class="hljs-comment">// Load the first message (4 bytes/int8s at once)</span>
+  ymm0 = *(<span class="hljs-keyword">const</span> <span class="hljs-keyword">uint32_t</span> *)(p_cnProcBuf + lane * <span class="hljs-number">4</span> + c_lut_idxG5[row][<span class="hljs-number">0</span>] * <span class="hljs-number">4</span>);
+  sgn = __vxor4(ones, ymm0); <span class="hljs-comment">// Extract and track signs</span>
+  min = __vabs4(ymm0);       <span class="hljs-comment">// Initialize minimum magnitude</span>
+
+  <span class="hljs-comment">// --- Fully Unrolled Min-Sum Loop for remaining 4 edges ---</span>
+  ymm0 = *(<span class="hljs-keyword">const</span> <span class="hljs-keyword">uint32_t</span> *)(p_cnProcBuf + lane * <span class="hljs-number">4</span> + c_lut_idxG5[row][<span class="hljs-number">1</span>] * <span class="hljs-number">4</span>);
+  min = __vminu4(min, __vabs4(ymm0)); <span class="hljs-comment">// Update minimum</span>
+  sgn = __vxor4(sgn, ymm0);           <span class="hljs-comment">// Accumulate sign parity</span>
+  
+  ymm0 = *(<span class="hljs-keyword">const</span> <span class="hljs-keyword">uint32_t</span> *)(p_cnProcBuf + lane * <span class="hljs-number">4</span> + c_lut_idxG5[row][<span class="hljs-number">2</span>] * <span class="hljs-number">4</span>);
+  min = __vminu4(min, __vabs4(ymm0));
+  sgn = __vxor4(sgn, ymm0);
+  
+  ymm0 = *(<span class="hljs-keyword">const</span> <span class="hljs-keyword">uint32_t</span> *)(p_cnProcBuf + lane * <span class="hljs-number">4</span> + c_lut_idxG5[row][<span class="hljs-number">3</span>] * <span class="hljs-number">4</span>);
+  min = __vminu4(min, __vabs4(ymm0));
+  sgn = __vxor4(sgn, ymm0);
+  <span class="hljs-comment">// ---------------------------------------------------------</span>
+  
+  <span class="hljs-comment">// Combine the accumulated sign with the minimum magnitude</span>
+  <span class="hljs-keyword">uint32_t</span> BricksToBeMoved = __vsign4(min, sgn);
+
+  <span class="hljs-comment">// Apply circular shift and write the generated message back to the BN buffer</span>
+  moveBricks_invput_circ((<span class="hljs-keyword">int8_t</span> *)&amp;p_bnProcBuf[idxBn], lane * <span class="hljs-number">4</span>, (<span class="hljs-keyword">uint8_t</span> *)&amp;BricksToBeMoved, Zc, circShift);
+}
+
+</div></code></pre>
+<h4 id="513-bnprockernel">5.1.3 bnProc_kernel</h4>
+<p>Similarly, the <code>bnProc</code> kernel is instantiated for each code rate:</p>
+<ul>
+<li><code>bnProcKernel_BG1_R13_int8_Edge</code></li>
+<li><code>bnProcKernel_BG1_R23_int8_Edge</code></li>
+<li><code>bnProcKernel_BG1_R89_int8_Edge</code></li>
+</ul>
+<pre class="hljs"><code><div><span class="hljs-function">__global__ <span class="hljs-keyword">void</span> <span class="hljs-title">bnProcKernel_BG1_R13_int8_Edge</span><span class="hljs-params">(<span class="hljs-keyword">const</span> <span class="hljs-keyword">int8_t</span> *__restrict__ d_bnProcBuf,
+                                               <span class="hljs-keyword">int8_t</span> *__restrict__ d_cnProcBuf,
+                                               <span class="hljs-keyword">int8_t</span> *__restrict__ d_llrProcBuf,
+                                               <span class="hljs-keyword">int8_t</span> *__restrict__ d_llrRes,
+                                               <span class="hljs-keyword">uint32_t</span> Zc,
+                                               <span class="hljs-keyword">uint32_t</span> ZcIdx)</span>
+</span>{
+  <span class="hljs-keyword">uint32_t</span> lane = threadIdx.x;
+  <span class="hljs-keyword">uint32_t</span> row = (blockIdx.x &lt;&lt; <span class="hljs-number">2</span>) + threadIdx.y;
+  <span class="hljs-keyword">uint32_t</span> segIdx = blockIdx.y;
+
+  <span class="hljs-keyword">if</span> (row &gt;= num_TotalBlocks_BG1_R13_Edge)
+    <span class="hljs-keyword">return</span>;
+
+  <span class="hljs-comment">// Retrieve routing logic and offsets via 1D Flat Index</span>
+  <span class="hljs-keyword">uint32_t</span> GrpIdx = lut_BnGrpIdx_BG1_R13_Edge[row];
+  <span class="hljs-keyword">uint32_t</span> MsgIdx = lut_BnMsgIdx_BG1_R13_Edge[row] - <span class="hljs-number">1</span>;
+  <span class="hljs-keyword">uint32_t</span> BnIdx = lut_BnIdx_BG1_R13_Edge[row];
+  <span class="hljs-keyword">uint32_t</span> BnToAddrIdx = lut_BnToAddrIdx_BG1_R13[GrpIdx - <span class="hljs-number">1</span>];
+  <span class="hljs-keyword">uint32_t</span> GrpNum = d_lut_numBnInBnGroups_BG1_R13[GrpIdx - <span class="hljs-number">1</span>];
+  <span class="hljs-keyword">uint32_t</span> circShift = bn_cn_map_BG1_Z_R13[row][ZcIdx];
+  <span class="hljs-keyword">const</span> <span class="hljs-keyword">uint32_t</span> baseBn = (BnIdx - <span class="hljs-number">1</span>) * NR_LDPC_ZMAX;
+
+  <span class="hljs-comment">// Calculate base pointers for the specific Variable Node group</span>
+  <span class="hljs-keyword">const</span> <span class="hljs-keyword">int8_t</span> *p_bnProcBuf_Grp = (<span class="hljs-keyword">const</span> <span class="hljs-keyword">int8_t</span> *)(d_bnProcBuf + baseBn + segIdx * NR_LDPC_SIZE_BN_PROC_BUF + d_lut_startAddrBnGroups_BG1_R13[BnToAddrIdx - <span class="hljs-number">1</span>]);
+  <span class="hljs-keyword">const</span> <span class="hljs-keyword">int8_t</span> *p_cnProcBuf_Grp = (<span class="hljs-keyword">const</span> <span class="hljs-keyword">int8_t</span> *)(d_cnProcBuf + segIdx * NR_LDPC_SIZE_CN_PROC_BUF + bn_cn_map_BG1_Z_R13[row][<span class="hljs-number">0</span>]);
+  <span class="hljs-keyword">const</span> <span class="hljs-keyword">int8_t</span> *p_llrProcBuf_Grp = (<span class="hljs-keyword">const</span> <span class="hljs-keyword">int8_t</span> *)(d_llrProcBuf + baseBn + segIdx * NR_LDPC_MAX_NUM_LLR + d_lut_startAddrBnGroupsLlr_BG1_R13[BnToAddrIdx - <span class="hljs-number">1</span>]);
+  <span class="hljs-keyword">const</span> <span class="hljs-keyword">int8_t</span> *p_llrRes_Grp = (<span class="hljs-keyword">const</span> <span class="hljs-keyword">int8_t</span> *)(d_llrRes + baseBn + segIdx * NR_LDPC_MAX_NUM_LLR + d_lut_startAddrBnGroupsLlr_BG1_R13[BnToAddrIdx - <span class="hljs-number">1</span>]);
+
+  bnProcKernel_BG1_int8_Gn_Edge(p_bnProcBuf_Grp, (<span class="hljs-keyword">int8_t</span> *)p_cnProcBuf_Grp, p_llrProcBuf_Grp, (<span class="hljs-keyword">int8_t</span> *)p_llrRes_Grp,
+                                lane, GrpIdx, MsgIdx, BnIdx, GrpNum, circShift, Zc);
+}
+
+</div></code></pre>
+<p>To prevent 8-bit integer overflow during Bit Node accumulation, the intrinsic values are unpacked and sign-extended to 16-bit integers (<code>vaddss2</code>), accumulated, and then saturated and repacked back to 8-bit.</p>
+<pre class="hljs"><code><div><span class="hljs-function">__device__ __forceinline__ <span class="hljs-keyword">void</span> <span class="hljs-title">bnProcKernel_BG1_int8_Gn_Edge</span><span class="hljs-params">(<span class="hljs-keyword">const</span> <span class="hljs-keyword">int8_t</span> *__restrict__ d_bnProcBuf,
+                                                              <span class="hljs-keyword">int8_t</span> *__restrict__ d_cnProcBuf,
+                                                              <span class="hljs-keyword">const</span> <span class="hljs-keyword">int8_t</span> *__restrict__ d_llrProcBuf,
+                                                              <span class="hljs-keyword">int8_t</span> *__restrict__ d_llrRes,
+                                                              <span class="hljs-keyword">uint32_t</span> lane, <span class="hljs-keyword">uint32_t</span> GrpIdx, <span class="hljs-keyword">uint32_t</span> MsgIdx,
+                                                              <span class="hljs-keyword">uint32_t</span> BnIdx, <span class="hljs-keyword">uint32_t</span> GrpNum, <span class="hljs-keyword">uint32_t</span> circShift, <span class="hljs-keyword">uint32_t</span> Zc)</span>
+</span>{
+  <span class="hljs-keyword">const</span> <span class="hljs-keyword">int32_t</span> *bnProcBufPtr = (<span class="hljs-keyword">const</span> <span class="hljs-keyword">int32_t</span> *)(d_bnProcBuf) + lane;
+  
+  <span class="hljs-comment">// Load intrinsic LLR (4x int8)</span>
+  <span class="hljs-keyword">uint32_t</span> packed_intrinsic = ((<span class="hljs-keyword">const</span> <span class="hljs-keyword">int32_t</span> *)(d_llrProcBuf))[lane];
+
+  <span class="hljs-comment">// Unpack to 16-bit to prevent overflow during accumulation</span>
+  <span class="hljs-keyword">uint32_t</span> MsgSumLo, MsgSumHi;
+  unpack_and_sign_extend(packed_intrinsic, &amp;MsgSumLo, &amp;MsgSumHi);
+
+  <span class="hljs-keyword">uint32_t</span> off = (GrpNum * NR_LDPC_ZMAX) &gt;&gt; <span class="hljs-number">2</span>;
+  <span class="hljs-keyword">const</span> <span class="hljs-keyword">int32_t</span> *currPtr = bnProcBufPtr;
+
+  <span class="hljs-keyword">int</span> i = <span class="hljs-number">0</span>;
+
+  <span class="hljs-comment">// --- 2-Way Unrolled Accumulation Loop ---</span>
+  <span class="hljs-keyword">for</span> (; i &lt; (<span class="hljs-keyword">int</span>)GrpIdx - <span class="hljs-number">1</span>; i += <span class="hljs-number">2</span>) {
+    <span class="hljs-keyword">uint32_t</span> val1 = *currPtr;
+    <span class="hljs-keyword">uint32_t</span> val2 = *(currPtr + off);
+
+    <span class="hljs-keyword">uint32_t</span> v1_lo, v1_hi;
+    unpack_and_sign_extend(val1, &amp;v1_lo, &amp;v1_hi);
+    MsgSumLo = __vaddss2(MsgSumLo, v1_lo); <span class="hljs-comment">// 16-bit SIMD addition</span>
+    MsgSumHi = __vaddss2(MsgSumHi, v1_hi);
+
+    <span class="hljs-keyword">uint32_t</span> v2_lo, v2_hi;
+    unpack_and_sign_extend(val2, &amp;v2_lo, &amp;v2_hi);
+    MsgSumLo = __vaddss2(MsgSumLo, v2_lo);
+    MsgSumHi = __vaddss2(MsgSumHi, v2_hi);
+
+    currPtr += (off &lt;&lt; <span class="hljs-number">1</span>);
+  }
+
+  <span class="hljs-comment">// Handle remaining element if GrpIdx is odd</span>
+  <span class="hljs-keyword">if</span> (i &lt; GrpIdx) {
+    <span class="hljs-keyword">uint32_t</span> val = *currPtr;
+    <span class="hljs-keyword">uint32_t</span> v_lo, v_hi;
+    unpack_and_sign_extend(val, &amp;v_lo, &amp;v_hi);
+    MsgSumLo = __vaddss2(MsgSumLo, v_lo);
+    MsgSumHi = __vaddss2(MsgSumHi, v_hi);
+  }
+
+  <span class="hljs-comment">// Saturate the 16-bit sums back into a packed 32-bit word (4x int8)</span>
+  <span class="hljs-keyword">uint32_t</span> saturated_llr = saturate_and_pack(MsgSumLo, MsgSumHi);
+
+  <span class="hljs-keyword">uint32_t</span> BricksToBeGet;
+  <span class="hljs-keyword">if</span> (GrpIdx == <span class="hljs-number">1</span>) {
+    BricksToBeGet = packed_intrinsic;
+  } <span class="hljs-keyword">else</span> {
+    <span class="hljs-comment">// Subtract the CN's own previous message to prevent belief drift</span>
+    <span class="hljs-keyword">uint32_t</span> prevIdxWords = (MsgIdx * GrpNum * NR_LDPC_ZMAX) &gt;&gt; <span class="hljs-number">2</span>;
+    <span class="hljs-keyword">uint32_t</span> prev = bnProcBufPtr[prevIdxWords];
+    BricksToBeGet = __vsubss4(saturated_llr, prev); <span class="hljs-comment">// SIMD4 saturated subtraction</span>
+  }
+
+  <span class="hljs-comment">// Apply circular shift and write to CN buffer</span>
+  moveBricks_forput_circ(d_cnProcBuf, lane * <span class="hljs-number">4</span>, (<span class="hljs-keyword">uint8_t</span> *)&amp;BricksToBeGet, Zc, circShift);
+}
+
+</div></code></pre>
+<p>During the final decoding iteration, an alternative <code>_last</code> kernel is invoked. Instead of subtracting the previous message and writing back to the <code>cnProcBuf</code>, it directly outputs the fully accumulated posterior LLRs (<code>saturated_llr</code>) into <code>d_llrRes</code> for hard decision extraction.</p>
+<h4 id="514-complexity-bottleneck-analysis">5.1.4 Complexity Bottleneck Analysis</h4>
+<p>While Edge-Based Parallelism maximizes concurrent thread execution, it achieves this at the severe cost of massive computational redundancy. By completely isolating each message computation into an independent thread to prevent memory write collisions and expensive synchonization cost across blocks, the hardware is forced to perform highly repetitive arithmetic operations.</p>
+<p>In the <code>bnProc</code> , the Bit Node(BN) must first accumulate all incoming messages from its connected Check Nodes (CNs), and subsequently subtract the specific target CN's previous message.</p>
+<p>Under the Edge-Based strategy, this logic leads to a severe performance bottleneck for high-degree nodes. For instance, consider BN30 in BG1 R13. This single node spawns 30 independent blocks to compute its 30 outgoing messages simultaneously. Because these blocks do not share intermediate accumulation results, <em>each</em> of the 30 blocks must independently perform the costly 30-message summation.</p>
+<p>Consequently, a process that mathematically requires only $30 + 30 = 60$ operations now executes $30 \times 30 = 900$ additions. The computational complexity for processing a node effectively explodes from $O(N)$ to $O(N^2)$, where $N$ represents the node degree.</p>
+<p><img src="file:///home/panq/OAI/openairinterface5g/openair1/PHY/CODING/nrLDPC_decoder/doc/nrLDPC/img/BN30_edge.svg" alt="BN30_analysis"></p>
+<p>As a result, Edge-Based Parallelism performs well for low-throughput scenarios (a small number of segments) due to its high GPU occupancy. However, it hits a compute-bound limit when scaling up to decode a large number of segments. These redundant arithmetic operations easily use up the GPU's ALU resources.</p>
+<p>This limitation imposes us to consider <strong>Node-Based Parallelism</strong>, which  resolves this redundancy and eases the hardware resource burden.</p>
+<h3 id="52-node-based-parallelism">5.2 Node-Based Parallelism</h3>
+<p>To fundamentally resolve the computational redundancy identified in the Edge-Based approach, we transition to a <strong>Node-Based Parallelism</strong> strategy. Instead of mapping one CUDA block to one edge (message), we map <strong>one block to one node</strong> (either a Check Node or a Bit Node).</p>
+<h4 id="521-node-based-parallelism-explained">5.2.1 Node-Based Parallelism Explained</h4>
+<p>The core philosophy of Node-Based parallelism is to calculate the shared intermediate result (the aggregate sum or global minimums) exactly <em>once</em> per node, cache it in local registers, and then reuse it to compute all outgoing messages.</p>
+<p><img src="file:///home/panq/OAI/openairinterface5g/openair1/PHY/CODING/nrLDPC_decoder/doc/nrLDPC/img/Node_based_explained.svg" alt="Node-Based_explained"></p>
+<p>As illustrated in the diagram above, consider a node with a degree of $N$:</p>
+<ul>
+<li><strong>Edge-Based (Redundant):</strong> Requires $N$ independent blocks. Each block computes the <code>Msg_Sum</code> from scratch ($N$ additions) and then performs 1 subtraction.
+<ul>
+<li>Total Operations: $N \times (N + 1) = N^2 + N \rightarrow \mathbf{O(N^2)}$</li>
+</ul>
+</li>
+<li><strong>Node-Based (Optimized):</strong> Uses exactly 1 block. The block computes the <code>Msg_Sum</code> once ($N$ additions) in Step 1. In Step 2, it loops through the $N$ edges, performing $N$ subtractions using the cached sum.
+<ul>
+<li>Total Operations: $N + N = 2N \rightarrow \mathbf{O(N)}$</li>
+</ul>
+</li>
+</ul>
+<p>This dramatic reduction in arithmetic complexity from quadratic to linear thoroughly unblocks the GPU ALU bottleneck, especially for high-degree nodes.</p>
+<h4 id="522-thread-organization">5.2.2 Thread Organization</h4>
+<p>The thread organization follows this updated 2D grid/block topology:</p>
+<ul>
+<li><strong>X-Dimension (Lifting Size &amp; Nodes):</strong> We continue to utilize 32-bit <code>simd4</code> vectorized loads/stores, meaning the block's X-dimension remains scaled to $Z_c / 4$ (<code>Z &gt;&gt; 2</code>). However, the Y-dimension of the block is now set to 4 to process <strong>4 nodes</strong> concurrently within a single block. Consequently, the grid's X-dimension represents the total number of Check Nodes or Bit Nodes divided by 4. Ceiling division (<code>+ 3</code>) is applied to handle cases where the total number of nodes is not a multiple of 4.</li>
+<li><strong>Y-Dimension (Segments):</strong> The grid's Y-dimension continues to map directly to the number of Transport Block segments (<code>n_segments</code>), decoding multiple code blocks in parallel.</li>
+</ul>
+<p>Because Check Nodes (CN) and Bit Nodes (BN) possess different totals depending on the Base Graph and code rate, their execution grids are launched separately. The precise kernel launch configurations for the supported code rates in BG1 are formulated as follows:</p>
+<pre class="hljs"><code><div><span class="hljs-comment">// Node-Based Block Configuration (Universal across all rates and node types)</span>
+<span class="hljs-comment">// X: Z/4 threads for simd4 access, Y: 4 nodes processed concurrently</span>
+<span class="hljs-function">dim3 <span class="hljs-title">Node_block</span><span class="hljs-params">(Z &gt;&gt; <span class="hljs-number">2</span>, <span class="hljs-number">4</span>, <span class="hljs-number">1</span>)</span></span>;
+
+</div></code></pre>
+<pre class="hljs"><code><div><span class="hljs-comment">// BG1 Rate 1/3 configurations</span>
+<span class="hljs-comment">//num_TotalBlocks_cn_BG1_R13_Node = 46</span>
+<span class="hljs-function">dim3 <span class="hljs-title">cn_R13_grid</span><span class="hljs-params">((num_TotalBlocks_cn_BG1_R13_Node + <span class="hljs-number">3</span>) &gt;&gt; <span class="hljs-number">2</span>, n_segments, <span class="hljs-number">1</span>)</span></span>;
+<span class="hljs-comment">//num_TotalBlocks_bn_BG1_R13_Node = 68</span>
+<span class="hljs-function">dim3 <span class="hljs-title">bn_R13_grid</span><span class="hljs-params">(num_TotalBlocks_bn_BG1_R13_Node &gt;&gt; <span class="hljs-number">2</span>, n_segments, <span class="hljs-number">1</span>)</span></span>; 
+
+</div></code></pre>
+<pre class="hljs"><code><div><span class="hljs-comment">// BG1 Rate 2/3 configurations</span>
+<span class="hljs-comment">//num_TotalBlocks_cn_BG1_R23_Node = 13</span>
+<span class="hljs-function">dim3 <span class="hljs-title">cn_R23_grid</span><span class="hljs-params">((num_TotalBlocks_cn_BG1_R23_Node + <span class="hljs-number">3</span>) &gt;&gt; <span class="hljs-number">2</span>, n_segments, <span class="hljs-number">1</span>)</span></span>;
+<span class="hljs-comment">//num_TotalBlocks_bn_BG1_R23_Node = 35</span>
+<span class="hljs-function">dim3 <span class="hljs-title">bn_R23_grid</span><span class="hljs-params">((num_TotalBlocks_bn_BG1_R23_Node + <span class="hljs-number">3</span>) &gt;&gt; <span class="hljs-number">2</span>, n_segments, <span class="hljs-number">1</span>)</span></span>; 
+
+</div></code></pre>
+<pre class="hljs"><code><div><span class="hljs-comment">// BG1 Rate 8/9 configurations</span>
+<span class="hljs-comment">//num_TotalBlocks_cn_BG1_R89_Node = 5</span>
+<span class="hljs-function">dim3 <span class="hljs-title">cn_R89_grid</span><span class="hljs-params">((num_TotalBlocks_cn_BG1_R89_Node + <span class="hljs-number">3</span>) &gt;&gt; <span class="hljs-number">2</span>, n_segments, <span class="hljs-number">1</span>)</span></span>;
+<span class="hljs-comment">//num_TotalBlocks_bn_BG1_R89_Node = 27</span>
+<span class="hljs-function">dim3 <span class="hljs-title">bn_R89_grid</span><span class="hljs-params">((num_TotalBlocks_bn_BG1_R89_Node + <span class="hljs-number">3</span>) &gt;&gt; <span class="hljs-number">2</span>, n_segments, <span class="hljs-number">1</span>)</span></span>; 
+
+</div></code></pre>
+<h4 id="523-cnprockernel">5.2.3 cnProc_kernel</h4>
+<p>For the Check Node processing in Node-Based mode, we implemented specific kernels for each code rate:</p>
+<ul>
+<li><code>cnProcKernel_BG1_R13_int8_Node</code></li>
+<li><code>cnProcKernel_BG1_R23_int8_Node</code></li>
+<li><code>cnProcKernel_BG1_R89_int8_Node</code></li>
+</ul>
+<p>Unlike the edge-based dispatcher, the global index <code>row</code> now points to a unique <strong>Check Node</strong> rather than a message.</p>
+<pre class="hljs"><code><div><span class="hljs-function">__global__ <span class="hljs-keyword">void</span> <span class="hljs-title">cnProcKernel_BG1_R13_int8_Node</span><span class="hljs-params">(<span class="hljs-keyword">const</span> <span class="hljs-keyword">int8_t</span> *__restrict__ d_cnBufAll,
+                                               <span class="hljs-keyword">int8_t</span> *__restrict__ d_bnBufAll,
+                                               <span class="hljs-keyword">uint32_t</span> Zc,
+                                               <span class="hljs-keyword">uint32_t</span> ZcIdx)</span>
+</span>{
+  <span class="hljs-keyword">uint32_t</span> lane = threadIdx.x;
+  <span class="hljs-keyword">uint32_t</span> row = (blockIdx.x &lt;&lt; <span class="hljs-number">2</span>) + threadIdx.y;
+  <span class="hljs-keyword">uint32_t</span> segIdx = blockIdx.y;
+
+  <span class="hljs-keyword">if</span> (row &gt;= num_TotalBlocks_cn_BG1_R13_Node)
+    <span class="hljs-keyword">return</span>;
+
+  <span class="hljs-comment">// 1D Indexing resolves the specific Check Node and its parameters</span>
+  <span class="hljs-keyword">uint32_t</span> CnGrpIdx = lut_CnGrpIdx_BG1_R13_Node[row] - <span class="hljs-number">1</span>;
+  <span class="hljs-keyword">uint32_t</span> CnIdx = lut_CnIdx_BG1_R13_Node[row] - <span class="hljs-number">1</span>;
+  <span class="hljs-keyword">uint32_t</span> InnerOffset = d_lut_startAddrCnGroups_BG1[CnGrpIdx] + NR_LDPC_ZMAX * CnIdx;
+  <span class="hljs-keyword">uint32_t</span> Cn2MsgStartIdx = lut_CnStartMsgIdx_BG1_R13_Node[row];
+  <span class="hljs-keyword">uint32_t</span> CnGrpIdxNum = d_lut_numBnInCnGroups_BG1_R13[CnGrpIdx];
+  <span class="hljs-keyword">uint32_t</span> CnNumInGrp = d_lut_numCnInCnGroups_BG1_R13[CnGrpIdx]; 
+
+  <span class="hljs-keyword">const</span> <span class="hljs-keyword">int8_t</span> *p_cnProcBuf = (<span class="hljs-keyword">const</span> <span class="hljs-keyword">int8_t</span> *)(d_cnBufAll + segIdx * NR_LDPC_SIZE_CN_PROC_BUF + InnerOffset);
+  <span class="hljs-keyword">int8_t</span> *p_bnProcBuf = (<span class="hljs-keyword">int8_t</span> *)(d_bnBufAll + segIdx * NR_LDPC_SIZE_BN_PROC_BUF);
+
+  <span class="hljs-comment">// Call the consolidated Node-Based device function</span>
+  cnProcKernel_BG1_int8_Gn_R13_node(p_cnProcBuf, p_bnProcBuf, lane, CnIdx, CnNumInGrp, CnGrpIdxNum, Cn2MsgStartIdx, Zc, ZcIdx);
+}
+
+</div></code></pre>
+<p>The device function executes a classic 2-pass Min-Sum algorithm to achieve $O(N)$ efficiency.</p>
+<ul>
+<li><strong>Pass 1:</strong> Find the absolute minimum (<code>min1</code>), the second minimum (<code>min2</code>), and the cumulative XOR sign (<code>total_xor</code>) of all connected edges.</li>
+<li><strong>Pass 2:</strong> Generate the outgoing messages by applying the appropriate minimum value and sign, then write them back sequentially.</li>
+</ul>
+<pre class="hljs"><code><div><span class="hljs-function">__device__ __forceinline__ <span class="hljs-keyword">void</span> <span class="hljs-title">cnProcKernel_BG1_int8_Gn_R13_node</span><span class="hljs-params">(<span class="hljs-comment">/* ... parameters ... */</span>)</span>
+</span>{
+  <span class="hljs-keyword">uint32_t</span> min1 = <span class="hljs-number">0x7F7F7F7F</span>;
+  <span class="hljs-keyword">uint32_t</span> min2 = <span class="hljs-number">0x7F7F7F7F</span>;
+  <span class="hljs-keyword">uint32_t</span> total_xor = <span class="hljs-number">0</span>;
+
+  <span class="hljs-comment">// Local thread registers to cache values, avoiding redundant global memory access</span>
+  <span class="hljs-keyword">uint32_t</span> cache_raw[<span class="hljs-number">19</span>];
+  <span class="hljs-keyword">uint32_t</span> cache_abs[<span class="hljs-number">19</span>];
+
+  <span class="hljs-keyword">const</span> <span class="hljs-keyword">int32_t</span> *cnProcBufPtr = (<span class="hljs-keyword">const</span> <span class="hljs-keyword">int32_t</span> *)(d_cnProcBuf) + lane;
+  <span class="hljs-keyword">const</span> <span class="hljs-keyword">int32_t</span> *currPtr = cnProcBufPtr;
+  <span class="hljs-keyword">uint32_t</span> offset = (CnNumInGrp * NR_LDPC_ZMAX) &gt;&gt; <span class="hljs-number">2</span>;
+
+  <span class="hljs-comment">// --- Pass 1: Global Extrema and Sign Accumulation ---</span>
+  <span class="hljs-meta">#<span class="hljs-meta-keyword">pragma</span> unroll</span>
+  <span class="hljs-keyword">for</span> (<span class="hljs-keyword">int</span> MsgIdx = <span class="hljs-number">0</span>; MsgIdx &lt; CnGrpIdxNum; MsgIdx++) {
+    <span class="hljs-keyword">uint32_t</span> val = *currPtr;
+
+    cache_raw[MsgIdx] = val;
+    <span class="hljs-keyword">uint32_t</span> v_abs = __vabs4(val);
+    cache_abs[MsgIdx] = v_abs;
+
+    total_xor = __vxor4(total_xor, val);
+
+    <span class="hljs-keyword">uint32_t</span> old_min1 = min1;
+    min1 = __vminu4(old_min1, v_abs);
+    <span class="hljs-keyword">uint32_t</span> candidate = __vmaxu4(old_min1, v_abs);
+    min2 = __vminu4(min2, candidate);
+    
+    currPtr += offset;
+  }
+
+  <span class="hljs-comment">// --- Pass 2: Message Generation and Write-Back ---</span>
+  <span class="hljs-meta">#<span class="hljs-meta-keyword">pragma</span> unroll</span>
+  <span class="hljs-keyword">for</span> (<span class="hljs-keyword">int</span> temp_MsgIdx = <span class="hljs-number">0</span>; temp_MsgIdx &lt; CnGrpIdxNum; temp_MsgIdx++) {
+    <span class="hljs-keyword">uint32_t</span> target_sign = __vxor4(total_xor, cache_raw[temp_MsgIdx]);
+    <span class="hljs-keyword">uint32_t</span> my_abs = cache_abs[temp_MsgIdx];
+
+    <span class="hljs-comment">// Branchless selection: If this edge was min1, use min2; otherwise use min1</span>
+    <span class="hljs-keyword">uint32_t</span> is_min_mask = __vcmpeq4(my_abs, min1);
+    <span class="hljs-keyword">uint32_t</span> final_mag = (min2 &amp; is_min_mask) | (min1 &amp; ~is_min_mask);
+
+    <span class="hljs-keyword">uint32_t</span> BricksToBeMoved = __vsign4(final_mag, target_sign);
+
+    <span class="hljs-keyword">uint32_t</span> MsgIdx = Cn2MsgStartIdx + temp_MsgIdx;
+    <span class="hljs-keyword">uint32_t</span> circShift = cn_bn_map_BG1_Z_R13[MsgIdx][ZcIdx];
+    <span class="hljs-keyword">int8_t</span> *p_bnProcBuf = (<span class="hljs-keyword">int8_t</span> *)(d_bnProcBuf + cn_bn_map_BG1_Z_R13[MsgIdx][<span class="hljs-number">0</span>]);
+
+    moveBricks_invput_circ(p_bnProcBuf, lane * <span class="hljs-number">4</span>, (<span class="hljs-keyword">uint8_t</span> *)&amp;BricksToBeMoved, Zc, circShift);
+  }
+}
+
+</div></code></pre>
+<h4 id="524-bnprockernel">5.2.4 bnProc_kernel</h4>
+<p>The Variable Node update (<code>bnProc</code>) mirrors this $O(N)$ logic. We define specific node-based kernels for each code rate:</p>
+<ul>
+<li><code>bnProcKernel_BG1_R13_int8_Node</code></li>
+<li><code>bnProcKernel_BG1_R23_int8_Node</code></li>
+<li><code>bnProcKernel_BG1_R89_int8_Node</code></li>
+</ul>
+<p><em>(Note: The global dispatcher <code>bnProcKernel_BG1_R13_int8_Node</code> follows the exact same 1D node-indexing structure as the <code>cnProc</code> equivalent.)</em></p>
+<p>In the device function, the 2-pass strategy is implemented as:</p>
+<ul>
+<li><strong>Pass 1:</strong> Accumulate all incoming edge messages and the intrinsic LLR into a single global sum (<code>MsgSumLo</code> / <code>MsgSumHi</code>).</li>
+<li><strong>Pass 2:</strong> Iterate through the edges, subtract that specific edge's previous message from the global sum (<code>__vsubss4</code>), and scatter the updated messages back.</li>
+</ul>
+<pre class="hljs"><code><div><span class="hljs-function">__device__ __forceinline__ <span class="hljs-keyword">void</span> <span class="hljs-title">bnProcKernel_BG1_int8_Gn_Node_R13</span><span class="hljs-params">(<span class="hljs-comment">/* ... parameters ... */</span>)</span>
+</span>{
+  <span class="hljs-keyword">const</span> <span class="hljs-keyword">int32_t</span> *bnProcBufPtr = (<span class="hljs-keyword">const</span> <span class="hljs-keyword">int32_t</span> *)(d_bnProcBuf) + lane;
+  <span class="hljs-keyword">uint32_t</span> packed_intrinsic = ((<span class="hljs-keyword">const</span> <span class="hljs-keyword">int32_t</span> *)(d_llrProcBuf))[lane];
+
+  <span class="hljs-keyword">uint32_t</span> MsgSumLo, MsgSumHi;
+  unpack_and_sign_extend(packed_intrinsic, &amp;MsgSumLo, &amp;MsgSumHi);
+
+  <span class="hljs-keyword">uint32_t</span> off = (GrpNum * NR_LDPC_ZMAX) &gt;&gt; <span class="hljs-number">2</span>;
+  <span class="hljs-keyword">const</span> <span class="hljs-keyword">int32_t</span> *currPtr = bnProcBufPtr;
+  <span class="hljs-keyword">int</span> i = <span class="hljs-number">0</span>;
+
+  <span class="hljs-comment">// --- Pass 1: 2-Way Unrolled Global Accumulation ---</span>
+  <span class="hljs-keyword">for</span> (; i &lt; (<span class="hljs-keyword">int</span>)BnGrpIdx - <span class="hljs-number">1</span>; i += <span class="hljs-number">2</span>) {
+    <span class="hljs-keyword">uint32_t</span> val1 = *currPtr;
+    <span class="hljs-keyword">uint32_t</span> val2 = *(currPtr + off);
+
+    <span class="hljs-keyword">uint32_t</span> v1_lo, v1_hi;
+    unpack_and_sign_extend(val1, &amp;v1_lo, &amp;v1_hi);
+    MsgSumLo = __vaddss2(MsgSumLo, v1_lo);
+    MsgSumHi = __vaddss2(MsgSumHi, v1_hi);
+
+    <span class="hljs-keyword">uint32_t</span> v2_lo, v2_hi;
+    unpack_and_sign_extend(val2, &amp;v2_lo, &amp;v2_hi);
+    MsgSumLo = __vaddss2(MsgSumLo, v2_lo);
+    MsgSumHi = __vaddss2(MsgSumHi, v2_hi);
+
+    currPtr += (off &lt;&lt; <span class="hljs-number">1</span>);
+  }
+
+  <span class="hljs-keyword">if</span> (i &lt; BnGrpIdx) {
+    <span class="hljs-keyword">uint32_t</span> val = *currPtr;
+    <span class="hljs-keyword">uint32_t</span> v_lo, v_hi;
+    unpack_and_sign_extend(val, &amp;v_lo, &amp;v_hi);
+    MsgSumLo = __vaddss2(MsgSumLo, v_lo);
+    MsgSumHi = __vaddss2(MsgSumHi, v_hi);
+  }
+
+  <span class="hljs-comment">// Pack the total sum back into 8-bit integers</span>
+  <span class="hljs-keyword">uint32_t</span> saturated_llr = saturate_and_pack(MsgSumLo, MsgSumHi);
+  <span class="hljs-keyword">uint32_t</span> BricksToBeGet;
+
+  <span class="hljs-comment">// --- Pass 2: Subtraction and Scatter Write-Back ---</span>
+  <span class="hljs-keyword">if</span> (BnGrpIdx == <span class="hljs-number">1</span>) {
+    <span class="hljs-comment">// Degree-1 optimization: No subtraction needed</span>
+    BricksToBeGet = packed_intrinsic;
+    <span class="hljs-keyword">uint32_t</span> MsgIdx = Bn2MsgStartIdx;
+    <span class="hljs-keyword">uint32_t</span> circShift = bn_cn_map_BG1_Z_R13[MsgIdx][ZcIdx];
+    <span class="hljs-keyword">int8_t</span> *p_cnProcBuf = (<span class="hljs-keyword">int8_t</span> *)(d_cnProcBuf + bn_cn_map_BG1_Z_R13[MsgIdx][<span class="hljs-number">0</span>]);
+
+    moveBricks_forput_circ(p_cnProcBuf, lane * <span class="hljs-number">4</span>, (<span class="hljs-keyword">uint8_t</span> *)&amp;BricksToBeGet, Zc, circShift);
+  } <span class="hljs-keyword">else</span> {
+    <span class="hljs-keyword">for</span> (<span class="hljs-keyword">int</span> temp_MsgIdx = <span class="hljs-number">0</span>; temp_MsgIdx &lt; BnGrpIdx; temp_MsgIdx++) {
+      <span class="hljs-keyword">uint32_t</span> prevIdxWords = (temp_MsgIdx * GrpNum * NR_LDPC_ZMAX) &gt;&gt; <span class="hljs-number">2</span>;
+      <span class="hljs-keyword">uint32_t</span> prev = bnProcBufPtr[prevIdxWords];
+      
+      <span class="hljs-comment">// Crucial Step: Subtract the specific edge's previous message</span>
+      BricksToBeGet = __vsubss4(saturated_llr, prev); 
+      
+      <span class="hljs-keyword">uint32_t</span> MsgIdx = Bn2MsgStartIdx + temp_MsgIdx;
+      <span class="hljs-keyword">uint32_t</span> circShift = bn_cn_map_BG1_Z_R13[MsgIdx][ZcIdx];
+      <span class="hljs-keyword">int8_t</span> *p_cnProcBuf = (<span class="hljs-keyword">int8_t</span> *)(d_cnProcBuf + bn_cn_map_BG1_Z_R13[MsgIdx][<span class="hljs-number">0</span>]);
+
+      moveBricks_forput_circ(p_cnProcBuf, lane * <span class="hljs-number">4</span>, (<span class="hljs-keyword">uint8_t</span> *)&amp;BricksToBeGet, Zc, circShift);
+    }
+  }
+}
+
+</div></code></pre>
+<h3 id="53-hybrid-approach--switching-policy">5.3 Hybrid Approach &amp; Switching Policy</h3>
+<h4 id="531-resource-vs-speed-trade-off">5.3.1 Resource vs. Speed Trade-off</h4>
+<p>The Edge-based approach computes all messages simultaneously, providing optimal latency (e.g., ~50µs) for single-segment workloads. However, its heavy resource consumption quickly saturates GPU Streaming Multiprocessors (SMs) when processing large batches. Conversely, the Node-based approach maps computations to graph nodes rather than edges, shrinking the resource footprint by a factor of the node degree ($N$). This footprint reduction prevents SM contention and delivers superior throughput for larger workloads.</p>
+<h4 id="532-dynamic-switching-policy">5.3.2 Dynamic Switching Policy</h4>
+<p>To balance latency and throughput, the decoder dynamically switches between Edge-based and Node-based kernels at runtime. This switching policy is determined by the number of code block segments (<code>n_segments</code>) being processed.</p>
+<p>For small batch sizes (e.g., <code>n_segments = 1</code>), the scheduler executes Edge-based kernels to minimize single-segment latency. For larger batch sizes (e.g., <code>n_segments = 128</code>), the scheduler switches to Node-based kernels to maintain overall throughput and optimize SM occupancy.</p>
+<p>The following code snippets illustrate this runtime switching mechanism. Empirical threshold parameters, such as <code>NodeEdge_Switch_Cn_R13</code>, are defined to trigger the transition:</p>
+<pre class="hljs"><code><div><span class="hljs-function"><span class="hljs-keyword">void</span> <span class="hljs-title">nrLDPC_cnProc_BG1_R13_cuda_stream_core</span><span class="hljs-params">(<span class="hljs-keyword">int8_t</span> *cnProcBuf,
+                                            <span class="hljs-keyword">int8_t</span> *bnProcBuf,
+                                            <span class="hljs-keyword">uint32_t</span> n_segments,
+                                            <span class="hljs-keyword">uint32_t</span> Z,
+                                            <span class="hljs-keyword">uint32_t</span> ZcIdx,
+                                            cudaStream_t *streams,
+                                            <span class="hljs-keyword">int8_t</span> CudaStreamIdx)</span>
+</span>{
+  <span class="hljs-keyword">if</span> (n_segments &gt; NodeEdge_Switch_Cn_R13) {
+    cnProcKernel_BG1_R13_int8_Node&lt;&lt;&lt;Kdim_cn_R13_Node[CudaStreamIdx].grid,
+                                     Kdim_cn_R13_Node[CudaStreamIdx].block,
+                                     <span class="hljs-number">0</span>,
+                                     streams[CudaStreamIdx]&gt;&gt;&gt;(cnProcBuf, bnProcBuf, Z, ZcIdx);
+  } <span class="hljs-keyword">else</span> {
+    cnProcKernel_BG1_R13_int8_Edge&lt;&lt;&lt;Kdim_R13_Edge[CudaStreamIdx].grid,
+                                     Kdim_R13_Edge[CudaStreamIdx].block,
+                                     <span class="hljs-number">0</span>,
+                                     streams[CudaStreamIdx]&gt;&gt;&gt;(cnProcBuf, bnProcBuf, Z, ZcIdx);
+  }
+
+  CHECK(cudaGetLastError());
+}
+
+<span class="hljs-function"><span class="hljs-keyword">void</span> <span class="hljs-title">nrLDPC_bnProc_BG1_R13_cuda_stream_core</span><span class="hljs-params">(<span class="hljs-keyword">int8_t</span> *bnProcBuf,
+                                            <span class="hljs-keyword">int8_t</span> *cnProcBuf,
+                                            <span class="hljs-keyword">int8_t</span> *llrProcBuf,
+                                            <span class="hljs-keyword">int8_t</span> *llrRes,
+                                            <span class="hljs-keyword">uint32_t</span> n_segments,
+                                            <span class="hljs-keyword">uint32_t</span> Z,
+                                            <span class="hljs-keyword">uint32_t</span> ZcIdx,
+                                            cudaStream_t *streams,
+                                            <span class="hljs-keyword">int8_t</span> CudaStreamIdx)</span>
+</span>{
+  <span class="hljs-keyword">if</span> (n_segments &gt; NodeEdge_Switch_Bn_R13) {
+    bnProcKernel_BG1_R13_int8_Node&lt;&lt;&lt;Kdim_bn_R13_Node[CudaStreamIdx].grid,
+                                     Kdim_bn_R13_Node[CudaStreamIdx].block,
+                                     <span class="hljs-number">0</span>,
+                                     streams[CudaStreamIdx]&gt;&gt;&gt;(bnProcBuf, cnProcBuf, llrProcBuf, llrRes, Z, ZcIdx);
+  } <span class="hljs-keyword">else</span> {
+    bnProcKernel_BG1_R13_int8_Edge&lt;&lt;&lt;Kdim_R13_Edge[CudaStreamIdx].grid,
+                                     Kdim_R13_Edge[CudaStreamIdx].block,
+                                     <span class="hljs-number">0</span>,
+                                     streams[CudaStreamIdx]&gt;&gt;&gt;(bnProcBuf, cnProcBuf, llrProcBuf, llrRes, Z, ZcIdx);
+  }
+  
+  CHECK(cudaGetLastError());
+}
+
+</div></code></pre>
+<p>It should be noted that the empirical switching thresholds obtained so far (e.g., NodeEdge_Switch_Cn_R13) were derived from actual performance testing on the NVIDIA GH200. For different hardware platforms, these optimal thresholds are expected to vary depending on the available computational resources. A practical heuristic is to scale these thresholds proportionally based on the target hardware's compute resources relative to the GH200 (such as the number of Streaming Multiprocessors). Future work will explore a more precise, analytical method for determining these thresholds across diverse architectures.</p>
+<h2 id="6-system-integration-and-performance-evaluation">6. System Integration and Performance Evaluation</h2>
+<h4 id="61-pipeline-scheduling--execution-flow">6.1 Pipeline Scheduling &amp; Execution Flow</h4>
+<p>Beyond the arithmetic optimizations at the kernel level, the overall decoder latency is heavily influenced by CPU-side driver overhead, specifically the cost of launching hundreds of iterative CUDA kernels per Transport Block. To mitigate this, the decoder integrates a dynamic pipeline scheduling architecture centered around <strong>CUDA Graphs</strong>.</p>
+<p>The execution lifecycle of a batch of incoming code blocks (<code>ldpc_decoder_cuda.c</code>) is governed by the following pipeline stages:</p>
+<p><strong>1. Driver Initialization and Warm-up</strong>
+To prevent unpredictable latency spikes during the arrival of the first network packets (often caused by lazy loading or JIT compilation within the NVIDIA driver), the system performs a preemptive driver warm-up (<code>init_decoder_warmup</code>). During init, the decoder allocates dummy buffers and pre-records CUDA graphs for common 5G NR configurations (e.g., Lifting Sizes $Z \in {320, 352, 384}$ and Base Graph 1, Rates 1/3 and 2/3). Executing these dummy graphs forces the GPU driver to fully initialize its execution context before real network traffic arrives.</p>
+<p><strong>2. Dynamic Graph Caching and Execution</strong>
+The core scheduling logic (<code>nrLDPC_decoder_core_dynamic</code>) bypasses standard stream-based kernel launches by utilizing a state-aware graph cache (<code>gpu_graph_cache</code>). When a decoding request arrives, the scheduler inspects the decoding parameters (e.g., $Z$, Code Rate, <code>n_segments</code>, maximum iterations) and routes the execution through one of three paths:</p>
+<ul>
+<li><strong>Cache Hit (Fast Path):</strong> If an existing graph matches the current configuration, the CPU overhead is minimized to an $O(1)$ cache lookup. The system updates the input/output buffer pointers via a memory bridge (<code>ldpc_cuda_bridge_t</code>) and directly launches the pre-recorded graph (<code>nrLDPC_decoder_cuda_GraphExecute</code>).</li>
+<li><strong>Cache Miss (Graph Record):</strong> If no matching graph exists and the cache is not full, the system records a new CUDA Graph (<code>nrLDPC_decoder_cuda_GraphRecord</code>). This operation captures the exact sequence of kernels—including the Edge/Node hybrid switching policy defined in Section 5.3—into a single executable topology. Once recorded, the graph is cached and executed.</li>
+<li><strong>Normal Execution (Fallback):</strong> In scenarios where graph operations fail, the cache capacity is exhausted, or the runtime environment actively breaks the graph logic (circuit breaker triggered), the scheduler safely falls back to standard, sequential CUDA kernel launches (<code>nrLDPC_decoder_cuda_NormalExecute</code>).</li>
+</ul>
+<p><strong>3. Memory Management</strong></p>
+<p>In a fully GPU-accelerated L1 pipeline, the input LLRs from the preceding rate-matching module typically already reside in the GPU device memory. The decoder accepts these device pointers directly, avoiding PCIe transfer overhead.</p>
+<p>To maintain API compatibility for partial-offload testing scenarios where inputs might originate from the host, the pipeline checks the memory space of the incoming pointer (<code>if (p_llr != p_llr_dev)</code>). It performs an asynchronous PCIe copy (<code>cudaMemcpyAsync</code>) only if a host pointer is detected. Additionally, for integrated architectures like the NVIDIA GH200, the implementation supports zero-copy memory access, mapping pageable or integrated host pointers directly without explicit data migration.</p>
+<h3 id="62-throughput-analysis">6.2 Throughput Analysis</h3>
+<h4 id="621-error-correction-performance-bler-validation">6.2.1 Error Correction Performance (BLER Validation)</h4>
+<p>To guarantee that the architectural transformations—including 8-bit saturation, SIMD4 vectorization, and Node-Based graph restructuring—do not compromise the mathematical integrity of the decoder, we benchmarked the Block Error Rate (BLER) against the standard OAI CPU baseline.</p>
+<p>As illustrated in the BLER vs. SNR curves, the CUDA GPU implementation is strictly bit-exact with the CPU baseline. Across all tested code rates (BG1 Rate 1/3, Rate 2/3, and Rate 8/9) under an AWGN channel, the GPU decoding trajectories perfectly overlap with the CPU reference trajectories. This confirms that the aggressive hardware acceleration strategies introduce zero degradation to the error correction capability.
+<img src="file:///home/panq/OAI/openairinterface5g/openair1/PHY/CODING/nrLDPC_decoder/doc/nrLDPC/img/bler_performance_cpu_vs_gpu.svg" alt="CPU_GPU_BLER">
+<em>(Tested with 5 iterations)</em></p>
+<h4 id="622-latency-vs-throughput-scalability">6.2.2 Latency vs. Throughput Scalability</h4>
+<p>Having validated the decoding accuracy, we evaluated the hardware acceleration performance natively on the NVIDIA GH200 architecture. The primary performance metrics are single-segment processing latency and overall decoding throughput, measured across varying workloads (number of code block segments, <code>n_segments</code>).</p>
+<p>The measurements demonstrate the seamless scalability enabled by the Dynamic Hybrid Switching policy introduced in Section 5.3. By tuning the <code>NodeEdge_Switch</code> thresholds specifically for the GH200's Streaming Multiprocessor (SM) capacity, the scheduler provides a remarkably smooth transition across different operational regimes.</p>
+<p><strong>Low-Latency Regime (Edge-Based Domination)</strong>
+For ultra-small batch sizes (e.g., <code>n_segments = 1</code> to <code>4</code>), the scheduler prioritizes the Edge-Based kernels. In this regime, the massive concurrent thread deployment minimizes the absolute decoding time. The implementation achieves an exceptional single-segment decoding latency ranging from <strong>~50 µs to 61 µs</strong> (measured at 5 iterations). This strictly satisfies the stringent processing time budgets required for 5G URLLC (Ultra-Reliable Low-Latency Communication) scenarios.</p>
+<p><strong>High-Throughput Regime (Node-Based Domination)</strong>
+As the workload scales up to simulate heavily loaded eMBB (Enhanced Mobile Broadband) base stations, the scheduler seamlessly transitions to the Node-Based kernels. This transition effectively prevents SM saturation by reducing the algorithmic complexity from $O(N^2)$ to $O(N)$.</p>
+<p>Because the switching thresholds are optimally aligned with the hardware's capabilities, the throughput curve exhibits a smooth, near-linear ascent before plateauing at the hardware limit. Under maximum parallel segment loading (<code>n_segments = 128</code>), the GPU decoder achieves peak sustained throughputs of <strong>~3.5 Gbps</strong> for Rate 1/3, <strong>~5.5 Gbps</strong> for Rate 2/3, and an impressive <strong>&gt;8.0 Gbps</strong> under Rate 8/9.</p>
+<p>The table below summarizes the accurately measured throughput and latency metrics across critical segment batch sizes on the GH200:</p>
+<details>
+<summary><b>Click to expand: Raw Performance Metrics (GH200)</b></summary>
+</details><table>
+<thead>
+<tr>
+<th><code>n_segments</code></th>
+<th>R13 Latency (µs)</th>
+<th>R13 Tput (Gbps)</th>
+<th>R23 Latency (µs)</th>
+<th>R23 Tput (Gbps)</th>
+<th>R89 Latency (µs)</th>
+<th>R89 Tput (Gbps)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>1</strong></td>
+<td>61.66</td>
+<td>0.137</td>
+<td>54.04</td>
+<td>0.156</td>
+<td>49.79</td>
+<td>0.170</td>
+</tr>
+<tr>
+<td><strong>2</strong></td>
+<td>69.98</td>
+<td>0.241</td>
+<td>54.62</td>
+<td>0.309</td>
+<td>51.45</td>
+<td>0.328</td>
+</tr>
+<tr>
+<td><strong>4</strong></td>
+<td>78.24</td>
+<td>0.432</td>
+<td>58.65</td>
+<td>0.576</td>
+<td>55.17</td>
+<td>0.612</td>
+</tr>
+<tr>
+<td><strong>8</strong></td>
+<td>91.52</td>
+<td>0.738</td>
+<td>68.89</td>
+<td>0.981</td>
+<td>56.89</td>
+<td>1.188</td>
+</tr>
+<tr>
+<td><strong>16</strong></td>
+<td>116.76</td>
+<td>1.157</td>
+<td>81.95</td>
+<td>1.649</td>
+<td>72.64</td>
+<td>1.861</td>
+</tr>
+<tr>
+<td><strong>32</strong></td>
+<td>157.88</td>
+<td>1.712</td>
+<td>105.75</td>
+<td>2.556</td>
+<td>81.60</td>
+<td>3.313</td>
+</tr>
+<tr>
+<td><strong>64</strong></td>
+<td>197.88</td>
+<td>2.732</td>
+<td>124.73</td>
+<td>4.335</td>
+<td>106.36</td>
+<td>5.083</td>
+</tr>
+<tr>
+<td><strong>128</strong></td>
+<td>303.47</td>
+<td>3.563</td>
+<td>195.77</td>
+<td>5.523</td>
+<td>134.42</td>
+<td>8.044</td>
+</tr>
+</tbody>
+</table>
+<p><em>(Note: Throughput calculations are based on $K=8448$ information bits per segment. Values are measured at 5 decoding iterations.)</em></p>
+
+<hr>
+<p><img src="file:///home/panq/OAI/openairinterface5g/openair1/PHY/CODING/nrLDPC_decoder/doc/nrLDPC/img/latency_vs_segments.svg" alt="latency">
+<img src="file:///home/panq/OAI/openairinterface5g/openair1/PHY/CODING/nrLDPC_decoder/doc/nrLDPC/img/throughput_vs_segments.svg" alt="throughput"></p>
+
+</body>
+</html>
