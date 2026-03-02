@@ -232,6 +232,7 @@ void fill_pdcch_vrb_map(gNB_MAC_INST *mac,
                         int first_cce,
                         int aggregation,
                         int beam);
+bool update_rb_mcs_tbs(NR_sched_pdsch_t *pdsch, uint32_t num_total_bytes, uint16_t *vrb_map);
 
 void fill_dci_pdu_rel15(const NR_UE_ServingCell_Info_t *servingCellInfo,
                         const NR_UE_DL_BWP_t *current_DL_BWP,
