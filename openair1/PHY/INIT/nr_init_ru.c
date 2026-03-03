@@ -8,35 +8,26 @@
 #include "openair1/PHY/defs_RU.h"
 #include "openair1/PHY/defs_nr_common.h"
 #include "openair1/PHY/defs_gNB.h"
-
-#define DEVELOP_CIR
-
-#ifdef DEVELOP_CIR
 #include "SIMULATION/TOOLS/sim.h"
-static char cir_conf_file[] = "../../../cir_conf.txt";
-static const char cir_file_template[] = "../../../cir/output/binary/delayamplist";
-static const char delayindexlist_template[] = "../../../cir/output/binary/delayindexlist";
-#endif
 
-#ifdef DEVELOP_CIR
-void init_cir_variables(void *param)
+static void init_cir_variables(void* param)
 {
-  RU_t *ru = (RU_t *)param;
-  FILE *fptr;
-  cf_t path_loss_dB = (cf_t){0.0, 0.0};
-  float amp_gain_dB = 0.0;
-  cf_t noise_power_dB = (cf_t){0.0, 0.0};
+  RU_t* ru = (RU_t*)param;
+  int nb_tx = ru->nb_tx;
+  int nb_rx = ru->nb_rx;
+  float path_loss_dB = 0.0f;
+  float amp_gain_dB = 0.0f;
+  float noise_power_dB = 0.0f;
   int channel_length = 1;
   char str[256];
-  char cir_file_path[256];
-  char delayindexlist_path[256];
 
-  // read file: pathloss_db, noise_power_dB
-  fptr = fopen(cir_conf_file, "r");
+  // Read file: pathloss_db, noise_power_dB
+  char cir_conf_file[] = "../../../cir_conf.txt";
+  FILE* fptr = fopen(cir_conf_file, "r");
   if (fptr) {
     // pathLossLinear
     if (fgets(str, sizeof(str), fptr) != NULL) {
-      sscanf(str, "%f", &path_loss_dB.r);
+      sscanf(str, "%f", &path_loss_dB);
     } else {
       LOG_E(NR_PHY, "Error reading path_loss_dB from cir_conf.txt\n");
     }
@@ -50,7 +41,7 @@ void init_cir_variables(void *param)
 
     // noise_per_sample
     if (fgets(str, sizeof(str), fptr) != NULL) {
-      sscanf(str, "%f", &noise_power_dB.r);
+      sscanf(str, "%f", &noise_power_dB);
     } else {
       LOG_E(NR_PHY, "Error reading noise_power_dB from cir_conf.txt\n");
     }
@@ -65,63 +56,41 @@ void init_cir_variables(void *param)
     fclose(fptr);
   } else {
     LOG_E(NR_PHY, "error: cir_conf.txt\n");
-    fflush(stdout);
   }
 
-  // write params
+  // Write params
   pthread_mutex_lock(&ru->proc.mutex_mimo);
-  ru->pathLossLinear = pow(10, (path_loss_dB.r + amp_gain_dB) / 20.0);
-  ru->noise_per_sample = pow(10, noise_power_dB.r / 20.0) * 256; // TODO: check formula
+  ru->pathLossLinear = pow(10, (path_loss_dB + amp_gain_dB) / 20.0);
+  ru->noise_per_sample = pow(10, noise_power_dB / 20.0) * 256; // The useful signal is scaled on the order of 256.
   ru->channel_length = channel_length;
+  ru->cir_was_received = false;
   pthread_mutex_unlock(&ru->proc.mutex_mimo);
 
-  // read cir data
-  cf_t cir_buffer[channel_length * ru->nb_tx * ru->nb_rx];
-  memset(cir_buffer, 0, sizeof(cir_buffer));
-  ru->cirMIMO_simulmatrix = malloc16_clear(ru->nb_tx * ru->nb_rx * channel_length * sizeof(cf_t));
-  sprintf(cir_file_path, "%s0000.b", cir_file_template);
-  fptr = fopen(cir_file_path, "rb");
-  if (fptr) {
-    if (fread(cir_buffer, sizeof(cir_buffer), 1, fptr) != 1)
-      LOG_D(NR_PHY, "Error reading cir_buffer from file\n");
-    fclose(fptr);
-    pthread_mutex_lock(&ru->proc.mutex_mimo);
-    for (int l = 0; l < channel_length; l++) {
-      for (int a_tx = 0; a_tx < ru->nb_tx; a_tx++) {
-        for (int a_rx = 0; a_rx < ru->nb_rx; a_rx++) {
-          ru->cirMIMO_simulmatrix[a_rx * channel_length * ru->nb_tx + l * ru->nb_rx + a_tx].r =
-              cir_buffer[l * ru->nb_tx * ru->nb_rx + ru->nb_rx * a_tx + a_rx].r;
-
-          ru->cirMIMO_simulmatrix[a_rx * channel_length * ru->nb_tx + l * ru->nb_rx + a_tx].i =
-              cir_buffer[l * ru->nb_tx * ru->nb_rx + ru->nb_rx * a_tx + a_rx].i;
-        }
-      }
+  // CIR data
+  ru->cirMIMO_simulmatrix = malloc16_clear(nb_tx * nb_rx * channel_length * sizeof(cf_t));
+  pthread_mutex_lock(&ru->proc.mutex_mimo);
+  int l = 0;
+  for (int a_tx = 0; a_tx < nb_tx; a_tx++) {
+    for (int a_rx = 0; a_rx < nb_rx; a_rx++) {
+      ru->cirMIMO_simulmatrix[a_rx * channel_length * nb_tx + l * nb_rx + a_tx].r = 1.0f / ru->pathLossLinear;
+      ru->cirMIMO_simulmatrix[a_rx * channel_length * nb_tx + l * nb_rx + a_tx].i = 0.0f;
     }
-    pthread_mutex_unlock(&ru->proc.mutex_mimo);
   }
+  pthread_mutex_unlock(&ru->proc.mutex_mimo);
 
-  // read delay index list
-  int delayindexlist_tmp[channel_length];
-  memset(delayindexlist_tmp, 0, sizeof(delayindexlist_tmp));
+  // Delay index list
   ru->delayindexlist = malloc16_clear(channel_length * sizeof(int));
-  sprintf(delayindexlist_path, "%s0000.b", delayindexlist_template);
-  fptr = fopen(delayindexlist_path, "rb");
-  if (fptr) {
-    if (fread(delayindexlist_tmp, sizeof(delayindexlist_tmp), 1, fptr) != 1)
-      LOG_D(NR_PHY, "Error reading delayindexlist from file\n");
-    fclose(fptr);
-    pthread_mutex_lock(&ru->proc.mutex_mimo);
-    for (int l = 0; l < channel_length; l++) {
-      ru->delayindexlist[l] = delayindexlist_tmp[l];
-    }
-    pthread_mutex_unlock(&ru->proc.mutex_mimo);
+  pthread_mutex_lock(&ru->proc.mutex_mimo);
+  for (int l = 0; l < channel_length; l++) {
+    ru->delayindexlist[l] = l;
   }
+  pthread_mutex_unlock(&ru->proc.mutex_mimo);
 }
 
-void init_noise(void *param)
+static void init_noise(void* param)
 {
-  RU_t *ru = (RU_t *)param;
-  NR_DL_FRAME_PARMS *fp = ru->nr_frame_parms;
+  RU_t* ru = (RU_t*)param;
+  NR_DL_FRAME_PARMS* fp = ru->nr_frame_parms;
   int samples_per_slot = get_samples_per_slot(0, fp) + ru->sf_extension;
 
   randominit();
@@ -141,8 +110,6 @@ void init_noise(void *param)
     }
   }
 }
-
-#endif // DEVELOP_CIR
 
 void nr_phy_init_RU(RU_t *ru)
 {
@@ -238,28 +205,18 @@ void nr_phy_init_RU(RU_t *ru)
     LOG_D(PHY, "[INIT] %s() ru->num_gNB:%d \n", __FUNCTION__, ru->num_gNB);
   } // !=IF5
 
-#ifdef DEVELOP_CIR
-  printf("INIT DEVELOP_CIR\n");
-  fflush(stdout);
-
-  // init cir variables
+  // Init CIR variables
   init_cir_variables(ru); // init: convolution matrix, channel_length, pathLossLinear, noise_per_sample
   init_noise(ru); // init: noise array
-
   ru->common.buffboundary = 0;
   ru->common.circular_buff_size = fp->samples_per_frame;
-
   ru->common.circular_buff = malloc16_clear(ru->nb_rx * sizeof(cf_t));
-  for (int a = 0; a < ru->nb_rx; a++) {
+  for (int a = 0; a < ru->nb_rx; a++)
     ru->common.circular_buff[a] = malloc16_clear(ru->common.circular_buff_size * sizeof(cf_t));
-  }
-
   int samples_per_slot = fp->samples_per_slot0 + ru->sf_extension;
   ru->common.noise_array = malloc16_clear(ru->nb_rx * samples_per_slot * sizeof(cf_t));
-
-  // allocate MIMO temporary store fields
-  ru->common.simul_input = malloc16_clear(ru->nb_tx * ru->channel_length * samples_per_slot * sizeof(cf_t));
-#endif // DEVELOP_CIR
+  ru->common.simul_input =
+      malloc16_clear(ru->nb_tx * ru->channel_length * samples_per_slot * sizeof(cf_t)); // allocate MIMO temporary store fields
 }
 
 void nr_phy_free_RU(RU_t *ru)
@@ -309,18 +266,16 @@ void nr_phy_free_RU(RU_t *ru)
   PHY_VARS_gNB *gNB0 = ru->gNB_list[0];
   gNB0->num_RU--;
   DevAssert(gNB0->num_RU >= 0);
-#ifdef DEVELOP_CIR
-  printf("terminate DEVELOP_CIR\n");
-  fflush(stdout);
+
+  // Free CIR variables
   free(ru->common.simul_input);
   free(ru->delayindexlist);
   free(ru->cirMIMO_simulmatrix);
-  for (int a = 0; a < ru->nb_tx; a++) free(ru->noise_array[a]);
+  for (int a = 0; a < ru->nb_tx; a++)
+    free(ru->noise_array[a]);
   free(ru->noise_array);
-
-  for (int a = 0; a < ru->nb_rx; a++) free(ru->common.circular_buff[a]);
+  for (int a = 0; a < ru->nb_rx; a++)
+    free(ru->common.circular_buff[a]);
   free(ru->common.circular_buff);
-
   free(ru->common.noise_array);
-#endif // DEVELOP_CIR
 }
