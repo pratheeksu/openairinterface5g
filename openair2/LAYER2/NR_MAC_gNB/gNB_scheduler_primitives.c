@@ -3599,7 +3599,8 @@ void beam_switching_procedure(gNB_MAC_INST *mac, NR_UE_info_t *UE, int new_beam_
 {
   LOG_I(NR_MAC, "[UE %x] Switching to beam with ID %d (from %d)\n", UE->rnti, new_beam_index, UE->UE_beam_index);
   UE->UE_beam_index = new_beam_index;
-  nr_mac_trigger_reconfiguration(mac, UE, -1, true);
+  if (mac->radio_config.do_CSIRS) // currently we only need to reconfigure if CSI-RS is enabled
+    nr_mac_trigger_reconfiguration(mac, UE, -1, true);
 }
 
 void nr_mac_update_timers(module_id_t module_id)
