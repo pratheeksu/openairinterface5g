@@ -901,53 +901,67 @@ void ue_context_modification_request(const f1ap_ue_context_mod_req_t *req)
 
 void ue_context_modification_confirm(const f1ap_ue_context_modif_confirm_t *confirm)
 {
-  LOG_I(MAC, "Received UE Context Modification Confirm for UE %04x\n", confirm->gNB_DU_ue_id);
+  LOG_I(NR_MAC, "Received UE Context Modification Confirm for UE %04x\n", confirm->gNB_DU_ue_id);
 
   gNB_MAC_INST *mac = RC.nrmac[0];
   NR_SCHED_LOCK(&mac->sched_lock);
   /* check first that the scheduler knows such UE */
   NR_UE_info_t *UE = find_nr_UE(&mac->UE_info, confirm->gNB_DU_ue_id);
   if (UE == NULL) {
-    LOG_E(MAC, "ERROR: unknown UE with RNTI %04x, ignoring UE Context Modification Confirm\n", confirm->gNB_DU_ue_id);
+    LOG_E(NR_MAC, "ERROR: unknown UE with RNTI %04x, ignoring UE Context Modification Confirm\n", confirm->gNB_DU_ue_id);
     NR_SCHED_UNLOCK(&mac->sched_lock);
     return;
   }
+  if (UE->cm_info.trigger_info == BEAM_SWITCH) {
+    LOG_I(NR_MAC, "[UE %x] Switching to beam with ID %d (from %d)\n", UE->rnti, UE->cm_info.new_state, UE->UE_beam_index);
+    UE->UE_beam_index = UE->cm_info.new_state;
+  } else if (UE->cm_info.trigger_info == BWP_SWITCH)
+    UE->local_bwp_id = UE->cm_info.new_state;
+  UE->cm_info.trigger_info = NO_TRIGGER;
   NR_SCHED_UNLOCK(&mac->sched_lock);
 
   if (confirm->rrc_container_length > 0) {
     logical_chan_id_t id = 1;
     nr_rlc_srb_recv_sdu(confirm->gNB_DU_ue_id, id, confirm->rrc_container, confirm->rrc_container_length);
   }
-  /* nothing else to be done? */
 }
 
 void ue_context_modification_refuse(const f1ap_ue_context_modif_refuse_t *refuse)
 {
-  /* Currently, we only use the UE Context Modification Required procedure to
-   * trigger a RRC reconfigurtion after Msg.3 with C-RNTI MAC CE. If the CU
-   * refuses, it cannot do this reconfiguration, leaving the UE in an
-   * unconfigured state. Therefore, we just free all RA-related info, and
-   * request the release of the UE.  */
-  LOG_W(MAC, "Received UE Context Modification Refuse for %04x, requesting release\n", refuse->gNB_DU_ue_id);
+  LOG_W(NR_MAC, "Received UE Context Modification Refuse for %04x\n", refuse->gNB_DU_ue_id);
 
   gNB_MAC_INST *mac = RC.nrmac[0];
   NR_SCHED_LOCK(&mac->sched_lock);
   NR_UE_info_t *UE = find_nr_UE(&RC.nrmac[0]->UE_info, refuse->gNB_DU_ue_id);
   if (UE == NULL) {
-    LOG_E(MAC, "ERROR: unknown UE with RNTI %04x, ignoring UE Context Modification Refuse\n", refuse->gNB_DU_ue_id);
+    LOG_E(NR_MAC, "ERROR: unknown UE with RNTI %04x, ignoring UE Context Modification Refuse\n", refuse->gNB_DU_ue_id);
     NR_SCHED_UNLOCK(&mac->sched_lock);
     return;
   }
 
+  bool release = false;
+  if (UE->cm_info.trigger_info == MSG3_CRNTI) {
+    /* if the UE Context Modification Required procedure was initiated
+     * for a RRC reconfigurtion after Msg.3 with C-RNTI MAC CE, if the CU
+     * refuses, it cannot do this reconfiguration, leaving the UE in an
+     * unconfigured state. Therefore, we just free all RA-related info, and
+     * request the release of the UE.  */
+    LOG_W(NR_MAC, "Context Modification Required after MSG3 with C-RNTI, requesting release\n");
+    release = true;
+  } else
+    ASN_STRUCT_FREE(asn_DEF_NR_CellGroupConfig, UE->reconfigCellGroup);
+  UE->cm_info.trigger_info = NO_TRIGGER;
   NR_SCHED_UNLOCK(&mac->sched_lock);
 
-  f1ap_ue_context_rel_req_t request = {
-    .gNB_CU_ue_id = refuse->gNB_CU_ue_id,
-    .gNB_DU_ue_id = refuse->gNB_DU_ue_id,
-    .cause = F1AP_CAUSE_RADIO_NETWORK,
-    .cause_value = F1AP_CauseRadioNetwork_procedure_cancelled,
-  };
-  mac->mac_rrc.ue_context_release_request(&request);
+  if (release) {
+    f1ap_ue_context_rel_req_t request = {
+      .gNB_CU_ue_id = refuse->gNB_CU_ue_id,
+      .gNB_DU_ue_id = refuse->gNB_DU_ue_id,
+      .cause = F1AP_CAUSE_RADIO_NETWORK,
+      .cause_value = F1AP_CauseRadioNetwork_procedure_cancelled,
+    };
+    mac->mac_rrc.ue_context_release_request(&request);
+  }
 }
 
 void ue_context_release_command(const f1ap_ue_context_rel_cmd_t *cmd)

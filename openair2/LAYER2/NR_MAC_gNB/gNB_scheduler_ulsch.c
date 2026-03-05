@@ -857,7 +857,7 @@ static void nr_rx_ra_sdu(const module_id_t mod_id,
     if (!old_UE->reconfigCellGroup) {
       LOG_I(NR_MAC, "Received UL_SCH_LCID_C_RNTI with C-RNTI 0x%04x, triggering RRC Reconfiguration\n", crnti);
       // Trigger RRCReconfiguration
-      nr_mac_trigger_reconfiguration(mac, old_UE, -1, false);
+      nr_mac_trigger_reconfiguration(mac, old_UE, -1, -1);
       // we configure the UE using common search space with DCIX0 while waiting for a reconfiguration
       configure_UE_BWP(mac, scc, old_UE, false, NR_SearchSpace__searchSpaceType_PR_common, -1, -1);
     }

@@ -765,6 +765,18 @@ typedef struct measgap_config {
   int mgl_slots;
 } measgap_config_t;
 
+typedef enum {
+  NO_TRIGGER,
+  MSG3_CRNTI,
+  BWP_SWITCH,
+  BEAM_SWITCH
+} reconfig_trigger_state_t;
+
+typedef struct {
+  int new_state;
+  reconfig_trigger_state_t trigger_info;
+} context_modification_info_t;
+
 /*! \brief UE list used by gNB to order UEs/CC for scheduling*/
 typedef struct NR_UE_info {
   rnti_t rnti;
@@ -795,6 +807,7 @@ typedef struct NR_UE_info {
   // dedicated BWP is always 1 from the UE's point of view, even if the gNB has multiple BWPs.
   // The below ID is the "true" (non-consecutive) BWP ID from the gNB's point of view
   NR_BWP_Id_t local_bwp_id;
+  context_modification_info_t cm_info;
 } NR_UE_info_t;
 
 typedef struct {
