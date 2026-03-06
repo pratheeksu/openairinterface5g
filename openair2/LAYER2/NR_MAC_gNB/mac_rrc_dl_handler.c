@@ -948,8 +948,10 @@ void ue_context_modification_refuse(const f1ap_ue_context_modif_refuse_t *refuse
      * request the release of the UE.  */
     LOG_W(NR_MAC, "Context Modification Required after MSG3 with C-RNTI, requesting release\n");
     release = true;
-  } else
+  } else {
     ASN_STRUCT_FREE(asn_DEF_NR_CellGroupConfig, UE->reconfigCellGroup);
+    UE->reconfigCellGroup = NULL;
+  }
   UE->cm_info.trigger_info = NO_TRIGGER;
   NR_SCHED_UNLOCK(&mac->sched_lock);
 

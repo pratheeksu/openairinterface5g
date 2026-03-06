@@ -3829,21 +3829,21 @@ NR_CellGroupConfig_t *update_cellGroupConfig_for_BWP_switch(NR_CellGroupConfig_t
     asn1cSeqAdd(&uplinkConfig->uplinkBWP_ToAddModList->list, ul_bwp);
   }
 
-  ASN_STRUCT_FREE(asn_DEF_NR_CSI_MeasConfig, configDedicated->csi_MeasConfig->choice.setup);
-  configDedicated->csi_MeasConfig->choice.setup = get_csiMeasConfig(configDedicated,
-                                                                    uecap,
-                                                                    scc,
-                                                                    &local_config,
-                                                                    uid,
-                                                                    *uplinkConfig->firstActiveUplinkBWP_Id,
-                                                                    bitmap,
-                                                                    ssb_index);
-
   // we temporarily need to keep both the old and the new BWP in the CG used by the gNB
   // while removing the old from the CG sent to the UE
   NR_CellGroupConfig_t *clone_cg = NULL;
   const int copy_result = asn_copy(&asn_DEF_NR_CellGroupConfig, (void **)&clone_cg, cellGroupConfig);
   AssertFatal(copy_result == 0, "unable to copy NR_CellGroupConfig for cloning\n");
+  NR_ServingCellConfig_t *clone_configDedicated = clone_cg->spCellConfig->spCellConfigDedicated;
+  clone_configDedicated->csi_MeasConfig->choice.setup  = get_csiMeasConfig(configDedicated,
+                                                                           uecap,
+                                                                           scc,
+                                                                           &local_config,
+                                                                           uid,
+                                                                           *uplinkConfig->firstActiveUplinkBWP_Id,
+                                                                           bitmap,
+                                                                           ssb_index);
+
   if (old_bwp > 0)
     clean_bwp_structures(clone_cg->spCellConfig);
   return clone_cg;
@@ -3874,6 +3874,15 @@ NR_CellGroupConfig_t *update_cellGroupConfig_for_beam_switch(NR_CellGroupConfig_
   NR_CellGroupConfig_t *clone_cg = NULL;
   const int copy_result = asn_copy(&asn_DEF_NR_CellGroupConfig, (void **)&clone_cg, cellGroupConfig);
   AssertFatal(copy_result == 0, "unable to copy NR_CellGroupConfig for cloning\n");
+  NR_ServingCellConfig_t *clone_configDedicated = clone_cg->spCellConfig->spCellConfigDedicated;
+  clone_configDedicated->csi_MeasConfig->choice.setup = get_csiMeasConfig(configDedicated,
+                                                                          uecap,
+                                                                          scc,
+                                                                          configuration,
+                                                                          uid,
+                                                                          bwp,
+                                                                          bitmap,
+                                                                          ssb_index);
   return clone_cg;
 }
 

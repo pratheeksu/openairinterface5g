@@ -3995,7 +3995,6 @@ void nr_mac_trigger_reconfiguration(const gNB_MAC_INST *nrmac, NR_UE_info_t *UE,
   if (new_beam >= 0) {
     UE->cm_info.trigger_info = BEAM_SWITCH;
     UE->cm_info.new_state = new_beam;
-    UE->sc_info.csi_MeasConfig = NULL; // to avoid segfault when freeing csi_MeasConfig in configDedicated
     int ssb_index = nrmac->common_channels[0].ssb_index[UE->UE_beam_index];
     cellGroup_for_UE = update_cellGroupConfig_for_beam_switch(UE->CellGroup,
                                                               &nrmac->radio_config,
@@ -4009,7 +4008,6 @@ void nr_mac_trigger_reconfiguration(const gNB_MAC_INST *nrmac, NR_UE_info_t *UE,
     if (!verify_bwp_switch(UE, &nrmac->radio_config, new_bwp_id))
       return;
     else {
-      UE->sc_info.csi_MeasConfig = NULL;  // to avoid segfault when freeing csi_MeasConfig in configDedicated
       UE->cm_info.trigger_info = BWP_SWITCH;
       UE->cm_info.new_state = new_bwp_id;
       int ssb_index = nrmac->common_channels[0].ssb_index[UE->UE_beam_index];
