@@ -527,7 +527,7 @@ void fix_scc(NR_ServingCellConfigCommon_t *scc, uint64_t ssbmap)
   // prepare DL Allocation lists
   nr_rrc_config_dl_tda(dlcc->initialDownlinkBWP->pdsch_ConfigCommon->choice.setup->pdsch_TimeDomainAllocationList,
                        frame_type,
-                       scc->tdd_UL_DL_ConfigurationCommon,
+                       scc,
                        NRRIV2BW(dlcc->initialDownlinkBWP->genericParameters.locationAndBandwidth, MAX_BWP_SIZE));
 
   if (frame_type == FDD) {
