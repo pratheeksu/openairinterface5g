@@ -3996,13 +3996,14 @@ void nr_mac_trigger_reconfiguration(const gNB_MAC_INST *nrmac, NR_UE_info_t *UE,
     UE->cm_info.trigger_info = BEAM_SWITCH;
     UE->cm_info.new_state = new_beam;
     int ssb_index = nrmac->common_channels[0].ssb_index[UE->UE_beam_index];
-    cellGroup_for_UE = update_cellGroupConfig_for_beam_switch(UE->CellGroup,
-                                                              &nrmac->radio_config,
-                                                              UE->capability,
-                                                              nrmac->common_channels[0].ServingCellConfigCommon,
-                                                              UE->uid,
-                                                              UE->current_DL_BWP.bwp_id,
-                                                              ssb_index);
+    cellGroup_for_UE = update_cellGroupConfig_for_reconfig(UE->CellGroup,
+                                                           &nrmac->radio_config,
+                                                           UE->capability,
+                                                           nrmac->common_channels[0].ServingCellConfigCommon,
+                                                           UE->uid,
+                                                           UE->current_DL_BWP.bwp_id,
+                                                           -1,
+                                                           ssb_index);
   } else if (new_bwp_id >= 0) {
     AssertFatal(UE->current_DL_BWP.bwp_id == UE->current_UL_BWP.bwp_id, "We only support same BWP for UL and DL\n");
     if (!verify_bwp_switch(UE, &nrmac->radio_config, new_bwp_id))
@@ -4011,14 +4012,14 @@ void nr_mac_trigger_reconfiguration(const gNB_MAC_INST *nrmac, NR_UE_info_t *UE,
       UE->cm_info.trigger_info = BWP_SWITCH;
       UE->cm_info.new_state = new_bwp_id;
       int ssb_index = nrmac->common_channels[0].ssb_index[UE->UE_beam_index];
-      cellGroup_for_UE = update_cellGroupConfig_for_BWP_switch(UE->CellGroup,
-                                                               &nrmac->radio_config,
-                                                               UE->capability,
-                                                               nrmac->common_channels[0].ServingCellConfigCommon,
-                                                               UE->uid,
-                                                               UE->current_DL_BWP.bwp_id,
-                                                               new_bwp_id,
-                                                               ssb_index);
+      cellGroup_for_UE = update_cellGroupConfig_for_reconfig(UE->CellGroup,
+                                                             &nrmac->radio_config,
+                                                             UE->capability,
+                                                             nrmac->common_channels[0].ServingCellConfigCommon,
+                                                             UE->uid,
+                                                             UE->current_DL_BWP.bwp_id,
+                                                             new_bwp_id,
+                                                             ssb_index);
     }
   } else
     UE->cm_info.trigger_info = MSG3_CRNTI;

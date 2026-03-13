@@ -3809,44 +3809,44 @@ NR_CellGroupConfig_t *get_initial_cellGroupConfig(int uid,
   return cellGroupConfig;
 }
 
-NR_CellGroupConfig_t *update_cellGroupConfig_for_BWP_switch(NR_CellGroupConfig_t *cellGroupConfig,
-                                                            const nr_mac_config_t *configuration,
-                                                            const NR_UE_NR_Capability_t *uecap,
-                                                            const NR_ServingCellConfigCommon_t *scc,
-                                                            int uid,
-                                                            int old_bwp,
-                                                            int new_bwp,
-                                                            int ssb_index)
+NR_CellGroupConfig_t *update_cellGroupConfig_for_reconfig(NR_CellGroupConfig_t *cellGroupConfig,
+                                                          const nr_mac_config_t *configuration,
+                                                          const NR_UE_NR_Capability_t *uecap,
+                                                          const NR_ServingCellConfigCommon_t *scc,
+                                                          int uid,
+                                                          int old_bwp,
+                                                          int new_bwp,
+                                                          int ssb_index)
 {
   NR_SpCellConfig_t *spCellConfig = cellGroupConfig->spCellConfig;
   NR_ServingCellConfig_t *configDedicated = spCellConfig->spCellConfigDedicated;
-  *configDedicated->firstActiveDownlinkBWP_Id = new_bwp != 0;  // 1 for any BWP != 0
   NR_UplinkConfig_t *uplinkConfig = configDedicated->uplinkConfig;
-  *uplinkConfig->firstActiveUplinkBWP_Id = new_bwp != 0;  // 1 for any BWP != 0
-  nr_mac_config_t local_config = *configuration;
-  long ul_maxMIMO_Layers = set_ul_max_layers(configuration, uecap);
-  local_config.first_active_bwp = new_bwp;
   uint64_t bitmap = get_ssb_bitmap(scc);
-  // add new BWP
-  if (new_bwp == 0) {
-    if (!configDedicated->initialDownlinkBWP)
-      configDedicated->initialDownlinkBWP = calloc_or_fail(1, sizeof(*configDedicated->initialDownlinkBWP));
-    if (!uplinkConfig->initialUplinkBWP)
-      uplinkConfig->initialUplinkBWP = calloc_or_fail(1, sizeof(*uplinkConfig->initialUplinkBWP));
-    uplinkConfig->initialUplinkBWP = configure_initial_ul_bwp(scc, &local_config, ul_maxMIMO_Layers, uecap, uid);
-    configDedicated->initialDownlinkBWP = configure_initial_dl_bwp(scc, bitmap, uecap, &local_config);
-  } else {
-    if (!configDedicated->downlinkBWP_ToAddModList)
-      configDedicated->downlinkBWP_ToAddModList = calloc_or_fail(1, sizeof(*configDedicated->downlinkBWP_ToAddModList));
-    NR_BWP_Downlink_t *dl_bwp = config_downlinkBWP(scc, uecap, local_config.force_256qam_off, true, &local_config);
-    asn1cSeqAdd(&configDedicated->downlinkBWP_ToAddModList->list, dl_bwp);
-
-    if (!uplinkConfig->uplinkBWP_ToAddModList)
-      uplinkConfig->uplinkBWP_ToAddModList = calloc_or_fail(1, sizeof(*uplinkConfig->uplinkBWP_ToAddModList));
-    NR_BWP_Uplink_t *ul_bwp = config_uplinkBWP(true, uid, ul_maxMIMO_Layers, &local_config, scc, uecap);
-    asn1cSeqAdd(&uplinkConfig->uplinkBWP_ToAddModList->list, ul_bwp);
+  nr_mac_config_t local_config = *configuration;
+  if (new_bwp >= 0) {
+    *configDedicated->firstActiveDownlinkBWP_Id = new_bwp != 0;  // 1 for any BWP != 0
+    *uplinkConfig->firstActiveUplinkBWP_Id = new_bwp != 0;  // 1 for any BWP != 0
+    long ul_maxMIMO_Layers = set_ul_max_layers(configuration, uecap);
+    local_config.first_active_bwp = new_bwp;
+    // add new BWP
+    if (new_bwp == 0) {
+      if (!configDedicated->initialDownlinkBWP)
+        configDedicated->initialDownlinkBWP = calloc_or_fail(1, sizeof(*configDedicated->initialDownlinkBWP));
+      if (!uplinkConfig->initialUplinkBWP)
+        uplinkConfig->initialUplinkBWP = calloc_or_fail(1, sizeof(*uplinkConfig->initialUplinkBWP));
+      uplinkConfig->initialUplinkBWP = configure_initial_ul_bwp(scc, &local_config, ul_maxMIMO_Layers, uecap, uid);
+      configDedicated->initialDownlinkBWP = configure_initial_dl_bwp(scc, bitmap, uecap, &local_config);
+    } else {
+      if (!configDedicated->downlinkBWP_ToAddModList)
+        configDedicated->downlinkBWP_ToAddModList = calloc_or_fail(1, sizeof(*configDedicated->downlinkBWP_ToAddModList));
+      NR_BWP_Downlink_t *dl_bwp = config_downlinkBWP(scc, uecap, local_config.force_256qam_off, true, &local_config);
+      asn1cSeqAdd(&configDedicated->downlinkBWP_ToAddModList->list, dl_bwp);
+      if (!uplinkConfig->uplinkBWP_ToAddModList)
+        uplinkConfig->uplinkBWP_ToAddModList = calloc_or_fail(1, sizeof(*uplinkConfig->uplinkBWP_ToAddModList));
+      NR_BWP_Uplink_t *ul_bwp = config_uplinkBWP(true, uid, ul_maxMIMO_Layers, &local_config, scc, uecap);
+      asn1cSeqAdd(&uplinkConfig->uplinkBWP_ToAddModList->list, ul_bwp);
+    }
   }
-
   // we temporarily need to keep both the old and the new BWP in the CG used by the gNB
   // while removing the old from the CG sent to the UE
   NR_CellGroupConfig_t *clone_cg = NULL;
@@ -3862,45 +3862,8 @@ NR_CellGroupConfig_t *update_cellGroupConfig_for_BWP_switch(NR_CellGroupConfig_t
                                                                            bitmap,
                                                                            ssb_index);
 
-  if (old_bwp > 0)
+  if (new_bwp >= 0 && old_bwp > 0)
     clean_bwp_structures(clone_cg->spCellConfig);
-  return clone_cg;
-}
-
-NR_CellGroupConfig_t *update_cellGroupConfig_for_beam_switch(NR_CellGroupConfig_t *cellGroupConfig,
-                                                            const nr_mac_config_t *configuration,
-                                                            const NR_UE_NR_Capability_t *uecap,
-                                                            const NR_ServingCellConfigCommon_t *scc,
-                                                            int uid,
-                                                            int bwp,
-                                                            int ssb_index)
-{
-  NR_SpCellConfig_t *spCellConfig = cellGroupConfig->spCellConfig;
-  NR_ServingCellConfig_t *configDedicated = spCellConfig->spCellConfigDedicated;
-
-  uint64_t bitmap = get_ssb_bitmap(scc);
-  ASN_STRUCT_FREE(asn_DEF_NR_CSI_MeasConfig, configDedicated->csi_MeasConfig->choice.setup);
-  configDedicated->csi_MeasConfig->choice.setup = get_csiMeasConfig(configDedicated,
-                                                                    uecap,
-                                                                    scc,
-                                                                    configuration,
-                                                                    uid,
-                                                                    bwp,
-                                                                    bitmap,
-                                                                    ssb_index);
-
-  NR_CellGroupConfig_t *clone_cg = NULL;
-  const int copy_result = asn_copy(&asn_DEF_NR_CellGroupConfig, (void **)&clone_cg, cellGroupConfig);
-  AssertFatal(copy_result == 0, "unable to copy NR_CellGroupConfig for cloning\n");
-  NR_ServingCellConfig_t *clone_configDedicated = clone_cg->spCellConfig->spCellConfigDedicated;
-  clone_configDedicated->csi_MeasConfig->choice.setup = get_csiMeasConfig(configDedicated,
-                                                                          uecap,
-                                                                          scc,
-                                                                          configuration,
-                                                                          uid,
-                                                                          bwp,
-                                                                          bitmap,
-                                                                          ssb_index);
   return clone_cg;
 }
 
