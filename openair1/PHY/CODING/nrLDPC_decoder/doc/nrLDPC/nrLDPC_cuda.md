@@ -1,7 +1,8 @@
 
 # OAI nrLDPC GPU Decoder Architecture
 
-**Author:** PAN Qizhi
+For hands-on instructions and execution commands of this GPU implementation, please refer to the [Tutorial Document](nrLDPC_cuda_tutorial.md).
+
 
 ## 0. Scope & Supported Configurations
 
@@ -11,11 +12,11 @@ This document describes the architecture and parallelization strategies of the G
 
 ### Currently Supported Parameters
 
-| Parameter | Supported Configuration |
-| :--- | :--- |
-| **Base Graph (BG)** | 1 |
-| **Lifting Size (Z)** | ≥ 128 |
-| **Code Rate (R)** | 1/3, 2/3, 8/9 |
+| Parameter | CPU Baseline  | GPU Implementation |
+| --- | --- | --- |
+| **Base Graph (BG)** | 1, 2 | **1** |
+| **Lifting Size ($Z_c$)** | All  | **$\ge 128$** |
+| **Code Rate (R)** | BG1: 1/3, 2/3, 8/9 <br><br> BG2: 1/5, 1/3, 2/3 | **BG1: 1/3, 2/3, 8/9** |
 
 
 ### Related Work & Comparison
@@ -33,6 +34,7 @@ This document describes the architecture and parallelization strategies of the G
 [[_TOC_]]
 
 ## 1. Overall Architecture
+
 ![Pipeline Overview](img/decoder_cuda_pipeline.svg)
 
 The OAI nrLDPC GPU decoder consists of four main kernels: `llrPreProc_kernel`, `cnProc_kernel`, `bnProc_kernel`, and `output_kernel`. 
@@ -774,6 +776,7 @@ To maintain API compatibility for partial-offload testing scenarios where inputs
 To guarantee that the architectural transformations—including 8-bit saturation, SIMD4 vectorization, and Node-Based graph restructuring—do not compromise the mathematical integrity of the decoder, we benchmarked the Block Error Rate (BLER) against the standard OAI CPU baseline.
 
 The BLER vs. SNR curves indicate that the CUDA GPU implementation performs consistently with the CPU baseline. Across the evaluated code rates (BG1 Rate 1/3, Rate 2/3, and Rate 8/9) in an AWGN channel, the decoding trajectories of the GPU and CPU implementations overlap. This demonstrates that the proposed GPU offloading strategies do not compromise the error correction performance.
+
 ![CPU_GPU_BLER](img/bler_performance_cpu_vs_gpu.svg)
 
 *(Tested with 5 iterations)*
@@ -817,6 +820,7 @@ The table below summarizes the measured throughput and latency metrics across di
 ---
 
 ![latency](img/latency_vs_segments.svg)
+
 ![throughput](img/throughput_vs_segments.svg)
 
 
@@ -879,5 +883,14 @@ The tables below record the per-segment execution time ($\mu s$) under varying w
 
 
 ![R13 Performance](img/perf_r13.svg)
+
 ![R23 Performance](img/perf_r23.svg)
+
 ![R89 Performance](img/perf_r89.svg)
+
+
+## Acknowledgments
+
+* **Main Developer:** PAN Qizhi (GPU Architecture & CUDA Implementation & Optimization)
+* **System Integration:** Raymond Knopp (E2E Integration & Validation & Optimization)
+* **Special Thanks:** To **Jingguo Zhao (BUPT)** for the insightful discussions on node-based baseline architectures which inspired the optimizations in this work.
