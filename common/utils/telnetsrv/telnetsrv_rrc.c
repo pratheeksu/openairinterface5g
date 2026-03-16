@@ -86,6 +86,7 @@ int rrc_gNB_trigger_release(char *buf, int debug, telnet_printfunc_t prnt)
   msg_p->ittiMsg.rrc_gnb_generate_rrcrelease.ue_id = ue.id;
   itti_send_msg_to_task(TASK_RRC_GNB, 0, msg_p);
 
+
   prnt("RRC Release triggered for UE %u\n", ue_id);
 
   return 0;
