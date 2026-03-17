@@ -3988,14 +3988,14 @@ static bool verify_bwp_switch(const NR_UE_info_t *UE, const nr_mac_config_t *con
   return false;
 }
 
-void nr_mac_trigger_reconfiguration(const gNB_MAC_INST *nrmac, NR_UE_info_t *UE, int new_bwp_id, int new_beam)
+void nr_mac_trigger_reconfiguration(gNB_MAC_INST *nrmac, NR_UE_info_t *UE, int new_bwp_id, int new_beam)
 {
   DevAssert(UE->CellGroup != NULL);
   NR_CellGroupConfig_t *cellGroup_for_UE = NULL;
+  int ssb_index = get_ssbidx_from_beam(nrmac, UE->UE_beam_index);
   if (new_beam >= 0) {
     UE->cm_info.trigger_info = BEAM_SWITCH;
     UE->cm_info.new_state = new_beam;
-    int ssb_index = nrmac->common_channels[0].ssb_index[UE->UE_beam_index];
     cellGroup_for_UE = update_cellGroupConfig_for_reconfig(UE->CellGroup,
                                                            &nrmac->radio_config,
                                                            UE->capability,
@@ -4011,7 +4011,6 @@ void nr_mac_trigger_reconfiguration(const gNB_MAC_INST *nrmac, NR_UE_info_t *UE,
     else {
       UE->cm_info.trigger_info = BWP_SWITCH;
       UE->cm_info.new_state = new_bwp_id;
-      int ssb_index = nrmac->common_channels[0].ssb_index[UE->UE_beam_index];
       cellGroup_for_UE = update_cellGroupConfig_for_reconfig(UE->CellGroup,
                                                              &nrmac->radio_config,
                                                              UE->capability,
