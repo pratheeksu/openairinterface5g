@@ -664,6 +664,8 @@ void run_telnetsrv(void) {
   int plen = sprintf(prompt, "%s_%s> ", TELNET_PROMPT_PREFIX, get_softmodem_function());
   TELNET_LOG("\nInitializing telnet server...\n");
 
+
+
   while( (telnetparams.new_socket = accept(sock, &cli_addr, &cli_len)) ) {
     TELNET_LOG("Telnet client connected....\n");
     read_history(telnetparams.histfile);
@@ -754,7 +756,7 @@ void run_telnetclt(void) {
   name.sin_family = AF_INET;
   struct in_addr addr;
   inet_aton("127.0.0.1", &addr) ;
-  name.sin_addr.s_addr = addr.s_addr;   
+  name.sin_addr.s_addr = addr.s_addr;
   name.sin_port = htons((unsigned short)(telnetparams.listenport));
   while (1) {
     sock = socket(AF_INET, SOCK_STREAM, 0);
@@ -763,29 +765,29 @@ void run_telnetclt(void) {
 
     if(connect(sock, (void *) &name, sizeof(name)))
       fprintf(stderr,"[TELNETSRV] Error %s on connect call\n",strerror(errno));
- 
+
     struct timeval ts;
     ts.tv_sec = 1; // 1 second
     ts.tv_usec = 0;
     while (1) {
-      fd_set fds;   
+      fd_set fds;
       FD_ZERO(&fds);
       FD_SET(sock, &fds);
-      FD_SET(STDIN_FILENO , &fds);     
+      FD_SET(STDIN_FILENO , &fds);
       // wait for data
       int nready = select(sock + 1, &fds, (fd_set *) 0, (fd_set *) 0, &ts);
       if (nready < 0) {
           perror("select. Error");
-          break;                                                                                                                                   
+          break;
       }
       else if (nready == 0) {
           ts.tv_sec = 1; // 1 second
           ts.tv_usec = 0;
       }
       else if ( FD_ISSET(sock, &fds)) {
-          int rv; 
+          int rv;
           char inbuf[TELNET_MAX_MSGLENGTH*2];
-          memset(inbuf,0,sizeof(inbuf)); 
+          memset(inbuf,0,sizeof(inbuf));
           rv = recv(sock , inbuf , sizeof(inbuf)-1 , 0);
           if (rv  > 0) {
 				 printf("%s",inbuf);
@@ -796,18 +798,18 @@ void run_telnetclt(void) {
           }
           else {
               perror("recv error");
-              break;            
-          }
-      }       
-      else if (FD_ISSET(STDIN_FILENO , &fds)) {
-		char *inbuf=NULL;  
-      	size_t inlen=0; 
-        inlen = getline( &inbuf,&inlen, stdin);
-        if ( inlen > 0 ) {
-      	  if ( send(sock, inbuf,inlen, 0) < 0) 
               break;
           }
-        free(inbuf); 
+      }
+      else if (FD_ISSET(STDIN_FILENO , &fds)) {
+		char *inbuf=NULL;
+      	size_t inlen=0;
+        inlen = getline( &inbuf,&inlen, stdin);
+        if ( inlen > 0 ) {
+      	  if ( send(sock, inbuf,inlen, 0) < 0)
+              break;
+          }
+        free(inbuf);
       }
     }
     close(sock);
@@ -817,7 +819,7 @@ void run_telnetclt(void) {
 
 void poll_telnetcmdq(void *qid, void *arg) {
 	notifiedFIFO_elt_t *msg = pollNotifiedFIFO((notifiedFIFO_t *)qid);
-	
+
 	if (msg != NULL) {
 	  telnetsrv_qmsg_t *msgdata=NotifiedFifoData(msg);
 	  msgdata->cmdfunc(msgdata->cmdbuff,msgdata->debug,msgdata->prnt,arg);
@@ -904,7 +906,7 @@ int telnetsrv_autoinit(void) {
       fprintf(stderr,"[TELNETSRV] Error %s on pthread_create f() run_telnetclt \n",strerror(errno));
     return -1;
     }
-  }  
+  }
   return 0;
 }
 
