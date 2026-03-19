@@ -41,6 +41,7 @@
 #include "common/utils/oai_asn1.h"
 #include "utils.h"
 #include "xer_encoder.h"
+#include "nr_rrc_proto.h"
 
 static int get_dl_band(const f1ap_served_cell_info_t *cell_info)
 {
