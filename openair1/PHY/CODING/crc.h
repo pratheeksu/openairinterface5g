@@ -39,7 +39,6 @@
 
 #ifndef __CRC_H__
 #define __CRC_H__
-#include "crcext.h"
 #include "types.h"
 #include "PHY/sse_intrin.h"
 
@@ -69,220 +68,52 @@ struct crc_pclmulqdq_ctx {
         uint64_t res;
 };
 
-/**
- * Functions and prototypes
- */
+static const struct crc_pclmulqdq_ctx lte_crc24a_pclmulqdq __attribute__((aligned(16))) = {
+        0x64e4d700,     /**< k1 */
+        0x2c8c9d00,     /**< k2 */
+        0xd9fe8c00,     /**< k3 */
+        0xf845fe24,     /**< q */
+        0x864cfb00,     /**< p */
+        0ULL            /**< res */
+};
+
+static const uint8_t crc_xmm_shift_tab[48]
+    __attribute__((aligned(16))) = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+                                    0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f,
+                                    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
 
 /**
- * @brief Initializes look-up-table (LUT) for given 8 bit polynomial
+ * @brief Shifts right 128 bit register by specified number of bytes
  *
- * @param poly CRC polynomial
- * @param lut pointer to look-up-table to be initialized
- */
-void crc8_init_lut(const uint8_t poly, uint8_t *lut);
-
-/**
- * @brief Calculates 8 bit CRC using LUT method.
+ * @param reg 128 bit value
+ * @param num number of bytes to shift right \a reg by (0-16)
  *
- * @param crc CRC initial value
- * @param data pointer to data block to calculate CRC for
- * @param data_len size of data block
- * @param lut 256x8bits look-up-table pointer
- *
- * @return New CRC value
+ * @return \a reg >> (\a num * 8)
  */
 __forceinline
-uint8_t crc8_calc_lut(const uint8_t *data,
-                      uint32_t data_len,
-                      uint8_t crc,
-                      const uint8_t *lut)
+simde__m128i xmm_shift_right(simde__m128i reg, const unsigned int num)
 {
-        if (unlikely(data == NULL || lut == NULL))
-                return crc;
+        const simde__m128i *p = (const simde__m128i *)(crc_xmm_shift_tab + 16 + num);
 
-        while (data_len--)
-                crc = lut[*data++ ^ crc];
-
-        return crc;
+        return simde_mm_shuffle_epi8(reg, simde_mm_loadu_si128(p));
 }
 
 /**
- * @brief Initializes look-up-table (LUT) for given 16 bit polynomial
+ * @brief Shifts left 128 bit register by specified number of bytes
  *
- * @param poly CRC polynomial
- * @param lut pointer to 256x16bits look-up-table to be initialized
- */
-void crc16_init_lut(const uint16_t poly, uint16_t *lut);
-
-/**
- * @brief Calculates 16 bit CRC using LUT method.
+ * @param reg 128 bit value
+ * @param num number of bytes to shift left \a reg by (0-16)
  *
- * @param crc CRC initial value
- * @param data pointer to data block to calculate CRC for
- * @param data_len size of data block
- * @param lut 256x16bits look-up-table pointer
- *
- * @return New CRC value
+ * @return \a reg << (\a num * 8)
  */
 __forceinline
-uint16_t crc16_calc_lut(const uint8_t *data,
-                        uint32_t data_len,
-                        uint16_t crc,
-                        const uint16_t *lut)
+simde__m128i xmm_shift_left(simde__m128i reg, const unsigned int num)
 {
-        if (unlikely(data == NULL || lut == NULL))
-                return crc;
+        const simde__m128i *p = (const simde__m128i *)(crc_xmm_shift_tab + 16 - num);
 
-        while (data_len--)
-                crc = lut[(crc >> 8) ^ *data++] ^ (crc << 8);
-
-        return crc;
+        return simde_mm_shuffle_epi8(reg, simde_mm_loadu_si128(p));
 }
 
-/**
- * @brief Initializes look-up-table (LUT) for given 32 bit polynomial
- *
- * @param poly CRC polynomial
- * @param lut pointer to 256x32bits look-up-table to be initialized
- */
-void crc32_init_lut(const uint32_t poly, uint32_t *lut);
-
-/**
- * @brief Calculates 32 bit CRC using LUT method.
- *
- * @param crc CRC initial value
- * @param data pointer to data block to calculate CRC for
- * @param data_len size of data block
- * @param lut 256x32bits look-up-table pointer
- *
- * @return New CRC value
- */
-__forceinline
-uint32_t crc32_calc_lut(const uint8_t *data,
-                        uint32_t data_len,
-                        uint32_t crc,
-                        const uint32_t *lut)
-{
-        if (unlikely(data == NULL || lut == NULL))
-                return crc;
-
-        while (data_len--)
-                crc = lut[(crc >> 24) ^ *data++] ^ (crc << 8);
-
-        return crc;
-}
-
-/**
- * @brief Initializes look up tables for slice-By-2 method.
- *
- * @param poly CRC polynomial
- * @param slice1 slice-by-2 look-up-table 1
- * @param slice2 slice-by-2 look-up-table 2
- *
- * @return New CRC value
- */
-void crc16_init_slice2(const uint16_t poly,
-                       uint16_t *slice1,
-                       uint16_t *slice2);
-
-/**
- * @brief Calculates 16 bit CRC using Slice-By-2 method.
- *
- * @param crc CRC initial value
- * @param data pointer to data block to calculate CRC for
- * @param data_len size of data block
- * @param slice1 256x16bits slice look-up-table 1
- * @param slice2 256x16bits slice look-up-table 2
- *
- * @return New CRC value
- */
-__forceinline
-uint16_t crc16_calc_slice2(const uint8_t *data,
-                           uint32_t data_len,
-                           uint16_t crc,
-                           const uint16_t *slice1,
-                           const uint16_t *slice2)
-{
-        uint_fast32_t i;
-
-        if (unlikely(data == NULL))
-                return crc;
-
-        if (unlikely(slice1 == NULL || slice2 == NULL))
-                return crc;
-
-        crc = bswap2(crc);
-        for (i = (data_len & (~1)), data += (data_len & (~1)); i != 0;
-             i -= sizeof(uint16_t)) {
-                crc ^= (*((const uint16_t *)(data - i)));
-                crc = slice2[(uint8_t)crc] ^ slice1[(uint8_t)(crc >> 8)];
-        }
-        crc = bswap2(crc);
-        if (data_len & 1)
-                crc = (crc << 8) ^ bswap2(slice1[(crc >> 8) ^ *data]);
-
-        return crc;
-}
-
-/**
- * @brief Initializes look up tables for slice-By-4 method.
- *
- * @param poly CRC polynomial
- * @param slice1 256x32bits slice look-up-table 1
- * @param slice2 256x32bits slice look-up-table 2
- * @param slice3 256x32bits slice look-up-table 3
- * @param slice4 256x32bits slice look-up-table 4
- *
- * @return New CRC value
- */
-void crc32_init_slice4(const uint32_t poly,
-                       uint32_t *slice1, uint32_t *slice2,
-                       uint32_t *slice3, uint32_t *slice4);
-
-/**
- * @brief Calculates 32 bit CRC using Slice-By-4 method.
- *
- * @param data pointer to data block to calculate CRC for
- * @param data_len size of data block
- * @param crc CRC initial value
- * @param slice1 256x32bits slice look-up-table 1
- * @param slice2 256x32bits slice look-up-table 2
- * @param slice3 256x32bits slice look-up-table 3
- * @param slice4 256x32bits slice look-up-table 4
- *
- * @return New CRC value
- */
-__forceinline
-uint32_t crc32_calc_slice4(const uint8_t *data,
-                           uint32_t data_len, uint32_t crc,
-                           const uint32_t *slice1, const uint32_t *slice2,
-                           const uint32_t *slice3, const uint32_t *slice4)
-{
-        uint_fast32_t i;
-
-        if (unlikely(data == NULL))
-                return crc;
-
-        if (unlikely(slice1 == NULL || slice2 == NULL ||
-                     slice3 == NULL || slice4 == NULL))
-                return crc;
-
-        crc = bswap4(crc);
-        for (i = data_len & (~3), data += (data_len & (~3)); i != 0;
-             i -= sizeof(uint32_t)) {
-                crc ^= (*((const uint32_t *)(data - i)));
-                crc = slice4[(uint8_t)(crc)] ^
-                        slice3[(uint8_t)(crc >> 8)] ^
-                        slice2[(uint8_t)(crc >> 16)] ^
-                        slice1[(uint8_t)(crc >> 24)];
-        }
-        crc = bswap4(crc);
-        for (i = data_len & 3, data += (data_len & 3); i != 0; i--)
-                crc = (crc << 8) ^
-                        bswap4(slice1[(crc >> 24) ^ *(data - i)]);
-
-        return crc;
-}
 
 /**
  * @brief Performs one folding round
@@ -422,7 +253,7 @@ crc32_calc_pclmulqdq(const uint8_t *data,
          * set \a swap BE<->LE 16 byte conversion variable
          */
         fold = simde_mm_loadu_si128((simde__m128i *)data);
-        swap = crc_xmm_be_le_swap128;
+        swap = simde_mm_setr_epi32(0x0c0d0e0f, 0x08090a0b, 0x04050607, 0x00010203);
 
         /**
          * -------------------------------------------------
