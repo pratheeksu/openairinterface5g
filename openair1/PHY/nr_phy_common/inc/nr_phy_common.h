@@ -20,6 +20,12 @@ typedef struct {
   int O_ack;
 } rate_match_info_uci_t;
 
+typedef struct {
+  /// bit mask of PT-RS ofdm symbol indicies
+  uint16_t ptrs_symbols;
+  int n_ptrs;
+} nr_ptrs_info_t;
+
 void init_byte2m128i(void);
 // tables for mcs values for different payloads
 static const uint8_t table1_mcs[] = {0, 6, 3, 9};
