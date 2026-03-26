@@ -9,6 +9,17 @@
 #include "PHY/NR_REFSIG/nr_refsig.h"
 #include "PHY/MODULATION/nr_modulation.h"
 
+typedef struct {
+  uint16_t Q_dash_ACK; // number of coded HARQ-ACK symbols
+  uint16_t E_uci_ACK; // number of coded HARQ-ACK bits
+  uint16_t Q_dash_CSI1; // number of coded CSI part 1 symbols
+  uint16_t E_uci_CSI1; // number of coded CSI part 1 bits
+  uint16_t Q_dash_CSI2; // number of coded CSI part 2 symbols
+  uint16_t E_uci_CSI2; // number of coded CSI part 2 bits
+  uint32_t G_ulsch; // bit capacity of ULSCH
+  int O_ack;
+} rate_match_info_uci_t;
+
 void init_byte2m128i(void);
 // tables for mcs values for different payloads
 static const uint8_t table1_mcs[] = {0, 6, 3, 9};
@@ -371,7 +382,6 @@ void nr_generate_csi_rs(const NR_DL_FRAME_PARMS *frame_parms,
                         const uint8_t power_control_offset_ss,
                         const uint8_t cdm_type,
                         c16_t **dataF);
-
 int nr_get_ssb_start_sc(int scs,
                         int ssb_offset_point_a,
                         int ssb_sco,
@@ -387,4 +397,16 @@ typedef struct {
 bool check_rb_in_bitmap(const freq_alloc_bitmap_t *alloc, int rb);
 freq_alloc_bitmap_t set_start_end_from_bitmap(int size, int alloc_size, const uint8_t bitmap[alloc_size]);
 freq_alloc_bitmap_t set_bitmap_from_start_size(int start, int size);
+
+void get_s1_s2(int *s1, int *s2, int rbsize, int nr_symbols, int start_symb, uint16_t dmrs_symb_pos, uint16_t ptrs_symb, int n_ptrs);
+double get_beta_offset_harq_ack(uint8_t beta_offset_index);
+double get_beta_offset_csi(const uint8_t beta_offset_idx);
+double get_alpha_scaling_value(uint8_t alpha_scaling);
+uint32_t get_Qd(const uint32_t ouci,
+                double beta,
+                double alpha,
+                const uint32_t eff_bits,
+                const uint32_t s1,
+                const uint32_t s2,
+                const uint32_t sub);
 #endif
