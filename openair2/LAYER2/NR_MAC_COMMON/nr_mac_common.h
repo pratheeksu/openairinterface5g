@@ -326,4 +326,6 @@ bool nr_pcch_ss0_po_half_frame(uint8_t i_s, int slot, int slots_per_frame);
 
 bool nr_pcch_type2_po_mo_in_range(int frame, int slot, int slots_per_frame, int period, int offset, int start_mo, int end_mo);
 
+uint16_t nr_pdcch_monitoring_symbols_mask(const BIT_STRING_t *symbols_in_slot, uint8_t sps);
+
 #endif

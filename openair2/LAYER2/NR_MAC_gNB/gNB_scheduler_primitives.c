@@ -482,8 +482,7 @@ NR_sched_pdcch_t set_pdcch_structure(gNB_MAC_INST *gNB_mac,
   BIT_STRING_t *symbolsInSlot = ss->monitoringSymbolsWithinSlot;
   AssertFatal(symbolsInSlot->buf != NULL, "ss->monitoringSymbolsWithinSlot->buf is null\n");
 
-  // for SPS=14 8 MSBs in positions 13 downto 6
-  int monitoringSymbolsWithinSlot = (symbolsInSlot->buf[0] << (sps - 8)) | (symbolsInSlot->buf[1] >> (16 - sps));
+  int monitoringSymbolsWithinSlot = nr_pdcch_monitoring_symbols_mask(symbolsInSlot, sps);
 
   for (int i = 0; i < sps; i++) {
     if ((monitoringSymbolsWithinSlot >> (sps - 1 - i)) & 1) {

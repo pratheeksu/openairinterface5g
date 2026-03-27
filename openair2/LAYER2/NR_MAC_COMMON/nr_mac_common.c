@@ -5150,3 +5150,25 @@ bool nr_pcch_type2_po_mo_in_range(int frame, int slot, int slots_per_frame, int 
   }
   return in_range;
 }
+
+/** @brief Pack TS 38.331 SearchSpace.monitoringSymbolsWithinSlot into a per-symbol bitmap.
+ *
+ * monitoringSymbolsWithinSlot is a 14-bit BIT STRING. The leftmost bit is symbol 0 and the
+ * rightmost is symbol 13 (TS 38.213 §10.1). asn1c stores it MSB-aligned across two bytes
+ * (buf[0] bit 7 = symbol 0 ... buf[1] bit 2 = symbol 13, bits_unused = 2).
+ *
+ * @param symbols_in_slot  monitoringSymbolsWithinSlot from SearchSpace
+ * @param sps              OFDM symbols per slot
+ * @return per-symbol bitmap (low sps bits valid) */
+uint16_t nr_pdcch_monitoring_symbols_mask(const BIT_STRING_t *symbols_in_slot, uint8_t sps)
+{
+  DevAssert(symbols_in_slot);
+  DevAssert(symbols_in_slot->buf);
+  DevAssert(symbols_in_slot->size >= 2);
+  AssertFatal(sps == NR_SYMBOLS_PER_SLOT_EXTENDED_CP || sps == NR_SYMBOLS_PER_SLOT,
+              "Invalid OFDM symbols per slot %u (must be %u or %u, TS 38.211 §4.3.2)\n",
+              sps,
+              NR_SYMBOLS_PER_SLOT_EXTENDED_CP,
+              NR_SYMBOLS_PER_SLOT);
+  return (symbols_in_slot->buf[0] << (sps - 8)) | (symbols_in_slot->buf[1] >> (16 - sps));
+}
