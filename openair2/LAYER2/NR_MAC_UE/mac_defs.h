@@ -12,6 +12,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "common/platform_constants.h"
 #include "common/platform_types.h"
 #include "common/utils/threadPool/notified_fifo.h"
 
@@ -514,6 +515,24 @@ typedef struct {
   A_SEQUENCE_OF(si_schedinfo_config_t) si_SchedInfo_list;
 } si_schedInfo_t;
 
+typedef struct {
+  // Paging Cycle in Radio Frames
+  uint16_t T;
+  // Number of Paging Frames per Paging Cycle
+  uint16_t N;
+  // Number of Paging Occasions per Paging Frame
+  uint8_t Ns;
+  // Offset of the first Paging Frame in the Paging Cycle
+  uint8_t PF_offset;
+  // Number of PDCCH Monitoring Occasions per SSB in the Paging Occasion
+  uint8_t X;
+  // Number of entries in firstPDCCH-MonitoringOccasionOfPO
+  uint8_t first_mo_of_po_count;
+  // First PDCCH MO index of (i_s+1)-th PO within the PF (TS 38.331 PCCH-Config,
+  // firstPDCCH-MonitoringOccasionOfPO list)
+  uint16_t first_mo_of_po[NR_PCCH_MAX_PO];
+} nr_ue_paging_cfg_t;
+
 /*!\brief Top level UE MAC structure */
 typedef struct NR_UE_MAC_INST_s {
   module_id_t ue_id;
@@ -525,6 +544,7 @@ typedef struct NR_UE_MAC_INST_s {
   NR_MIB_t *mib;
 
   si_schedInfo_t si_SchedInfo;
+  nr_ue_paging_cfg_t paging_cfg;
   ssb_list_info_t ssb_list;
 
   NR_UE_ServingCell_Info_t sc_info;

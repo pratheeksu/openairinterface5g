@@ -1973,6 +1973,57 @@ static void configure_si_schedulingInfo(NR_UE_MAC_INST_t *mac,
   }
 }
 
+/** @brief Parse SIB1 PCCH-Config (TS 38.331) into UE MAC paging_cfg (T, N, PF_offset, Ns, X and the
+ *  per-PO start-MO list). */
+static void configure_pcch_config(NR_UE_MAC_INST_t *mac, const NR_ServingCellConfigCommonSIB_t *scc)
+{
+  DevAssert(mac);
+  DevAssert(scc);
+  const NR_PCCH_Config_t *pcch = &scc->downlinkConfigCommon.pcch_Config;
+  nr_ue_paging_cfg_t *paging_cfg = &mac->paging_cfg;
+  /* Reset the per-PO start-MO list */
+  paging_cfg->first_mo_of_po_count = 0;
+  memset(paging_cfg->first_mo_of_po, 0, sizeof(paging_cfg->first_mo_of_po));
+
+  paging_cfg->T = nr_pcch_default_paging_cycle_rf(pcch);
+  nr_pcch_n_and_paging_frame_offset(pcch, paging_cfg->T, &paging_cfg->N, &paging_cfg->PF_offset);
+  paging_cfg->Ns = nr_pcch_ns_per_pf(pcch);
+
+  /* TS 38.304 §7.1: X defaults to 1 when nrofPDCCH-MonitoringOccasionPerSSB-InPO-r16 is absent
+   * (one PDCCH MO per SSB in a PO) */
+  paging_cfg->X = 1;
+  if (pcch->ext1 && pcch->ext1->nrofPDCCH_MonitoringOccasionPerSSB_InPO_r16) {
+    const long x = *pcch->ext1->nrofPDCCH_MonitoringOccasionPerSSB_InPO_r16;
+    AssertFatal(x >= 2 && x <= NR_PCCH_MAX_MO_PER_SSB_IN_PO,
+                "TS 38.331 PCCH-Config: nrofPDCCH-MonitoringOccasionPerSSB-InPO-r16=%ld out of range (2..%d)\n",
+                x,
+                NR_PCCH_MAX_MO_PER_SSB_IN_PO);
+    paging_cfg->X = x;
+  }
+
+  // TS 38.304 §7.1 / TS 38.331 PCCH-Config: when firstPDCCH-MonitoringOccasionOfPO is present, it
+  // explicitly defines the starting PDCCH MO index of each PO within the PF, overriding the default
+  // (i_s * S * X) computation.
+  if (pcch->firstPDCCH_MonitoringOccasionOfPO) {
+    for (uint8_t i = 0; i < sizeofArray(paging_cfg->first_mo_of_po); i++) {
+      int v;
+      if (!nr_pcch_first_pdcch_start_mo(pcch->firstPDCCH_MonitoringOccasionOfPO, i, &v))
+        break;
+      paging_cfg->first_mo_of_po[i] = v;
+      paging_cfg->first_mo_of_po_count++;
+    }
+  }
+
+  LOG_D(NR_MAC,
+        "PCCH-Config parsed: T=%u N=%u Ns=%u PF_offset=%u X=%u first_mo_of_po_count=%u\n",
+        paging_cfg->T,
+        paging_cfg->N,
+        paging_cfg->Ns,
+        paging_cfg->PF_offset,
+        paging_cfg->X,
+        paging_cfg->first_mo_of_po_count);
+}
+
 void nr_rrc_mac_config_req_sib1(module_id_t module_id, int cc_idP, NR_SIB1_t *sib1, bool can_start_ra)
 {
   NR_UE_MAC_INST_t *mac = get_mac_inst(module_id);
@@ -1988,6 +2039,7 @@ void nr_rrc_mac_config_req_sib1(module_id_t module_id, int cc_idP, NR_SIB1_t *si
   AssertFatal(scc, "SIB1 SCC should not be NULL\n");
   UPDATE_IE(mac->tdd_UL_DL_ConfigurationCommon, scc->tdd_UL_DL_ConfigurationCommon, NR_TDD_UL_DL_ConfigCommon_t);
   configure_si_schedulingInfo(mac, si_SchedulingInfo, si_SchedulingInfo_v1700);
+  configure_pcch_config(mac, scc);
 
   config_common_ue_sa(mac, scc, cc_idP);
 
