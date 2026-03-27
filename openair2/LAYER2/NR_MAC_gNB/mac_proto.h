@@ -170,6 +170,8 @@ int get_pucch_resourceid(NR_PUCCH_Config_t *pucch_Config, int O_uci, int pucch_r
 
 void nr_schedule_srs(int module_id, frame_t frame, int slot);
 
+void nr_schedule_pos_srs(int module_id, frame_t frame, int slot);
+
 void nr_csirs_scheduling(int Mod_idP, frame_t frame, slot_t slot, nfapi_nr_dl_tti_request_t *DL_req);
 
 void nr_csi_meas_reporting(int Mod_idP, frame_t frameP, slot_t slotP);
@@ -356,6 +358,13 @@ void handle_nr_srs_measurements(const module_id_t module_id,
                                 const frame_t frame,
                                 const slot_t slot,
                                 nfapi_nr_srs_indication_pdu_t *srs_ind);
+
+void handle_nr_srs_toa_vendor_ext_measurements(const module_id_t module_id,
+                                               const frame_t frame,
+                                               const slot_t slot,
+                                               const uint8_t num_ta,
+                                               const int16_t *ta_offset_nsec,
+                                               const rnti_t rnti);
 
 void find_SSB_and_RO_available(gNB_MAC_INST *nrmac);
 
