@@ -14,6 +14,7 @@
 #include "NR_DL-CCCH-Message.h"        //asn_DEF_NR_DL_CCCH_Message
 #include "NR_BCCH-BCH-Message.h"       //asn_DEF_NR_BCCH_BCH_Message
 #include "NR_BCCH-DL-SCH-Message.h"    //asn_DEF_NR_BCCH_DL_SCH_Message
+#include "NR_PCCH-Message.h" //asn_DEF_NR_PCCH_Message
 #include "NR_CellGroupConfig.h"        //asn_DEF_NR_CellGroupConfig
 #include "NR_BWP-Downlink.h"           //asn_DEF_NR_BWP_Downlink
 #include "NR_RRCReconfiguration.h"
@@ -38,6 +39,8 @@
 #include "openair3/SECU/key_nas_deriver.h"
 
 #include "common/utils/LOG/log.h"
+#include "conversions.h"
+#include "common/utils/ds/byte_array.h"
 
 #ifndef CELLULAR
   #include "RRC/NR/MESSAGES/asn1_msg.h"
@@ -2283,6 +2286,43 @@ static int8_t nr_rrc_ue_decode_ccch(NR_UE_RRC_INST_t *rrc, const NRRrcMacCcchDat
    return rval;
 }
 
+/** @brief Decode a PCCH paging message and scan its paging records (TS 38.331 §5.3.2.3).
+ * @return -1 on decode error, 0 if no match is found, 1 if a record matches the UE */
+static int8_t nr_rrc_ue_decode_pcch(NR_UE_RRC_INST_t *rrc, const byte_array_t pcch)
+{
+  // Paging is only relevant in RRC_IDLE and RRC_INACTIVE.
+  if (rrc->nrRrcState != RRC_STATE_IDLE_NR && rrc->nrRrcState != RRC_STATE_INACTIVE_NR) {
+    LOG_D(NR_RRC, "[UE %ld] Ignoring PCCH in RRC state %d\n", rrc->ue_id, rrc->nrRrcState);
+    return 0;
+  }
+
+  LOG_D(NR_RRC, "[UE %ld] Decoding PCCH message (%zu bytes), State %d\n", rrc->ue_id, pcch.len, rrc->nrRrcState);
+
+  nr_paging_params_t params[NR_PCCH_MAX_PAGING_RECORDS];
+  int count = 0;
+  if (nr_pcch_decode(pcch, params, &count) != 0) {
+    LOG_E(NR_RRC, "[UE %ld] Failed to decode PCCH message (%zu bytes)\n", rrc->ue_id, pcch.len);
+    log_dump(NR_RRC, pcch.buf, pcch.len, LOG_DUMP_CHAR, "   Received bytes:\n");
+    return -1;
+  }
+
+  LOG_D(NR_RRC, "[UE %ld] Received Paging message with %d record(s)\n", rrc->ue_id, count);
+
+  const uint32_t ue_m_tmsi = rrc->fiveG_S_TMSI & UINT32_MAX;
+  for (int i = 0; i < count; i++) {
+    if (params[i].ue_identity_type == NR_PagingUE_Identity_PR_ng_5G_S_TMSI) {
+      LOG_D(NR_RRC, "[UE %ld] PagingRecord %d: M-TMSI=0x%08x\n", rrc->ue_id, i, params[i].ue_identity.m_tmsi);
+      if (params[i].ue_identity.m_tmsi == ue_m_tmsi) {
+        LOG_I(NR_RRC, "[UE %ld] Paging record %d matches M-TMSI=0x%08x\n", rrc->ue_id, i, params[i].ue_identity.m_tmsi);
+        return 1;
+      }
+    }
+  }
+
+  LOG_D(NR_RRC, "[UE %ld] No paging match found in PagingRecordList\n", rrc->ue_id);
+  return 0;
+}
+
 static void nr_rrc_ue_process_securityModeCommand(NR_UE_RRC_INST_t *ue_rrc,
                                                   NR_SecurityModeCommand_t *const securityModeCommand,
                                                   int srb_id,
@@ -3174,6 +3214,14 @@ void *rrc_nrue(void *notUsed)
   case NR_RRC_MAC_CCCH_DATA_IND: {
     NRRrcMacCcchDataInd *ind = &NR_RRC_MAC_CCCH_DATA_IND(msg_p);
     nr_rrc_ue_decode_ccch(rrc, ind);
+  } break;
+
+  case NR_RRC_MAC_PCCH_DATA_IND: {
+    NRRrcMacPcchDataInd *ind = &NR_RRC_MAC_PCCH_DATA_IND(msg_p);
+    const byte_array_t pcch = {.len = ind->sdu_size, .buf = ind->sdu};
+    if (nr_rrc_ue_decode_pcch(rrc, pcch) == 1) {
+      LOG_I(NR_RRC, "[UE %ld] Paging match found in PagingRecordList\n", rrc->ue_id);
+    }
   } break;
 
   case NR_RRC_DCCH_DATA_IND:
