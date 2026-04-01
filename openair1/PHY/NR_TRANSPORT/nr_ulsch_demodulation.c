@@ -1140,7 +1140,8 @@ typedef struct puschSymbolProc_s {
   c16_t *rxFext_slot_mem;
 } puschSymbolProc_t;
 
-static void symbol_unscrambling_demux(puschSymbolProc_t *rdata, int s, int size, int16_t llr_in[size])
+// layer demapping, UCI demultiplexing and unsrambling
+static void symbol_unscrambling_demux(puschSymbolProc_t *rdata, int s, int16_t **llrss)
 {
   const nfapi_nr_pusch_pdu_t *rel15_ul = rdata->rel15_ul;
   rate_match_info_uci_t *uci_info = rdata->uci_info;
@@ -1148,7 +1149,9 @@ static void symbol_unscrambling_demux(puschSymbolProc_t *rdata, int s, int size,
   NR_gNB_PUSCH *pusch_vars = rdata->pusch_vars;
   // unscrambling and UCI demultiplexing
   int16_t *s_seq = rdata->scramblingSequence + (pusch_vars->llr_offset[s] * rel15_ul->nrOfLayers);
-  uint32_t bits_per_re = rel15_ul->nrOfLayers * rel15_ul->qam_mod_order;
+  uint32_t nLayers = rel15_ul->nrOfLayers;
+  uint32_t qam = rel15_ul->qam_mod_order;
+  uint32_t bits_per_re = nLayers * qam;
   uint32_t a_idx  = map_uci->ack_offset[s];
   uint32_t c1_idx = map_uci->csi1_offset[s];
   uint32_t c2_idx = map_uci->csi2_offset[s];
@@ -1157,51 +1160,54 @@ static void symbol_unscrambling_demux(puschSymbolProc_t *rdata, int s, int size,
     bool is_ack = (map_uci->d_ack[s] > 0  && (re % map_uci->d_ack[s] == 0));
     bool is_csi1 = (map_uci->d_csi1[s] > 0 && (re % map_uci->d_csi1[s] == 0));
     bool is_csi2 = (map_uci->d_csi2[s] > 0 && (re % map_uci->d_csi2[s] == 0));
-    int16_t *curr_re_llr = &llr_in[re * bits_per_re];
-    int16_t *curr_re_s = &s_seq[re * bits_per_re];
 
     if (is_ack) {
-      if (uci_info->O_ack <= 2) {
-        for (int b = 0; b < bits_per_re; b++) {
-          int bit_in_mod_symbol = b % rel15_ul->qam_mod_order;
-          if (uci_info->O_ack == 1) {
-            // Table 5.3.3.1-1 of 38.212: Only the first bit (d0) is c0
-            // Subsequent bits d1...dN-1 are placeholders (y, x).
-            if (bit_in_mod_symbol == 0)
-              pusch_vars->ack_llrs[a_idx++] = curr_re_llr[b] * curr_re_s[b]; // unsrambling for info bits
-            else
-              pusch_vars->ack_llrs[a_idx++] = curr_re_llr[b]; // not unscrambling for placeholders x and y
+      for (int l = 0; l < nLayers; l++) {
+        for (int m = 0; m < qam; m++) {
+          int16_t s_bit = s_seq[re * bits_per_re + l * qam + m];
+          if (uci_info->O_ack <= 2) {
+            bool is_info = false;
+            if (uci_info->O_ack == 1) {
+              // Table 5.3.3.1-1 of 212: Only the very first bit of the first layer is c0
+              is_info = (m == 0);
+            } else {
+              // Table 5.3.3.1-2 for 2 information bits, and N=3Qm encoded bits
+              is_info = (m == 0 || m == 1);
+            }
+            // Only unscramble if it's an info bit (c0, c1, c2)
+            // as per 6.3.1.1 of 211 placeholders are not scrambled
+            pusch_vars->ack_llrs[a_idx++] = is_info ? (llrss[l][re * qam + m] * s_bit) : llrss[l][re * qam + m];
+            // Puncturing: Always write 0 to ULSCH
+            pusch_vars->ulsch_llrs[u_idx++] = 0;
           } else {
-            // Table 5.3.3.1-2 of 38.212
-            // Subsequent bits d1...dN-1 are placeholders (y, x).
-            if (bit_in_mod_symbol == 0 || bit_in_mod_symbol == 1)
-              pusch_vars->ack_llrs[a_idx++] = curr_re_llr[b] * curr_re_s[b]; // unsrambling for info bits
-            else
-              pusch_vars->ack_llrs[a_idx++] = curr_re_llr[b]; // not unscrambling for placeholders x and y
+            // Large ACK (>2 bits): Standard extraction and unscrambling
+            pusch_vars->ack_llrs[a_idx++] = llrss[l][re * qam + m] * s_bit;
           }
         }
-        // Puncturing: ULSCH decoder needs 0-LLRs at these positions
-        for (int b = 0; b < bits_per_re; b++)
-          pusch_vars->ulsch_llrs[u_idx++] = 0;
-      } else {
-        // Large ACK (>2 bits): Standard extraction and unscrambling
-        for (int b = 0; b < bits_per_re; b++)
-          pusch_vars->ack_llrs[a_idx++] = curr_re_llr[b] * curr_re_s[b];
       }
       continue;
     }
+
+    int16_t *target_buffer;
+    uint32_t *target_idx;
     if (is_csi1) {
-      for (int b = 0; b < bits_per_re; b++)
-        pusch_vars->csi1_llrs[c1_idx++] = curr_re_llr[b] * curr_re_s[b];
-      continue;
+      target_buffer = pusch_vars->csi1_llrs;
+      target_idx = &c1_idx;
+    } else if (is_csi2) {
+      target_buffer = pusch_vars->csi2_llrs;
+      target_idx = &c2_idx;
+    } else {
+      target_buffer = pusch_vars->ulsch_llrs;
+      target_idx = &u_idx;
     }
-    if (is_csi2) {
-      for (int b = 0; b < bits_per_re; b++)
-        pusch_vars->csi2_llrs[c2_idx++] = curr_re_llr[b] * curr_re_s[b];
-      continue;
+
+    // Standard Unscrambling Logic
+    for (int l = 0; l < nLayers; l++) {
+      for (int m = 0; m < qam; m++) {
+        int16_t s_bit = s_seq[re * bits_per_re + l * qam + m];
+        target_buffer[(*target_idx)++] = llrss[l][re * qam + m] * s_bit;
+      }
     }
-    for (int b = 0; b < bits_per_re; b++)
-      pusch_vars->ulsch_llrs[u_idx++] = curr_re_llr[b] * curr_re_s[b];
   }
 }
 
@@ -1238,17 +1244,7 @@ static void nr_pusch_symbol_processing(void *arg)
              rdata->rxFext_slot_mem,
              rdata->pusch_ch_est_dmrs_interpl_slot_mem);
 
-    int nb_re_pusch = pusch_vars->ul_valid_re_per_slot[symbol];
-    // layer de-mapping
-    int size = rel15_ul->nrOfLayers * buffer_length;
-    int16_t llr_ptr[size];
-    for (int i = 0; i < (nb_re_pusch); i++)
-      for (int l = 0; l < rel15_ul->nrOfLayers; l++)
-        for (int m = 0; m < rel15_ul->qam_mod_order; m++)
-          llr_ptr[i * rel15_ul->nrOfLayers * rel15_ul->qam_mod_order + l * rel15_ul->qam_mod_order + m] =
-              llrss[l][i * rel15_ul->qam_mod_order + m];
-
-    symbol_unscrambling_demux(rdata, symbol, size, llr_ptr);
+    symbol_unscrambling_demux(rdata, symbol, llrss);
   }
   // Task running in // completed
   completed_task_ans(rdata->ans);
