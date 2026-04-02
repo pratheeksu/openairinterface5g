@@ -1127,7 +1127,6 @@ typedef struct puschSymbolProc_s {
   NR_DL_FRAME_PARMS *frame_parms;
   const nfapi_nr_pusch_pdu_t *rel15_ul;
   NR_gNB_PUSCH *pusch_vars;
-  rate_match_info_uci_t *uci_info;
   nr_uci_mapping_t *map_uci;
   int slot;
   int startSymbol;
@@ -1144,9 +1143,9 @@ typedef struct puschSymbolProc_s {
 static void symbol_unscrambling_demux(puschSymbolProc_t *rdata, int s, int16_t **llrss)
 {
   const nfapi_nr_pusch_pdu_t *rel15_ul = rdata->rel15_ul;
-  rate_match_info_uci_t *uci_info = rdata->uci_info;
   nr_uci_mapping_t *map_uci = rdata->map_uci;
   NR_gNB_PUSCH *pusch_vars = rdata->pusch_vars;
+  rate_match_info_uci_t *uci_info = &pusch_vars->uci_info;
   // unscrambling and UCI demultiplexing
   int16_t *s_seq = rdata->scramblingSequence + (pusch_vars->llr_offset[s] * rel15_ul->nrOfLayers);
   uint32_t nLayers = rel15_ul->nrOfLayers;
@@ -1586,8 +1585,8 @@ int nr_rx_pusch_tp(PHY_VARS_gNB *gNB,
   if (pusch_vars->log2_maxh < 0)
     pusch_vars->log2_maxh = 0;
 
-  rate_match_info_uci_t uci_info = get_uci_on_pusch_info(rel15_ul, &ptrs_info, G);
-  nr_uci_mapping_t map_uci = init_nr_uci_pusch_demux(rel15_ul, &uci_info, frame_parms, pusch_vars);
+  pusch_vars->uci_info = get_uci_on_pusch_info(rel15_ul, &ptrs_info, G);
+  nr_uci_mapping_t map_uci = init_nr_uci_pusch_demux(rel15_ul, &pusch_vars->uci_info, frame_parms, pusch_vars);
   stop_meas(&gNB->rx_pusch_init_stats);
 
   start_meas(&gNB->rx_pusch_symbol_processing_stats);
@@ -1627,7 +1626,6 @@ int nr_rx_pusch_tp(PHY_VARS_gNB *gNB,
       rdata->beam_nb = beam_nb;
       rdata->rxFext_slot_mem = rxFext_slot_mem;
       rdata->pusch_ch_est_dmrs_interpl_slot_mem = pusch_ch_est_dmrs_interpl_slot_mem;
-      rdata->uci_info = &uci_info;
       rdata->map_uci = &map_uci;
 
       if (rel15_ul->pdu_bit_map & PUSCH_PDU_BITMAP_PUSCH_PTRS) {
