@@ -1738,8 +1738,9 @@ static bool allocate_ul_retransmission(gNB_MAC_INST *nrmac,
 
   /* mark when retransmission will happen */
   int slots_frame = nrmac->frame_structure.numb_slots_frame;
-  new_sched.frame = (frame + (slot + tda_info->k2 + get_NTN_Koffset(scc)) / slots_frame) % MAX_FRAME_NUMBER;
-  new_sched.slot = (slot + tda_info->k2 + get_NTN_Koffset(scc)) % slots_frame;
+  int NTN_gNB_Koffset = get_NTN_Koffset(scc);
+  new_sched.frame = get_fb_frame(frame, slot, tda_info->k2, slots_frame, NTN_gNB_Koffset);
+  new_sched.slot = get_fb_slot(slot, tda_info->k2, slots_frame, NTN_gNB_Koffset);
   new_sched.bwp_info = bwp_info;
   DevAssert(new_sched.ul_harq_pid == harq_pid);
 

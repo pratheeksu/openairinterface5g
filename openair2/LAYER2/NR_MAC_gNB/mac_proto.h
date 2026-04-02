@@ -500,5 +500,6 @@ void nr_mac_set_target_snrx10(nr_power_control_t *pc, int target_snrx10);
 void nr_mac_set_rssi_threshold(nr_power_control_t *pc, int rssi_threshold);
 void nr_mac_signal_dtx(nr_power_control_t *pc);
 int nr_mac_get_tpc(nr_power_control_t *pc);
-
+int get_fb_frame(int frame, int slot, int K, int n_slots_frame, int NTN_gNB_Koffset);
+int get_fb_slot(int slot, int K, int n_slots_frame, int NTN_gNB_Koffset);
 #endif /*__LAYER2_NR_MAC_PROTO_H__*/

@@ -784,9 +784,9 @@ static void nr_generate_Msg3_retransmission(module_id_t module_idP,
                                            ra->Msg3_tda_id);
 
   int slots_frame = nr_mac->frame_structure.numb_slots_frame;
-  uint16_t K2 = tda_info.k2 + get_NTN_Koffset(scc);
-  const int sched_frame = (frame + (slot + K2) / slots_frame) % MAX_FRAME_NUMBER;
-  const int sched_slot = (slot + K2) % slots_frame;
+  int NTN_gNB_Koffset = get_NTN_Koffset(scc);
+  const int sched_frame = get_fb_frame(frame, slot, tda_info.k2, slots_frame, NTN_gNB_Koffset);
+  const int sched_slot = get_fb_slot(slot, tda_info.k2, slots_frame, NTN_gNB_Koffset);
   uint16_t slot_bitmap = get_ul_bitmap(&nr_mac->frame_structure, sched_slot);
   uint16_t msg3_mask = SL_to_bitmap(tda_info.startSymbolIndex, tda_info.nrOfSymbols);
 
@@ -962,7 +962,7 @@ static void nr_generate_Msg3_retransmission(module_id_t module_idP,
   start_ra_contention_resolution_timer(
       ra,
       scc->uplinkConfigCommon->initialUplinkBWP->rach_ConfigCommon->choice.setup->ra_ContentionResolutionTimer,
-      K2,
+      NTN_gNB_Koffset + tda_info.k2,
       ul_bwp->scs);
 
   // reset state to wait msg3
