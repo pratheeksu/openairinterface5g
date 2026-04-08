@@ -383,6 +383,7 @@ typedef struct PHY_VARS_NR_UE_s {
   double freq_off_acc; /// accumulated DL frequency error (for PI controller)
   double dl_Doppler_shift; /// calculated DL Doppler shift
   double ul_Doppler_shift; /// calculated UL Doppler shift
+  int disable_blind_search; /// flag disabling the blind search for UE searches by neighboring cells
 
   /// Timing Advance updates variables
   /// Timing advance update computed from the TA command signalled from gNB

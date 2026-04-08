@@ -1196,12 +1196,12 @@ int pbch_processing(PHY_VARS_NR_UE *ue, const UE_nr_rxtx_proc_t *proc, nr_phy_da
   }
 
   // Search for unknown neighboring cells
-  if (proc->frame_rx % 256 == 0 && proc->nr_slot_rx == 0
+  if (!ue->disable_blind_search && proc->frame_rx % 256 == 0 && proc->nr_slot_rx == 0
       && measurements->last_blind_slot == measurements->last_slot)
     measurements->last_blind_slot = -1;
   uint16_t slots_per_frame = ue->frame_parms.slots_per_frame;
   bool is_meas_slot = proc->frame_rx % 256 == 0 && proc->nr_slot_rx >= CIRCULAR_INC(measurements->last_blind_slot, 1, slots_per_frame);
-  if (is_meas_slot && check_neighboring_cells_task(ue, measurements->search_new_cells_pending)) {
+  if (!ue->disable_blind_search && is_meas_slot && check_neighboring_cells_task(ue, measurements->search_new_cells_pending)) {
     measurements->search_new_cells_pending = true;
     measurements->last_blind_slot = proc->nr_slot_rx;
     nr_meas_task_args_t *args = create_meas_task_args(proc, ue);
