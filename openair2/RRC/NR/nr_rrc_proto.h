@@ -113,4 +113,7 @@ void nr_rrc_transfer_protected_rrc_message(const gNB_RRC_INST *rrc,
                                            const uint8_t *buffer,
                                            int size);
 
+void store_du_f1u_tunnel(const f1ap_drb_setup_t *drbs, int n, gNB_RRC_UE_t *ue);
+void e1_send_bearer_updates(gNB_RRC_INST *rrc, gNB_RRC_UE_t *UE, int n, f1ap_drb_setup_t *drbs);
+
 #endif

@@ -14,6 +14,7 @@
 #include "NR_UECapabilityEnquiry-v1560-IEs.h"
 #include "common/utils/time_manager/time_timer.h"
 #include "openair2/F1AP/lib/f1ap_ue_context.h"
+#include "openair2/F1AP/f1ap_ids.h"
 
 typedef enum {
   NRDC_NONE,
@@ -21,6 +22,7 @@ typedef enum {
   ACTIVATE_NRDC_WAIT_FOR_A4_RECONFIGURATION_COMPLETE,
   ACTIVATE_NRDC_WAIT_FOR_SCG_MEASUREMENT,
   ACTIVATE_NRDC_WAIT_FOR_F1_CONTEXT_SETUP_RESPONSE,
+  ACTIVATE_NRDC_WAIT_FOR_ACTIVATION_RECONFIGURATION_COMPLETE,
   NRDC_ACTIVE
 } nrdc_state_t;
 
@@ -33,6 +35,7 @@ typedef struct {
   int meas_object_id;
   int report_config_id;
   int measurement_id;
+  uint32_t secondary_du_ue_id;
 } nrdc_ue_state_t;
 
 static int generate_ue_capability_enquiry(uint8_t *out, int outsize, int xid, int mcg_band, int scg_band)
@@ -191,7 +194,8 @@ static int generate_a4_measurement(gNB_RRC_UE_t *ue,
         .sf20 = 0
       }
     },
-    .duration = NR_SSB_MTC__duration_sf5
+    //.duration = NR_SSB_MTC__duration_sf5
+    .duration = NR_SSB_MTC__duration_sf1         /* we have only the first SS/PBCH block, 1ms is enough */
   };
   du_ssb_mtc = &mtc;
 
@@ -223,14 +227,13 @@ static int generate_a4_measurement(gNB_RRC_UE_t *ue,
                                     .smtc1 = du_ssb_mtc,
                                     .referenceSignalConfig = {
                                       .ssb_ConfigMobility = &(struct NR_SSB_ConfigMobility) {
-                                        //.deriveSSB_IndexFromCell = false                   /* hardcoded */
-                                        .deriveSSB_IndexFromCell = true                    /* hardcoded */
+                                        .deriveSSB_IndexFromCell = false                   /* hardcoded */
                                       }
                                     },
                                     .absThreshSS_BlocksConsolidation = &(struct NR_ThresholdNR) {
                                       .thresholdRSRP = &(NR_RSRP_Range_t) { 36 }           /* hardcoded */
                                     },
-                                    .nrofSS_BlocksToAverage = &(long) { 8 },               /* hardcoded */
+                                    .nrofSS_BlocksToAverage = &(long) { 4 },               /* hardcoded */
                                     .quantityConfigIndex = 1,                              /* hardcoded, todo: check this value */
                                     .ext1 = &(struct NR_MeasObjectNR__ext1) {
                                       .freqBandIndicatorNR = &(NR_FreqBandIndicatorNR_t) { scg_band }
@@ -275,14 +278,21 @@ static int generate_a4_measurement(gNB_RRC_UE_t *ue,
                                           },
                                           .rsType = NR_NR_RS_Type_ssb,                     /* hardcoded */
                                           .reportInterval = NR_ReportInterval_ms120,       /* hardcoded */
-                                          .reportAmount = NR_EventTriggerConfig__reportAmount_r2,      /* todo: choose a proper value, maybe 1 would be enough? */
+                                          //.reportAmount = NR_EventTriggerConfig__reportAmount_r2,      /* todo: choose a proper value, maybe 1 would be enough? */
+                                          .reportAmount = NR_EventTriggerConfig__reportAmount_infinity,
                                           .reportQuantityCell = {
                                             .rsrp = true,                                  /* hardcoded */
                                             .rsrq = true,                                  /* hardcoded */
                                             .sinr = true                                   /* hardcoded */
                                           },
                                           .maxReportCells = 4,                             /* hardcoded */
-                                          .includeBeamMeasurements = false                 /* hardcoded */
+                                          .reportQuantityRS_Indexes = &(NR_MeasReportQuantity_t){
+                                            .rsrp = true,                                  /* hardcoded */
+                                            .rsrq = true,                                  /* hardcoded */
+                                            .sinr = true                                   /* hardcoded */
+                                          },
+                                          .maxNrofRS_IndexesToReport = &(long) { 32 },     /* hardcoded */
+                                          .includeBeamMeasurements = true                  /* hardcoded */
                                         }
                                       }
                                     }
@@ -355,7 +365,7 @@ void rrc_gnb_nrdc_start(gNB_RRC_INST *rrc, gNB_RRC_UE_t *ue)
 
   /* look for an NR-DC combination */
   int mcg_band = 77;
-  int scg_band = 257;
+  int scg_band = 261;
 
   /* a combination is found, start NR-DC, ask for UE capabilities */
   /* allocate the NR-DC state data in the UE */
@@ -449,6 +459,9 @@ void rrc_gnb_nrdc_ue_capabilities_received(gNB_RRC_INST *rrc, gNB_RRC_UE_t *ue, 
                                    (uint64_t []){ ue->rrc_ue_id, xid, nrdc->state }, 3);
 }
 
+/* this function is called both for ack of A4 measurement setting
+ * and secondary cell group addition
+ */
 void rrc_gnb_nrdc_rrc_reconfiguration_complete_received(gNB_RRC_INST *rrc, gNB_RRC_UE_t *ue, int xid)
 {
   LOG_D(NR_RRC, "rrc_gnb_nrdc_rrc_reconfiguration_complete_received called!!\n");
@@ -459,7 +472,8 @@ void rrc_gnb_nrdc_rrc_reconfiguration_complete_received(gNB_RRC_INST *rrc, gNB_R
     return;
   }
 
-  if (nrdc->state != ACTIVATE_NRDC_WAIT_FOR_A4_RECONFIGURATION_COMPLETE) {
+  if (nrdc->state != ACTIVATE_NRDC_WAIT_FOR_A4_RECONFIGURATION_COMPLETE
+      && nrdc->state != ACTIVATE_NRDC_WAIT_FOR_ACTIVATION_RECONFIGURATION_COMPLETE) {
     LOG_W(NR_RRC, "ignore unexpected NR-DC RRC Reconfiguration received for ue %d\n", ue->rrc_ue_id);
     return;
   }
@@ -476,11 +490,18 @@ void rrc_gnb_nrdc_rrc_reconfiguration_complete_received(gNB_RRC_INST *rrc, gNB_R
   ue->xids[nrdc->xid] = RRC_ACTION_NONE;
   nrdc->xid = -1;
 
-  /* measurements correctly configured for NR-DC combination
-   * do nothing until we receive a measurement
-   * (or until the UE is removed from the system)
-   */
-  nrdc->state = ACTIVATE_NRDC_WAIT_FOR_SCG_MEASUREMENT;
+  if (nrdc->state == ACTIVATE_NRDC_WAIT_FOR_A4_RECONFIGURATION_COMPLETE) {
+    /* measurements correctly configured for NR-DC combination
+     * do nothing until we receive a measurement
+     * (or until the UE is removed from the system)
+     */
+    nrdc->state = ACTIVATE_NRDC_WAIT_FOR_SCG_MEASUREMENT;
+    return;
+  }
+
+  /* Reconfiguration Complete for activation is received, NR-DC is now active */
+  nrdc->state = NRDC_ACTIVE;
+  LOG_I(NR_RRC, "ue %d: NR-DC is now active\n", ue->rrc_ue_id);
 }
 
 void rrc_gnb_nrdc_measurement_received(gNB_RRC_INST *rrc, gNB_RRC_UE_t *ue, NR_MeasurementReport_t *meas)
@@ -497,6 +518,11 @@ void rrc_gnb_nrdc_measurement_received(gNB_RRC_INST *rrc, gNB_RRC_UE_t *ue, NR_M
     LOG_W(NR_RRC, "ignore NR-DC measurement for ue %d\n", ue->rrc_ue_id);
     return;
   }
+
+  /* retrieve the UE primary DU ID */
+  f1_ue_data_t ue_data = cu_get_f1_ue_data(ue->rrc_ue_id);
+  RETURN_IF_INVALID_ASSOC_ID(ue_data.du_assoc_id);
+  uint32_t ue_du_id = ue_data.secondary_ue;
 
   /* measurement received, send context setup request to the secondary DU
    * including CG-ConfigInfo to inform the secondary DU that the CU requests
@@ -626,6 +652,26 @@ void rrc_gnb_nrdc_measurement_received(gNB_RRC_INST *rrc, gNB_RRC_UE_t *ue, NR_M
   rrc->mac_rrc.ue_context_setup_request(cell->assoc_id, &ue_context_setup_req);
   free_ue_context_setup_req(&ue_context_setup_req);
 
+  /* measurement received, send context modification request to the primary DU
+   * to remove the transfered RLC bearer
+   */
+
+  /* note: we ignore the modification response, to be changed if needed,
+   * modifications to be done in rrc_CU_process_ue_context_modification_response()
+   * and then add something in this file somewhere
+   */
+  f1ap_drb_to_release_t *drbs_release = calloc_or_fail(1, sizeof(*drbs_release));
+  f1ap_drb_to_release_t *drb_release = &drbs_release[0];
+  drb_release->id = rrc_drb->drb_id;
+  f1ap_ue_context_mod_req_t ue_context_mod_req = {
+    .gNB_CU_ue_id = ue->rrc_ue_id,
+    .gNB_DU_ue_id = ue_du_id,
+    .drbs_rel_len = 1,
+    .drbs_rel = drbs_release
+  };
+  rrc->mac_rrc.ue_context_modification_request(ue_data.du_assoc_id, &ue_context_mod_req);
+  free_ue_context_mod_req(&ue_context_mod_req);
+
   nrdc->state = ACTIVATE_NRDC_WAIT_FOR_F1_CONTEXT_SETUP_RESPONSE;
 
   LOG_E(NR_RRC, "NR-DC activation: rrc->mac_rrc.ue_context_setup_request() has been called\n");
@@ -691,4 +737,193 @@ bool rrc_gnb_nrdc_wait_for_f1_context_setup_response(gNB_RRC_UE_t *ue)
 void nrdc_rrc_CU_process_ue_context_setup_response(gNB_RRC_UE_t *ue, gNB_RRC_INST *rrc, f1ap_ue_context_setup_resp_t *resp)
 {
   LOG_E(NR_RRC, "nrdc_rrc_CU_process_ue_context_setup_response called\n");
+
+  nrdc_ue_state_t *nrdc = ue->nrdc;
+  if (!nrdc) {
+    LOG_E(NR_RRC, "no NR-DC found for ue %d, ignore ContextSetupResponse\n", ue->rrc_ue_id);
+    return;
+  }
+
+  /* store secondary DU UE ID */
+  nrdc->secondary_du_ue_id = resp->gNB_DU_ue_id;
+
+  /* modify GTP bearer endpoint */
+  AssertFatal(resp->drbs_len == 1, "bad setup response\n");
+  store_du_f1u_tunnel(resp->drbs, resp->drbs_len, ue);
+  e1_send_bearer_updates(rrc, ue, resp->drbs_len, resp->drbs);
+
+  /* reconfigure the UE to trigger NR-DC activation */
+  OCTET_STRING_t cgbuf = {
+    .buf = resp->du_to_cu_rrc_info.cell_group_config.buf,
+    .size = resp->du_to_cu_rrc_info.cell_group_config.len
+  };
+
+  /* build an RRCReconfiguration that contains only the sCG */
+  NR_RRCReconfiguration_t scg = {
+    .rrc_TransactionIdentifier = 0 /* xid */,  /* not sure what to put here */
+    .criticalExtensions = {
+      .present = NR_RRCReconfiguration__criticalExtensions_PR_rrcReconfiguration,
+      .choice = {
+        .rrcReconfiguration = &(struct NR_RRCReconfiguration_IEs) {
+          .secondaryCellGroup = &cgbuf
+        }
+      }
+    }
+  };
+
+  /* encode it */
+  OCTET_STRING_t nr_scg = { 0 };
+  nr_scg.size = uper_encode_to_new_buffer(&asn_DEF_NR_RRCReconfiguration, NULL, &scg, (void **)&nr_scg.buf);
+  if (nr_scg.size <= 0) {
+    AssertFatal(nr_scg.size > 0, "Failed to encode RRCReconfiguration\n");
+    LOG_E(NR_RRC, "go_fr2: Failed to encode RRCReconfiguration\n");
+    return;
+  }
+
+  /* we have to release rlc of drb1 in the master cell group */
+  NR_CellGroupConfig_t mcg = {
+    .cellGroupId = 0,
+    .rlc_BearerToReleaseList = &(struct NR_CellGroupConfig__rlc_BearerToReleaseList) {
+      .list = {
+        .array = (NR_LogicalChannelIdentity_t *[]) {
+          &(NR_LogicalChannelIdentity_t) {
+            4
+          }
+        },
+        .count = 1
+      }
+    }
+  };
+
+  /* encode the mcg */
+  OCTET_STRING_t nr_mcg = { 0 };
+  nr_mcg.size = uper_encode_to_new_buffer(&asn_DEF_NR_CellGroupConfig, NULL, &mcg, (void **)&nr_mcg.buf);
+  if (nr_mcg.size <= 0) {
+    AssertFatal(nr_mcg.size > 0, "Failed to encode CellGroupConfig of MCG\n");
+    LOG_E(NR_RRC, "go_fr2: Failed to encode CellGroupConfig of MCG\n");
+    return;
+  }
+
+  uint8_t xid = rrc_gNB_get_next_transaction_identifier(rrc->module_id);
+  ue->xids[xid] = RRC_F1_NRDC_IN_PROGRESS;
+  ue->ongoing_reconfiguration = true;
+
+  /* build main RRCReconfiguration containing the sCG one
+   * (we have to embed an RRCReconfiguration inside an RRCReconfiguration
+   * as explained in 38.331 6.2.2 description of RRCReconfiguration,
+   * especially the explaination about secondaryCellGroup)
+   */
+  NR_DL_DCCH_Message_t dl_dcch_msg = {
+    .message = {
+      .present = NR_DL_DCCH_MessageType_PR_c1,
+      .choice = {
+        .c1 = &(struct NR_DL_DCCH_MessageType__c1) {
+          .present = NR_DL_DCCH_MessageType__c1_PR_rrcReconfiguration,
+          .choice = {
+            .rrcReconfiguration = &(struct NR_RRCReconfiguration) {
+              .rrc_TransactionIdentifier = xid,
+              .criticalExtensions = {
+                .present = NR_RRCReconfiguration__criticalExtensions_PR_rrcReconfiguration,
+                .choice = {
+                  .rrcReconfiguration = &(struct NR_RRCReconfiguration_IEs) {
+                    .measConfig = &(struct NR_MeasConfig) {
+                      .measObjectToRemoveList = &(struct NR_MeasObjectToRemoveList) {
+                        .list = {
+                          .array = (NR_MeasObjectId_t *[]) {
+                            &(NR_MeasObjectId_t) { nrdc->meas_object_id }
+                          },
+                          .count = 1
+                        }
+                      },
+                      .reportConfigToRemoveList = &(struct NR_ReportConfigToRemoveList) {
+                        .list = {
+                          .array = (NR_ReportConfigId_t *[]) {
+                            &(NR_ReportConfigId_t) { nrdc->report_config_id }
+                          },
+                          .count = 1
+                        }
+                      },
+                      .measIdToRemoveList = &(struct NR_MeasIdToRemoveList) {
+                        .list = {
+                          .array = (NR_MeasId_t *[]) {
+                            &(NR_MeasId_t) { nrdc->measurement_id }
+                          },
+                          .count = 1
+                        }
+                      }
+                    },
+                    .radioBearerConfig = &(struct NR_RadioBearerConfig) {
+                      .drb_ToAddModList = &(struct NR_DRB_ToAddModList) {
+                        .list = {
+                          .array = (struct NR_DRB_ToAddMod *[]) {
+                            &(struct NR_DRB_ToAddMod) {
+                              .drb_Identity = (NR_DRB_Identity_t) 1,
+                              .recoverPDCP = &(long) {
+                                NR_DRB_ToAddMod__recoverPDCP_true
+                              }
+                            }
+                          },
+                          .count = 1
+                        }
+                      },
+                    },
+                    .nonCriticalExtension = &(struct NR_RRCReconfiguration_v1530_IEs) {
+                      .masterCellGroup = &nr_mcg,
+                      .nonCriticalExtension = &(struct NR_RRCReconfiguration_v1540_IEs) {
+                        .nonCriticalExtension = &(struct NR_RRCReconfiguration_v1560_IEs) {
+                          .mrdc_SecondaryCellGroupConfig = &(struct NR_SetupRelease_MRDC_SecondaryCellGroupConfig) {
+                            .present = NR_SetupRelease_MRDC_SecondaryCellGroupConfig_PR_setup,
+                            .choice = {
+                              .setup = &(struct NR_MRDC_SecondaryCellGroupConfig) {
+                                .mrdc_SecondaryCellGroup = {
+                                  .present = NR_MRDC_SecondaryCellGroupConfig__mrdc_SecondaryCellGroup_PR_nr_SCG,
+                                  .choice = {
+                                    .nr_SCG = nr_scg
+                                  }
+                                }
+                              }
+                            }
+                          },
+                          .sk_Counter = &(NR_SK_Counter_t) {
+                            (NR_SK_Counter_t) 0
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  };
+
+  /* free the measurement IDs */
+  free_measurement_object_id(ue, nrdc->meas_object_id);
+  free_report_config_id(ue, nrdc->report_config_id);
+  free_measurement_id(ue, nrdc->measurement_id);
+  nrdc->meas_object_id = -1;
+  nrdc->report_config_id = -1;
+  nrdc->measurement_id = -1;
+
+  /* encode and send */
+  unsigned char *buf = 0;
+
+  int len = uper_encode_to_new_buffer(&asn_DEF_NR_DL_DCCH_Message, NULL, &dl_dcch_msg, (void **)&buf);
+  free(nr_mcg.buf);
+  if (len <= 0) {
+    AssertFatal(len > 0, "Failed to encode DL-DCCH message\n");
+    LOG_E(NR_RRC, "go_fr2: Failed to encode DL-DCCH message\n");
+    return;
+  }
+
+  const uint32_t msg_id = NR_DL_DCCH_MessageType__c1_PR_rrcReconfiguration;
+  nr_rrc_transfer_protected_rrc_message(rrc, ue, DL_SCH_LCID_DCCH, msg_id, buf, len);
+
+  free(buf);
+
+  /* no need for a timer */
+  nrdc->state = ACTIVATE_NRDC_WAIT_FOR_ACTIVATION_RECONFIGURATION_COMPLETE;
 }

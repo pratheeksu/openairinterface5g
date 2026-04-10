@@ -23,20 +23,21 @@ static NR_UE_info_t *nrdc_create_new_UE(gNB_MAC_INST *mac, uint32_t cu_id, const
   bool success = du_add_f1_ue_data(rnti, &new_ue_data);
   DevAssert(success);
 
-  NR_UE_info_t *UE = get_new_nr_ue_inst(&mac->UE_info.uid_allocator, rnti, NULL, &mac->radio_config);
+  const nr_mac_config_t *configuration = &mac->radio_config;
+  NR_UE_info_t *UE = get_new_nr_ue_inst(&mac->UE_info.uid_allocator, rnti, NULL, configuration);
   AssertFatal(UE->uid < MAX_MOBILES_PER_GNB, "cannot create UE context, UE context setup failure not implemented\n");
 
   NR_COMMON_channels_t *cc = &mac->common_channels[CC_id];
   const NR_ServingCellConfigCommon_t *scc = cc->ServingCellConfigCommon;
-  const nr_mac_config_t *configuration = &mac->radio_config;
 
+  /* mimic NSA way to create a new UE (with adaptations) */
   NR_UE_NR_Capability_t *cap = get_ue_nr_cap_from_cg_config_info(cgci);
   int ssb_index = get_ssbidx_from_beam(mac, UE->UE_beam_index);
   NR_CellGroupConfig_t *cellGroupConfig = get_default_secondaryCellGroup(scc, cap, 1, 1, configuration, UE->uid, ssb_index);
-  AssertFatal(cellGroupConfig != NULL, "out of memory\n");
+
   cellGroupConfig->spCellConfig->reconfigurationWithSync = get_reconfiguration_with_sync(UE->rnti, UE->uid, scc, mac->frame);
   UE->capability = cap;
-  UE->local_bwp_id = 1; // nrdc_get_default_secondaryCellGroup sets 1st active BWP as 1
+  UE->local_bwp_id = 1; // get_default_secondaryCellGroup sets 1st active BWP as 1
 
   // note: we don't pass the cellGroupConfig to add_new_nr_ue() because we need
   // the uid to create the CellGroupConfig (which is in the UE context created
@@ -80,6 +81,11 @@ void nrdc_ue_context_setup_request(const f1ap_ue_context_setup_req_t *req)
 
   if (req->drbs_len > 0)
     resp.drbs_len = handle_ue_context_drbs_setup(UE, req->drbs_len, req->drbs, &resp.drbs, new_CellGroup, &mac->rlc_config);
+
+  UE->reconfigCellGroup = new_CellGroup;
+  int ss_type =  NR_SearchSpace__searchSpaceType_PR_common;
+  NR_ServingCellConfigCommon_t *scc = mac->common_channels[0].ServingCellConfigCommon;
+  configure_UE_BWP(mac, scc, UE, true, ss_type, -1, -1);
 
   NR_SCHED_UNLOCK(&mac->sched_lock);
 
