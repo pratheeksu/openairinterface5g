@@ -474,6 +474,7 @@ check_install_oai_software() {
 
     install_asn1c_from_source $1
     install_simde_from_source $1
+    install_blis_from_source $1
 }
 
 install_asn1c_from_source(){
@@ -517,6 +518,25 @@ install_simde_from_source(){
     git log -n1
     # brute force copy into /usr/include
     $SUDO \cp -rv ../simde /usr/include
+}
+
+install_blis_from_source(){
+    echo_info "\nInstalling BLIS."
+    $SUDO $INSTALLER -y install build-essential make g++ gfortran cmake
+    $SUDO rm -rf /tmp/blis
+    git clone https://github.com/amd/blis.git /tmp/blis
+    cd /tmp/blis
+    ./configure --enable-cblas -t openmp auto
+    make -j`nproc`
+    make check
+    $SUDO make install
+    $SUDO ldconfig
+
+    $SUDO cp /usr/local/share/pkgconfig/blis-mt.pc /usr/local/share/pkgconfig/cblis.pc
+    $SUDO ln -s /usr/local/share/pkgconfig/blis-mt.pc /usr/local/share/pkgconfig/blis.pc
+
+    grep -qxF 'export BLIS_NUM_THREADS=6' ~/.bashrc || echo 'export BLIS_NUM_THREADS=6' >> ~/.bashrc
+    source ~/.bashrc
 }
 
 install_lttng() {
