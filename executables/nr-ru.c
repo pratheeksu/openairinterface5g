@@ -396,111 +396,119 @@ static void rx_rf(RU_t *ru, int *frame, int *slot)
   proc->timestamp_rx = ts-ru->ts_offset;
 
 #ifdef DEVELOP_CIR
-  // init common variables
-  pathLossLinear.r = ru->pathLossLinear;
-  noise_per_sample.r = ru->noise_per_sample;
-  noise_reader(ru, ru->common.noise_array, samples_per_slot, nb_rx);
 
-  // Copy and cast int16 to floats
-  for (int a_rx = 0; a_rx < nb_rx; a_rx++) {
-    c16_t *in = rxp[a_rx];
-    cf_t *out = ru->common.circular_buff[a_rx];
-    int idx = (ru->common.buffboundary + ru->common.circular_buff_size) % ru->common.circular_buff_size;
-    int i = 0;
-    for (; i + 4 <= samples_per_slot; i += 4) {
-      simde__m128i v16 = simde_mm_loadu_si128((simde__m128i *)&in[i]); // Load 8 int16: r0,i0, r1,i1, r2,i2, r3,i3
-      simde__m128i lo32 = simde_mm_cvtepi16_epi32(v16); // Cast int16 -> int32: r0,i0, r1,i1
-      simde__m128i hi16 = simde_mm_srli_si128(v16, 8); // Shift v16 right by 8 bytes
-      simde__m128i hi32 = simde_mm_cvtepi16_epi32(hi16); // Cast int16 -> int32: r2,i2, r3,i3
-      simde__m128 lo_f = simde_mm_cvtepi32_ps(lo32); // Cast int32 -> float: r0,i0, r1,i1
-      simde__m128 hi_f = simde_mm_cvtepi32_ps(hi32); // Cast int32 -> float: r2,i2, r3,i3
-      simde_mm_storeu_ps((float *)&out[idx], lo_f); // Store 128-bits composed by 4 floats: r0,i0, r1,i1
-      simde_mm_storeu_ps((float *)&out[idx + 2], hi_f); // Store 128-bits composed by 4 floats: r2,i2, r3,i3
-      idx += 4;
-      if (idx >= ru->common.circular_buff_size)
-        idx -= ru->common.circular_buff_size;
-    }
-    // Remaining data
-    for (; i < samples_per_slot; i++) {
-      out[idx].r = (float)in[i].r;
-      out[idx].i = (float)in[i].i;
-      idx++;
-      if (idx == ru->common.circular_buff_size)
-        idx = 0;
-    }
-  }
+  nfapi_nr_config_request_scf_t *config = &ru->config;
+  int slot_type = nr_slot_select(config, *frame, *slot % fp->slots_per_frame);
 
-  // memcpy from circularBuff
-  for (int lp = 0; lp < ru->channel_length; lp++) {
+  if (slot_type == NR_UPLINK_SLOT || slot_type == NR_MIXED_SLOT) {
+    // init common variables
+    pathLossLinear.r = ru->pathLossLinear;
+    noise_per_sample.r = ru->noise_per_sample;
+    noise_reader(ru, ru->common.noise_array, samples_per_slot, nb_rx);
+
+    // Copy and cast int16 to floats
+    for (int a_rx = 0; a_rx < nb_rx; a_rx++) {
+      c16_t *in = rxp[a_rx];
+      cf_t *out = ru->common.circular_buff[a_rx];
+      int idx = (ru->common.buffboundary + ru->common.circular_buff_size) % ru->common.circular_buff_size;
+      int i = 0;
+      for (; i + 4 <= samples_per_slot; i += 4) {
+        simde__m128i v16 = simde_mm_loadu_si128((simde__m128i *)&in[i]); // Load 8 int16: r0,i0, r1,i1, r2,i2, r3,i3
+        simde__m128i lo32 = simde_mm_cvtepi16_epi32(v16); // Cast int16 -> int32: r0,i0, r1,i1
+        simde__m128i hi16 = simde_mm_srli_si128(v16, 8); // Shift v16 right by 8 bytes
+        simde__m128i hi32 = simde_mm_cvtepi16_epi32(hi16); // Cast int16 -> int32: r2,i2, r3,i3
+        simde__m128 lo_f = simde_mm_cvtepi32_ps(lo32); // Cast int32 -> float: r0,i0, r1,i1
+        simde__m128 hi_f = simde_mm_cvtepi32_ps(hi32); // Cast int32 -> float: r2,i2, r3,i3
+        simde_mm_storeu_ps((float *)&out[idx], lo_f); // Store 128-bits composed by 4 floats: r0,i0, r1,i1
+        simde_mm_storeu_ps((float *)&out[idx + 2], hi_f); // Store 128-bits composed by 4 floats: r2,i2, r3,i3
+        idx += 4;
+        if (idx >= ru->common.circular_buff_size)
+          idx -= ru->common.circular_buff_size;
+      }
+      // Remaining data
+      for (; i < samples_per_slot; i++) {
+        out[idx].r = (float)in[i].r;
+        out[idx].i = (float)in[i].i;
+        idx++;
+        if (idx == ru->common.circular_buff_size)
+          idx = 0;
+      }
+    }
+
+    // memcpy from circularBuff
+    for (int lp = 0; lp < ru->channel_length; lp++) {
+      pthread_mutex_lock(&ru->proc.mutex_mimo);
+      int l = ru->delayindexlist[lp]; // l: tap index number
+      pthread_mutex_unlock(&ru->proc.mutex_mimo);
+      int delayed_boundary_s = (ru->common.buffboundary - l + ru->common.circular_buff_size) % ru->common.circular_buff_size;
+      int delayed_boundary_e =
+          (ru->common.buffboundary + samples_per_slot - l + ru->common.circular_buff_size) % ru->common.circular_buff_size;
+      for (a_rx = 0; a_rx < nb_rx; a_rx++) {
+        if (delayed_boundary_s < delayed_boundary_e) { // data is contiguous in the buffer
+          memcpy(&ru->common.simul_input[(nb_rx * lp + a_rx) * samples_per_slot],
+                 &ru->common.circular_buff[a_rx][delayed_boundary_s],
+                 sizeof(cf_t) * (delayed_boundary_e - delayed_boundary_s));
+        } else {
+          memcpy(&ru->common.simul_input[(nb_rx * lp + a_rx) * samples_per_slot],
+                 &ru->common.circular_buff[a_rx][delayed_boundary_s],
+                 sizeof(cf_t) * (ru->common.circular_buff_size - delayed_boundary_s)); // Copy the first half
+          memcpy(
+              &ru->common.simul_input[(nb_rx * lp + a_rx) * samples_per_slot + ru->common.circular_buff_size - delayed_boundary_s],
+              &ru->common.circular_buff[a_rx][0],
+              sizeof(cf_t) * delayed_boundary_e); // Copy the second half
+        }
+      }
+    }
+
+    ru->common.buffboundary =
+        (ru->common.buffboundary + samples_per_slot + ru->common.circular_buff_size) % ru->common.circular_buff_size;
+
     pthread_mutex_lock(&ru->proc.mutex_mimo);
-    int l = ru->delayindexlist[lp]; // l: tap index number
+    // calculation C <= alpha * AB + beta * C
+    // alpha: pathLossLinear
+    // A    : (nb_rx, nb_tx*channel_length) cirMIMO_simulmatrix
+    // B    : (nb_tx*channel_length, nsamps) samples array
+    // beta : noise_per_sample
+    // C    : (nb_rx, nsamps) noise_array
+    cblas_cgemm(CblasRowMajor,
+                CblasNoTrans,
+                CblasNoTrans,
+                nb_rx, // M, A rows: MIMO rows
+                samples_per_slot, // N, B cols: sample cols
+                nb_tx * ru->channel_length, // K, A cols == B rows
+                &pathLossLinear, // alpha: path loss linear
+                ru->cirMIMO_simulmatrix, // A: MIMO matrix
+                nb_tx * ru->channel_length, // K, leading dimension == A cols
+                ru->common.simul_input, // B: samples matrix
+                samples_per_slot, // N, leading dimension == B cols
+                &noise_per_sample, // beta: noise_per_sample
+                ru->common.noise_array, // C: noise_array
+                samples_per_slot // N, leading dimension == C cols
+    );
     pthread_mutex_unlock(&ru->proc.mutex_mimo);
-    int delayed_boundary_s = (ru->common.buffboundary - l + ru->common.circular_buff_size) % ru->common.circular_buff_size;
-    int delayed_boundary_e =
-        (ru->common.buffboundary + samples_per_slot - l + ru->common.circular_buff_size) % ru->common.circular_buff_size;
-    for (a_rx = 0; a_rx < nb_rx; a_rx++) {
-      if (delayed_boundary_s < delayed_boundary_e) { // data is contiguous in the buffer
-        memcpy(&ru->common.simul_input[(nb_rx * lp + a_rx) * samples_per_slot],
-               &ru->common.circular_buff[a_rx][delayed_boundary_s],
-               sizeof(cf_t) * (delayed_boundary_e - delayed_boundary_s));
-      } else {
-        memcpy(&ru->common.simul_input[(nb_rx * lp + a_rx) * samples_per_slot],
-               &ru->common.circular_buff[a_rx][delayed_boundary_s],
-               sizeof(cf_t) * (ru->common.circular_buff_size - delayed_boundary_s)); // Copy the first half
-        memcpy(&ru->common.simul_input[(nb_rx * lp + a_rx) * samples_per_slot + ru->common.circular_buff_size - delayed_boundary_s],
-               &ru->common.circular_buff[a_rx][0],
-               sizeof(cf_t) * delayed_boundary_e); // Copy the second half
+
+    // Store
+    for (int a_rx = 0; a_rx < nb_rx; a_rx++) {
+      c16_t *out = rxp[a_rx];
+      cf_t *in = &ru->common.noise_array[a_rx * samples_per_slot];
+      // Processes blocks of 4 complex numbers (8 floats) per iteration.
+      int i = 0;
+      for (; i + 4 <= samples_per_slot; i += 4) {
+        simde__m256 in_f = simde_mm256_loadu_ps((const float *)&in[i]); // Load 8 32-bit floats: r0,i0, r1,i1, r2,i2, r3,i3
+        simde__m256i in_i32 = simde_mm256_cvttps_epi32(in_f); // Cast float -> int32 with truncation: r0,i0, r1,i1, r2,i2, r3,i3
+        simde__m128i low = simde_mm256_castsi256_si128(in_i32); // Cast __m256i -> __m128i: r0,i0, r1,i1
+        simde__m128i high = simde_mm256_extracti128_si256(in_i32, 1); // Extract 128 bits, 1: dst[127:0] := a[255:128]: r2,i2, r3,i3
+        simde__m128i packed = simde_mm_packs_epi32(low, high); // Cast int32 -> int16: r0,i0, r1,i1, r2,i2, r3,i3
+        simde_mm_storeu_si128((simde__m128i *)&out[i], packed); // Store 128-bits of integer data
+      }
+      // Remaining data
+      for (; i < samples_per_slot; i++) {
+        out[i].r = (int16_t)in[i].r; // 32->16bit
+        out[i].i = (int16_t)in[i].i; // 32->16bit
       }
     }
   }
 
-  ru->common.buffboundary =
-      (ru->common.buffboundary + samples_per_slot + ru->common.circular_buff_size) % ru->common.circular_buff_size;
-
-  pthread_mutex_lock(&ru->proc.mutex_mimo);
-  // calculation C <= alpha * AB + beta * C
-  // alpha: pathLossLinear
-  // A    : (nb_rx, nb_tx*channel_length) cirMIMO_simulmatrix
-  // B    : (nb_tx*channel_length, nsamps) samples array
-  // beta : noise_per_sample
-  // C    : (nb_rx, nsamps) noise_array
-  cblas_cgemm(CblasRowMajor,
-              CblasNoTrans,
-              CblasNoTrans,
-              nb_rx, // M, A rows: MIMO rows
-              samples_per_slot, // N, B cols: sample cols
-              nb_tx * ru->channel_length, // K, A cols == B rows
-              &pathLossLinear, // alpha: path loss linear
-              ru->cirMIMO_simulmatrix, // A: MIMO matrix
-              nb_tx * ru->channel_length, // K, leading dimension == A cols
-              ru->common.simul_input, // B: samples matrix
-              samples_per_slot, // N, leading dimension == B cols
-              &noise_per_sample, // beta: noise_per_sample
-              ru->common.noise_array, // C: noise_array
-              samples_per_slot // N, leading dimension == C cols
-  );
-  pthread_mutex_unlock(&ru->proc.mutex_mimo);
-
-  // Store
-  for (int a_rx = 0; a_rx < nb_rx; a_rx++) {
-    c16_t *out = rxp[a_rx];
-    cf_t *in = &ru->common.noise_array[a_rx * samples_per_slot];
-    // Processes blocks of 4 complex numbers (8 floats) per iteration.
-    int i = 0;
-    for (; i + 4 <= samples_per_slot; i += 4) {
-      simde__m256 in_f = simde_mm256_loadu_ps((const float *)&in[i]); // Load 8 32-bit floats: r0,i0, r1,i1, r2,i2, r3,i3
-      simde__m256i in_i32 = simde_mm256_cvttps_epi32(in_f); // Cast float -> int32 with truncation: r0,i0, r1,i1, r2,i2, r3,i3
-      simde__m128i low = simde_mm256_castsi256_si128(in_i32); // Cast __m256i -> __m128i: r0,i0, r1,i1
-      simde__m128i high = simde_mm256_extracti128_si256(in_i32, 1); // Extract 128 bits, 1: dst[127:0] := a[255:128]: r2,i2, r3,i3
-      simde__m128i packed = simde_mm_packs_epi32(low, high); // Cast int32 -> int16: r0,i0, r1,i1, r2,i2, r3,i3
-      simde_mm_storeu_si128((simde__m128i *)&out[i], packed); // Store 128-bits of integer data
-    }
-    // Remaining data
-    for (; i < samples_per_slot; i++) {
-      out[i].r = (int16_t)in[i].r; // 32->16bit
-      out[i].i = (int16_t)in[i].i; // 32->16bit
-    }
-  }
 #endif // DEVELOP_CIR
 
   if (rxs != samples_per_slot)
@@ -722,111 +730,118 @@ void tx_rf(RU_t *ru, int frame,int slot, uint64_t timestamp)
 #endif // DEVELOP_CIR
 
 #ifdef DEVELOP_CIR
-  // init common variables
-  pathLossLinear.r = ru->pathLossLinear;
-  noise_per_sample.r = ru->noise_per_sample;
-  noise_reader(ru, ru->common.noise_array, samples_per_slot, nb_tx);
 
-  // Copy and cast int16 to floats
-  for (int a_rx = 0; a_rx < nb_rx; a_rx++) {
-    c16_t *in = txp[a_rx];
-    cf_t *out = ru->common.circular_buff[a_rx];
-    int idx = (ru->common.buffboundary + ru->common.circular_buff_size) % ru->common.circular_buff_size;
-    int i = 0;
-    for (; i + 4 <= samples_per_slot; i += 4) {
-      simde__m128i v16 = simde_mm_loadu_si128((simde__m128i *)&in[i]); // Load 8 int16: r0,i0, r1,i1, r2,i2, r3,i3
-      simde__m128i lo32 = simde_mm_cvtepi16_epi32(v16); // Cast int16 -> int32: r0,i0, r1,i1
-      simde__m128i hi16 = simde_mm_srli_si128(v16, 8); // Shift v16 right by 8 bytes
-      simde__m128i hi32 = simde_mm_cvtepi16_epi32(hi16); // Cast int16 -> int32: r2,i2, r3,i3
-      simde__m128 lo_f = simde_mm_cvtepi32_ps(lo32); // Cast int32 -> float: r0,i0, r1,i1
-      simde__m128 hi_f = simde_mm_cvtepi32_ps(hi32); // Cast int32 -> float: r2,i2, r3,i3
-      simde_mm_storeu_ps((float *)&out[idx], lo_f); // Store 128-bits composed by 4 floats: r0,i0, r1,i1
-      simde_mm_storeu_ps((float *)&out[idx + 2], hi_f); // Store 128-bits composed by 4 floats: r2,i2, r3,i3
-      idx += 4;
-      if (idx >= ru->common.circular_buff_size)
-        idx -= ru->common.circular_buff_size;
-    }
-    // Remaining data
-    for (; i < samples_per_slot; i++) {
-      out[idx].r = (float)in[i].r;
-      out[idx].i = (float)in[i].i;
-      idx++;
-      if (idx == ru->common.circular_buff_size)
-        idx = 0;
-    }
-  }
+  int slot_type = nr_slot_select(cfg, frame, slot % fp->slots_per_frame);
 
-  // memcpy from circularBuff
-  for (int lp = 0; lp < ru->channel_length; lp++) {
+  if (slot_type == NR_DOWNLINK_SLOT || slot_type == NR_MIXED_SLOT) {
+    // init common variables
+    pathLossLinear.r = ru->pathLossLinear;
+    noise_per_sample.r = ru->noise_per_sample;
+    noise_reader(ru, ru->common.noise_array, samples_per_slot, nb_tx);
+
+    // Copy and cast int16 to floats
+    for (int a_rx = 0; a_rx < nb_rx; a_rx++) {
+      c16_t *in = txp[a_rx];
+      cf_t *out = ru->common.circular_buff[a_rx];
+      int idx = (ru->common.buffboundary + ru->common.circular_buff_size) % ru->common.circular_buff_size;
+      int i = 0;
+      for (; i + 4 <= samples_per_slot; i += 4) {
+        simde__m128i v16 = simde_mm_loadu_si128((simde__m128i *)&in[i]); // Load 8 int16: r0,i0, r1,i1, r2,i2, r3,i3
+        simde__m128i lo32 = simde_mm_cvtepi16_epi32(v16); // Cast int16 -> int32: r0,i0, r1,i1
+        simde__m128i hi16 = simde_mm_srli_si128(v16, 8); // Shift v16 right by 8 bytes
+        simde__m128i hi32 = simde_mm_cvtepi16_epi32(hi16); // Cast int16 -> int32: r2,i2, r3,i3
+        simde__m128 lo_f = simde_mm_cvtepi32_ps(lo32); // Cast int32 -> float: r0,i0, r1,i1
+        simde__m128 hi_f = simde_mm_cvtepi32_ps(hi32); // Cast int32 -> float: r2,i2, r3,i3
+        simde_mm_storeu_ps((float *)&out[idx], lo_f); // Store 128-bits composed by 4 floats: r0,i0, r1,i1
+        simde_mm_storeu_ps((float *)&out[idx + 2], hi_f); // Store 128-bits composed by 4 floats: r2,i2, r3,i3
+        idx += 4;
+        if (idx >= ru->common.circular_buff_size)
+          idx -= ru->common.circular_buff_size;
+      }
+      // Remaining data
+      for (; i < samples_per_slot; i++) {
+        out[idx].r = (float)in[i].r;
+        out[idx].i = (float)in[i].i;
+        idx++;
+        if (idx == ru->common.circular_buff_size)
+          idx = 0;
+      }
+    }
+
+    // memcpy from circularBuff
+    for (int lp = 0; lp < ru->channel_length; lp++) {
+      pthread_mutex_lock(&ru->proc.mutex_mimo);
+      int l = ru->delayindexlist[lp];
+      pthread_mutex_unlock(&ru->proc.mutex_mimo);
+      int delayed_boundary_s = (ru->common.buffboundary - l + ru->common.circular_buff_size) % ru->common.circular_buff_size;
+      int delayed_boundary_e =
+          (ru->common.buffboundary + samples_per_slot - l + ru->common.circular_buff_size) % ru->common.circular_buff_size;
+      for (a_tx = 0; a_tx < nb_tx; a_tx++) {
+        if (delayed_boundary_s < delayed_boundary_e) { // data is contiguous in the buffer
+          memcpy(&ru->common.simul_input[(nb_tx * lp + a_tx) * samples_per_slot],
+                 &ru->common.circular_buff[a_tx][delayed_boundary_s],
+                 sizeof(cf_t) * (delayed_boundary_e - delayed_boundary_s));
+        } else {
+          memcpy(&ru->common.simul_input[(nb_tx * lp + a_tx) * samples_per_slot],
+                 &ru->common.circular_buff[a_tx][delayed_boundary_s],
+                 sizeof(cf_t) * (ru->common.circular_buff_size - delayed_boundary_s)); // Copy the first half
+          memcpy(
+              &ru->common.simul_input[(nb_tx * lp + a_tx) * samples_per_slot + ru->common.circular_buff_size - delayed_boundary_s],
+              &ru->common.circular_buff[a_tx][0],
+              sizeof(cf_t) * delayed_boundary_e); // Copy the second half
+        }
+      }
+    }
+
+    ru->common.buffboundary =
+        (ru->common.buffboundary + samples_per_slot + ru->common.circular_buff_size) % ru->common.circular_buff_size;
+
     pthread_mutex_lock(&ru->proc.mutex_mimo);
-    int l = ru->delayindexlist[lp];
+    // calculation C <= alpha * AB + beta * C
+    // alpha: pathLossLinear
+    // A    : (nb_rx, nb_tx*channel_length) cirMIMO_simulmatrix
+    // B    : (nb_tx*channel_length, nsamps) samples array
+    // beta : noise_per_sample
+    // C    : (nb_rx, nsamps) noise_array
+    cblas_cgemm(CblasRowMajor,
+                CblasNoTrans,
+                CblasNoTrans,
+                nb_rx, // M, A rows: MIMO rows
+                samples_per_slot, // N, B cols: sample cols
+                nb_tx * ru->channel_length, // K, A cols == B rows
+                &pathLossLinear, // alpha: path loss linear
+                ru->cirMIMO_simulmatrix, // A: MIMO matrix
+                nb_tx * ru->channel_length, // K, leading dimension == A cols
+                ru->common.simul_input, // B: samples matrix
+                samples_per_slot, // N, leading dimension == B cols
+                &noise_per_sample, // beta: noise_per_sample
+                ru->common.noise_array, // C: noise_array
+                samples_per_slot // N, leading dimension == C cols
+    );
     pthread_mutex_unlock(&ru->proc.mutex_mimo);
-    int delayed_boundary_s = (ru->common.buffboundary - l + ru->common.circular_buff_size) % ru->common.circular_buff_size;
-    int delayed_boundary_e =
-        (ru->common.buffboundary + samples_per_slot - l + ru->common.circular_buff_size) % ru->common.circular_buff_size;
-    for (a_tx = 0; a_tx < nb_tx; a_tx++) {
-      if (delayed_boundary_s < delayed_boundary_e) { // data is contiguous in the buffer
-        memcpy(&ru->common.simul_input[(nb_tx * lp + a_tx) * samples_per_slot],
-               &ru->common.circular_buff[a_tx][delayed_boundary_s],
-               sizeof(cf_t) * (delayed_boundary_e - delayed_boundary_s));
-      } else {
-        memcpy(&ru->common.simul_input[(nb_tx * lp + a_tx) * samples_per_slot],
-               &ru->common.circular_buff[a_tx][delayed_boundary_s],
-               sizeof(cf_t) * (ru->common.circular_buff_size - delayed_boundary_s)); // Copy the first half
-        memcpy(&ru->common.simul_input[(nb_tx * lp + a_tx) * samples_per_slot + ru->common.circular_buff_size - delayed_boundary_s],
-               &ru->common.circular_buff[a_tx][0],
-               sizeof(cf_t) * delayed_boundary_e); // Copy the second half
+
+    // Store
+    for (int a_tx = 0; a_tx < nb_rx; a_tx++) {
+      c16_t *out = txp[a_tx];
+      cf_t *in = &ru->common.noise_array[a_tx * samples_per_slot];
+      // Processes blocks of 4 complex numbers (8 floats) per iteration.
+      int i = 0;
+      for (; i + 4 <= samples_per_slot; i += 4) {
+        simde__m256 in_f = simde_mm256_loadu_ps((const float *)&in[i]); // Load 8 32-bit floats: r0,i0, r1,i1, r2,i2, r3,i3
+        simde__m256i in_i32 = simde_mm256_cvttps_epi32(in_f); // Cast float -> int32 with truncation: r0,i0, r1,i1, r2,i2, r3,i3
+        simde__m128i low = simde_mm256_castsi256_si128(in_i32); // Cast __m256i -> __m128i: r0,i0, r1,i1
+        simde__m128i high = simde_mm256_extracti128_si256(in_i32, 1); // Extract 128 bits, 1: dst[127:0] := a[255:128]: r2,i2, r3,i3
+        simde__m128i packed = simde_mm_packs_epi32(low, high); // Cast int32 -> int16: r0,i0, r1,i1, r2,i2, r3,i3
+        simde_mm_storeu_si128((simde__m128i *)&out[i], packed); // Store 128-bits of integer data
+      }
+      // Remaining data
+      for (; i < samples_per_slot; i++) {
+        out[i].r = (int16_t)in[i].r; // 32->16bit
+        out[i].i = (int16_t)in[i].i; // 32->16bit
       }
     }
   }
 
-  ru->common.buffboundary =
-      (ru->common.buffboundary + samples_per_slot + ru->common.circular_buff_size) % ru->common.circular_buff_size;
-
-  pthread_mutex_lock(&ru->proc.mutex_mimo);
-  // calculation C <= alpha * AB + beta * C
-  // alpha: pathLossLinear
-  // A    : (nb_rx, nb_tx*channel_length) cirMIMO_simulmatrix
-  // B    : (nb_tx*channel_length, nsamps) samples array
-  // beta : noise_per_sample
-  // C    : (nb_rx, nsamps) noise_array
-  cblas_cgemm(CblasRowMajor,
-              CblasNoTrans,
-              CblasNoTrans,
-              nb_rx, // M, A rows: MIMO rows
-              samples_per_slot, // N, B cols: sample cols
-              nb_tx * ru->channel_length, // K, A cols == B rows
-              &pathLossLinear, // alpha: path loss linear
-              ru->cirMIMO_simulmatrix, // A: MIMO matrix
-              nb_tx * ru->channel_length, // K, leading dimension == A cols
-              ru->common.simul_input, // B: samples matrix
-              samples_per_slot, // N, leading dimension == B cols
-              &noise_per_sample, // beta: noise_per_sample
-              ru->common.noise_array, // C: noise_array
-              samples_per_slot // N, leading dimension == C cols
-  );
-  pthread_mutex_unlock(&ru->proc.mutex_mimo);
-
-  // Store
-  for (int a_tx = 0; a_tx < nb_rx; a_tx++) {
-    c16_t *out = txp[a_tx];
-    cf_t *in = &ru->common.noise_array[a_tx * samples_per_slot];
-    // Processes blocks of 4 complex numbers (8 floats) per iteration.
-    int i = 0;
-    for (; i + 4 <= samples_per_slot; i += 4) {
-      simde__m256 in_f = simde_mm256_loadu_ps((const float *)&in[i]); // Load 8 32-bit floats: r0,i0, r1,i1, r2,i2, r3,i3
-      simde__m256i in_i32 = simde_mm256_cvttps_epi32(in_f); // Cast float -> int32 with truncation: r0,i0, r1,i1, r2,i2, r3,i3
-      simde__m128i low = simde_mm256_castsi256_si128(in_i32); // Cast __m256i -> __m128i: r0,i0, r1,i1
-      simde__m128i high = simde_mm256_extracti128_si256(in_i32, 1); // Extract 128 bits, 1: dst[127:0] := a[255:128]: r2,i2, r3,i3
-      simde__m128i packed = simde_mm_packs_epi32(low, high); // Cast int32 -> int16: r0,i0, r1,i1, r2,i2, r3,i3
-      simde_mm_storeu_si128((simde__m128i *)&out[i], packed); // Store 128-bits of integer data
-    }
-    // Remaining data
-    for (; i < samples_per_slot; i++) {
-      out[i].r = (int16_t)in[i].r; // 32->16bit
-      out[i].i = (int16_t)in[i].i; // 32->16bit
-    }
-  }
 #endif // DEVELOP_CIR
 
   // prepare tx buffer pointers
