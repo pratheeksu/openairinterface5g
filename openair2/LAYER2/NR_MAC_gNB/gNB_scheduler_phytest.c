@@ -247,7 +247,7 @@ void nr_ul_preprocessor_phytest(gNB_MAC_INST *nr_mac, post_process_pusch_t *pp_p
   DevAssert(n_tda > 0);
   /* check only the first TDA: we are only interested in finding out if this TDA fits completely */
   int rb_s = rbStart, rb_l = rbSize;
-  get_best_ul_tda(nr_mac, beam, tda_p, 1, sched_frame, sched_slot, &rb_s, &rb_l);
+  get_rb_for_tda_candidates(nr_mac, beam, tda_p, 1, sched_frame, sched_slot, &rb_s, &rb_l);
   DevAssert(rb_s == rbStart && rb_l == rbSize);
 
   const int buffer_index = ul_buffer_index(sched_frame, sched_slot, slots_frame, nr_mac->vrb_map_UL_size);
