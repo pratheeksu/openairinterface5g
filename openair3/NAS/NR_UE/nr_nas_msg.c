@@ -999,7 +999,7 @@ void generateServiceRequest(as_nas_info_t *initialNasMsg, nr_ue_nas_t *nas)
   int size = 0;
 
   // NAS is security protected if has valid security contexts
-  bool security_protected = nas->security_container->ciphering_context && nas->security_container->integrity_context;
+  bool security_protected = nas->security_container && nas->security_container->integrity_context;
 
   // Set 5GMM plain header
   fgmm_nas_message_plain_t plain = {0};
@@ -1010,22 +1010,71 @@ void generateServiceRequest(as_nas_info_t *initialNasMsg, nr_ue_nas_t *nas)
   // Service Type
   mm_msg->serviceType = SERVICE_TYPE_DATA;
   // NAS key set identifier
-  mm_msg->naskeysetidentifier.naskeysetidentifier = NAS_KEY_SET_IDENTIFIER_NOT_AVAILABLE;
   mm_msg->naskeysetidentifier.tsc = NAS_KEY_SET_IDENTIFIER_NATIVE;
+  mm_msg->naskeysetidentifier.naskeysetidentifier = set_fgs_ksi(nas);
   size += 1;
   // 5G-S-TMSI
   size += fill_fgstmsi(&mm_msg->fiveg_s_tmsi, nas->guti);
 
+  // PDU session status is a non-cleartext Service Request IE (TS 24.501 8.2.16.3).
+  // Here configured UE PDU sessions are marked active to trigger the NAS container path.
+  uint8_t pdu_session_status[MAX_NUM_PSI] = {0};
+  bool has_non_cleartext_ies = false;
+  for (int i = 0; i < nas->uicc->n_pdu_sessions; ++i) {
+    const int pdu_id = nas->uicc->pdu_sessions[i].id;
+    if (pdu_id > 0 && pdu_id < MAX_NUM_PSI) {
+      pdu_session_status[pdu_id] = PDU_SESSION_ACTIVE;
+      has_non_cleartext_ies = true;
+    }
+  }
+
   /* message encoding */
-  initialNasMsg->nas_data = malloc_or_fail(size * sizeof(*initialNasMsg->nas_data));
   if (security_protected) {
     fgmm_nas_msg_security_protected_t sp = {0};
+    FGCNasMessageContainer nas_container = {0};
 
     // Set security protected 5GS NAS message header (see 9.1.1 of 3GPP TS 24.501)
     sp.header.protocol_discriminator = FGS_MOBILITY_MANAGEMENT_MESSAGE;
     sp.header.security_header_type = INTEGRITY_PROTECTED;
     sp.header.sequence_number = nas->security.nas_count_ul & 0xff;
+    const int plain_sr_size = size;
     size += sizeof(sp.header);
+
+    // TS 24.501 4.4.6.b.1: when non-cleartext IEs are present, place the full Service Request
+    // in the NAS message container and cipher only that container value before outer integrity.
+    if (has_non_cleartext_ies) {
+      fgmm_nas_message_plain_t full_sr = plain;
+      fgs_service_request_msg_t *full_mm_msg = &full_sr.mm_msg.service_request;
+      full_mm_msg->has_pdu_session_status = true;
+      memcpy(full_mm_msg->pdu_session_status, pdu_session_status, sizeof(full_mm_msg->pdu_session_status));
+
+      const int full_sr_size = plain_sr_size + MIN_PDU_SESSION_CONTENTS_LEN + 2;
+      uint8_t *inner_sr = calloc_or_fail(full_sr_size, sizeof(*inner_sr));
+      const int inner_sr_len = mm_msg_encode(&full_sr, inner_sr, full_sr_size);
+      if (inner_sr_len <= 0) {
+        free(inner_sr);
+        AssertFatal(false, "Failed to encode Service Request NAS container payload\n");
+      }
+
+      nas_container.nasmessagecontainercontents.value = inner_sr;
+      nas_container.nasmessagecontainercontents.length = inner_sr_len;
+
+      uint8_t ciphered_container[inner_sr_len];
+      nas_stream_cipher_t container_cipher = {0};
+      AssertFatal(nas->security.nas_count_ul <= 0xffffff, "fatal: NAS COUNT UL too big (todo: fix that)\n");
+      container_cipher.context = nas->security_container->ciphering_context;
+      container_cipher.count = nas->security.nas_count_ul;
+      container_cipher.bearer = 1;
+      container_cipher.message = inner_sr;
+      container_cipher.blength = inner_sr_len << 3;
+      stream_compute_encrypt(nas->security_container->ciphering_algorithm, &container_cipher, ciphered_container);
+      memcpy(inner_sr, ciphered_container, inner_sr_len);
+
+      mm_msg->fgsnasmessagecontainer = &nas_container;
+      size += inner_sr_len + 3;
+    }
+
+    initialNasMsg->nas_data = malloc_or_fail(size * sizeof(*initialNasMsg->nas_data));
 
     // Payload: plain message
     sp.plain = plain;
@@ -1035,23 +1084,13 @@ void generateServiceRequest(as_nas_info_t *initialNasMsg, nr_ue_nas_t *nas)
     initialNasMsg->length =
         security_header_len
         + mm_msg_encode(&sp.plain, (uint8_t *)(initialNasMsg->nas_data + security_header_len), size - security_header_len);
-    /* ciphering */
-    uint8_t buf[initialNasMsg->length - 7];
-    nas_stream_cipher_t stream_cipher;
-    stream_cipher.context = nas->security_container->ciphering_context;
-    AssertFatal(nas->security.nas_count_ul <= 0xffffff, "fatal: NAS COUNT UL too big (todo: fix that)\n");
-    stream_cipher.count = nas->security.nas_count_ul;
-    stream_cipher.bearer = 1;
-    stream_cipher.direction = 0;
-    stream_cipher.message = (unsigned char *)(initialNasMsg->nas_data + 7);
-    /* length in bits */
-    stream_cipher.blength = (initialNasMsg->length - 7) << 3;
-    stream_compute_encrypt(nas->security_container->ciphering_algorithm, &stream_cipher, buf);
-    memcpy(stream_cipher.message, buf, initialNasMsg->length - 7);
     /* integrity protection */
     uint8_t mac[4];
+    nas_stream_cipher_t stream_cipher = {0};
     stream_cipher.context = nas->security_container->integrity_context;
-    stream_cipher.count = nas->security.nas_count_ul++;
+    const uint32_t sr_ul_count = nas->security.nas_count_ul;
+    stream_cipher.count = sr_ul_count;
+    nas->security.nas_count_ul++;
     stream_cipher.bearer = 1;
     stream_cipher.direction = 0;
     stream_cipher.message = (unsigned char *)(initialNasMsg->nas_data + 6);
@@ -1061,7 +1100,12 @@ void generateServiceRequest(as_nas_info_t *initialNasMsg, nr_ue_nas_t *nas)
     LOG_D(NAS, "Integrity protected initial NAS message: mac = %x %x %x %x \n", mac[0], mac[1], mac[2], mac[3]);
     for (int i = 0; i < 4; i++)
       initialNasMsg->nas_data[2 + i] = mac[i];
+
+    /* Keep AS security in sync with updated NAS UL count for post-paging reconnect */
+    derive_kgnb(nas->security.kamf, sr_ul_count, nas->security.kgnb);
+    nas_itti_kgnb_refresh_req(nas->UE_id, nas->security.kgnb);
   } else {
+    initialNasMsg->nas_data = malloc_or_fail(size * sizeof(*initialNasMsg->nas_data));
     // plain encoding
     initialNasMsg->length = mm_msg_encode(&plain, initialNasMsg->nas_data, size);
     LOG_I(NAS, "PLAIN_5GS_MSG initial NAS message: Service Request with length %d \n", initialNasMsg->length);
