@@ -969,7 +969,7 @@ void nr_mac_config_scc(gNB_MAC_INST *nrmac, NR_ServingCellConfigCommon_t *scc, c
   if (IS_SA_MODE(get_softmodem_params()))
     config_sched_ctrlSIB1(nrmac);
 
-  seq_arr_init(&nrmac->ul_tda, sizeof(NR_tda_info_t));
+  nrmac->ul_tda = seq_arr_init(sizeof(NR_tda_info_t));
   init_ul_tda_info(scc->uplinkConfigCommon->initialUplinkBWP->pusch_ConfigCommon->choice.setup->pusch_TimeDomainAllocationList, &nrmac->ul_tda);
 }
 

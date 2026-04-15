@@ -125,15 +125,15 @@ int nr_rx_psbch(PHY_VARS_NR_UE *ue,
 
   for (int symbol = 0; symbol < numsym;) {
     const uint16_t nb_re = SL_NR_NUM_PSBCH_DATA_RE_IN_ONE_SYMBOL;
-    __attribute__((aligned(32))) struct complex16 rxdataF_ext[frame_parms->nb_antennas_rx][nb_re + 1];
-    __attribute__((aligned(32))) struct complex16 dl_ch_estimates_ext[frame_parms->nb_antennas_rx][nb_re + 1];
+    __attribute__((aligned(32))) c16_t rxdataF_ext[frame_parms->nb_antennas_rx][nb_re + 1];
+    __attribute__((aligned(32))) c16_t dl_ch_estimates_ext[1][frame_parms->nb_antennas_rx][nb_re + 1];
     // memset(dl_ch_estimates_ext,0, sizeof  dl_ch_estimates_ext);
     nr_psbch_extract(frame_parms->samples_per_slot_wCP,
                      rxdataF,
                      estimateSz,
                      dl_ch_estimates,
                      rxdataF_ext,
-                     dl_ch_estimates_ext,
+                     dl_ch_estimates_ext[0],
                      symbol,
                      frame_parms);
 #ifdef DEBUG_PSBCH
@@ -143,7 +143,7 @@ int nr_rx_psbch(PHY_VARS_NR_UE *ue,
     int max_h = 0;
     if (symbol == 0) {
       int avg[frame_parms->nb_antennas_rx];
-      nr_channel_level(0, PBCH_MAX_RE_PER_SYMBOL, dl_ch_estimates_ext, frame_parms->nb_antennas_rx, 1, avg, nb_re);
+      nr_channel_level(1, frame_parms->nb_antennas_rx, nb_re + 1, nb_re, dl_ch_estimates_ext, avg);
       max_h = avg[0];
       for (int i = 1; i < frame_parms->nb_antennas_rx; i++)
         max_h = cmax(avg[i], max_h);
@@ -155,7 +155,7 @@ int nr_rx_psbch(PHY_VARS_NR_UE *ue,
 
     __attribute__((aligned(32))) struct complex16 rxdataF_comp[frame_parms->nb_antennas_rx][nb_re + 1];
     nr_pbch_channel_compensation(rxdataF_ext,
-                                 dl_ch_estimates_ext,
+                                 dl_ch_estimates_ext[0],
                                  nb_re,
                                  rxdataF_comp,
                                  frame_parms,

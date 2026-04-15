@@ -69,7 +69,7 @@ void nr_pdsch_channel_estimation(PHY_VARS_NR_UE *ue,
                                  unsigned short p,
                                  unsigned char symbol,
                                  uint32_t pdsch_est_size,
-                                 int32_t dl_ch_estimates[][pdsch_est_size],
+                                 c16_t dl_ch_estimates[][pdsch_est_size],
                                  int rxdataFsize,
                                  c16_t rxdataF[][rxdataFsize],
                                  uint32_t *nvar);
@@ -86,7 +86,7 @@ void nr_ue_measurements(PHY_VARS_NR_UE *ue,
                         const UE_nr_rxtx_proc_t *proc,
                         int number_rbs,
                         uint32_t pdsch_est_size,
-                        int32_t dl_ch_estimates[][pdsch_est_size]);
+                        c16_t dl_ch_estimates[][pdsch_est_size]);
 
 uint32_t nr_ue_calculate_ssb_rsrp(const NR_DL_FRAME_PARMS *fp,
                                   const c16_t rxdataF[][fp->samples_per_slot_wCP],

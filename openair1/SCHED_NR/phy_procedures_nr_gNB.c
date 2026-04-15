@@ -1070,7 +1070,7 @@ int phy_procedures_gNB_uespec_RX(PHY_VARS_gNB *gNB, int frame_rx, int slot_rx, N
   UL_INFO->rx_ind.sfn = frame_rx;
   UL_INFO->rx_ind.slot = slot_rx;
   UL_INFO->rx_ind.pdu_list = UL_INFO->rx_pdu_list;
-  bool ulsch_to_decode[gNB->max_nb_pusch];
+  check_vla(bool ulsch_to_decode[gNB->max_nb_pusch]);
   bzero(ulsch_to_decode, sizeof(ulsch_to_decode));
   for (int ULSCH_id = 0; ULSCH_id < gNB->max_nb_pusch; ULSCH_id++) {
     NR_gNB_ULSCH_t *ulsch = &gNB->ulsch[ULSCH_id];

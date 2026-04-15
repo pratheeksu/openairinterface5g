@@ -264,7 +264,7 @@ int main(int argc, char *argv[])
   stop = false;
   __attribute__((unused)) struct sigaction oldaction;
   sigaction(SIGINT, &sigint_action, &oldaction);
-
+  printf("Origin stack: %lu\n", get_stack_usage());
   FILE *csv_file = NULL;
   char *filename_csv = NULL;
   int i;
@@ -288,7 +288,6 @@ int main(int argc, char *argv[])
   uint16_t N_RB_DL = 106, N_RB_UL = 106, mu = 1;
 
   // unsigned char frame_type = 0;
-  int loglvl = OAILOG_WARNING;
   uint16_t nb_symb_sch = 12;
   int start_symbol = 0;
   uint16_t nb_rb = 50;
@@ -342,7 +341,7 @@ int main(int argc, char *argv[])
     exit_fun("[NR_ULSIM] Error, configuration module init failed\n");
   }
   int ul_proc_error = 0; // uplink processing checking status flag
-  //logInit();
+  logInit();
   randominit();
 
   /* initialize the sin-cos table */
@@ -594,7 +593,7 @@ int main(int argc, char *argv[])
       break;
 
     case 'L':
-      loglvl = atoi(optarg);
+      set_glog(atoi(optarg));
       break;
 
    case 'T':
@@ -705,9 +704,6 @@ int main(int argc, char *argv[])
 
     }
   }
-
-  logInit();
-  set_glog(loglvl);
 
   get_softmodem_params()->phy_test = 1;
   get_softmodem_params()->do_ra = 0;
@@ -1598,13 +1594,6 @@ int main(int argc, char *argv[])
         if (n_trials == 1 && round == 0) {
           __attribute__((unused)) int off = ((nb_rb & 1) == 1) ? 4 : 0;
 
-          LOG_M("chestF0.m",
-                "chF0",
-                &pusch_vars->ul_ch_estimates[0][start_symbol * gNB->frame_parms.ofdm_symbol_size],
-                gNB->frame_parms.ofdm_symbol_size,
-                1,
-                1 | log_format);
-
           LOG_M("rxsigF0_comp.m",
                 "rxsF0_comp",
                 &pusch_vars->rxdataF_comp[0][start_symbol * (off + (NR_NB_SC_PER_RB * pusch_pdu->rb_size))],
@@ -1613,13 +1602,6 @@ int main(int argc, char *argv[])
                 1 | log_format);
 
           if (precod_nbr_layers == 2) {
-            LOG_M("chestF3.m",
-                  "chF3",
-                  &pusch_vars->ul_ch_estimates[3][start_symbol * gNB->frame_parms.ofdm_symbol_size],
-                  gNB->frame_parms.ofdm_symbol_size,
-                  1,
-                  1 | log_format);
-
             LOG_M("rxsigF2_comp.m",
                   "rxsF2_comp",
                   &pusch_vars->rxdataF_comp[2][start_symbol * (off + (NR_NB_SC_PER_RB * pusch_pdu->rb_size))],
@@ -1629,25 +1611,6 @@ int main(int argc, char *argv[])
           }
 
           if (precod_nbr_layers == 4) {
-            LOG_M("chestF5.m",
-                  "chF5",
-                  &pusch_vars->ul_ch_estimates[5][start_symbol * gNB->frame_parms.ofdm_symbol_size],
-                  gNB->frame_parms.ofdm_symbol_size,
-                  1,
-                  1 | log_format);
-            LOG_M("chestF10.m",
-                  "chF10",
-                  &pusch_vars->ul_ch_estimates[10][start_symbol * gNB->frame_parms.ofdm_symbol_size],
-                  gNB->frame_parms.ofdm_symbol_size,
-                  1,
-                  1 | log_format);
-            LOG_M("chestF15.m",
-                  "chF15",
-                  &pusch_vars->ul_ch_estimates[15][start_symbol * gNB->frame_parms.ofdm_symbol_size],
-                  gNB->frame_parms.ofdm_symbol_size,
-                  1,
-                  1 | log_format);
-
             LOG_M("rxsigF4_comp.m",
                   "rxsF4_comp",
                   &pusch_vars->rxdataF_comp[4][start_symbol * (off + (NR_NB_SC_PER_RB * pusch_pdu->rb_size))],

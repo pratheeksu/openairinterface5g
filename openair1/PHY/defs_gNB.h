@@ -237,10 +237,6 @@ typedef struct {
 } NR_gNB_COMMON;
 
 typedef struct {
-  /// \brief Hold the channel estimates in frequency domain based on DRS.
-  /// - first index: rx antenna id [0..nb_antennas_rx[
-  /// - second index: ? [0..12*N_RB_UL*frame_parms->symbols_per_tti[
-  int32_t **ul_ch_estimates;
   /// \brief Holds the compensated signal.
   /// - first index: rx antenna id [0..nb_antennas_rx[
   /// - second index: ? [0..12*N_RB_UL*frame_parms->symbols_per_tti[
@@ -268,11 +264,6 @@ typedef struct {
   /// - first index: ? [0..7] Number of Antenna
   /// - second index: ? [0...14] smybol per slot
   int32_t **ptrs_phase_per_slot;
-  /// \brief Total RE count after DMRS/PTRS RE's are extracted from respective symbol.
-  /// - first index: ? [0...14] smybol per slot
-  int16_t *ul_valid_re_per_slot;
-  /// \brief offset for llr corresponding to each symbol
-  int llr_offset[14];
   /// flag to indicate DTX on reception
   int DTX;
 } NR_gNB_PUSCH;

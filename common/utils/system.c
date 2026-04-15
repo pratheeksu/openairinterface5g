@@ -225,18 +225,27 @@ bool has_cap_sys_nice(void)
 bool has_cap_sys_nice(void)
 {
   struct __user_cap_header_struct hdr = {.version = _LINUX_CAPABILITY_VERSION_3};
-  struct __user_cap_data_struct cap[2];
+  struct __user_cap_data_struct cap[2] = {};
   if (syscall(SYS_capget, &hdr, cap) == -1)
     return false;
   return (cap[0].effective & (1 << CAP_SYS_NICE)) != 0;
 }
 #endif
 
+ssize_t get_stack_usage()
+{
+  pthread_attr_t attr;
+  void *stack_base;
+  size_t stack_size;
+  pthread_getattr_np(pthread_self(), &attr);
+  pthread_attr_getstack(&attr, &stack_base, &stack_size);
+  return (intptr_t)&stack_base - (intptr_t)stack_base;
+}
+
 void threadCreate(pthread_t* t, void * (*func)(void*), void * param, char* name, int affinity, int priority)
 {
   int ret;
   bool set_prio = has_cap_sys_nice();
-
   pthread_attr_t attr;
   ret=pthread_attr_init(&attr);
   AssertFatal(ret == 0, "Error in pthread_attr_init(): ret: %d, errno: %d\n", ret, errno);

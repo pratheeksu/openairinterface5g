@@ -9,7 +9,7 @@
 #include "PHY/defs_gNB.h"
 #include "PHY/sse_intrin.h"
 #include "nr_phy_common.h"
-
+#include "openair1/PHY/NR_TRANSPORT/nr_transport_proto.h"
 #ifdef __aarch64__
 #define USE_128BIT
 #endif

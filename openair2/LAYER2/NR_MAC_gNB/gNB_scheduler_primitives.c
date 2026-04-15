@@ -3001,7 +3001,7 @@ NR_UE_info_t *get_new_nr_ue_inst(uid_allocator_t *uia, rnti_t rnti, NR_CellGroup
   AssertFatal(UE->sc_info.n_ul_bwp <= NR_MAX_NUM_BWP, "uplinkBWP_ToAddModList has %d BWP!\n", UE->sc_info.n_ul_bwp);
 
   // initialize LCID structure
-  seq_arr_init(&sched_ctrl->lc_config, sizeof(nr_lc_config_t));
+  sched_ctrl->lc_config = seq_arr_init(sizeof(nr_lc_config_t));
   return UE;
 }
 

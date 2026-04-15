@@ -185,11 +185,9 @@ void phy_init_nr_gNB(PHY_VARS_gNB *gNB)
   gNB->pusch_vars = (NR_gNB_PUSCH *)malloc16_clear(gNB->max_nb_pusch * sizeof(NR_gNB_PUSCH));
   for (int ULSCH_id = 0; ULSCH_id < gNB->max_nb_pusch; ULSCH_id++) {
     NR_gNB_PUSCH *pusch = &gNB->pusch_vars[ULSCH_id];
-    pusch->ul_ch_estimates = (int32_t **)malloc16(n_buf * sizeof(int32_t *));
     pusch->ptrs_phase_per_slot = (int32_t **)malloc16(n_buf * sizeof(int32_t *));
     pusch->rxdataF_comp = (c16_t **)malloc16(n_buf * sizeof(*pusch->rxdataF_comp));
     for (int i = 0; i < n_buf; i++) {
-      pusch->ul_ch_estimates[i] = (int32_t *)malloc16_clear(sizeof(int32_t) * fp->ofdm_symbol_size * fp->symbols_per_slot);
       pusch->ptrs_phase_per_slot[i] = (int32_t *)malloc16_clear(sizeof(int32_t) * fp->symbols_per_slot); // symbols per slot
       pusch->rxdataF_comp[i] = (c16_t *)malloc16_clear(sizeof(**pusch->rxdataF_comp) * nb_re_pusch2 * fp->symbols_per_slot);
     }
@@ -198,7 +196,6 @@ void phy_init_nr_gNB(PHY_VARS_gNB *gNB)
     }
     pusch->llr = (int16_t *)malloc16_clear((8 * ((3 * 8 * 6144) + 12))
                                            * sizeof(int16_t)); // [hna] 6144 is LTE and (8*((3*8*6144)+12)) is not clear
-    pusch->ul_valid_re_per_slot = (int16_t *)malloc16_clear(sizeof(int16_t) * fp->symbols_per_slot);
   } // ulsch_id
 }
 
@@ -251,13 +248,10 @@ void phy_free_nr_gNB(PHY_VARS_gNB *gNB)
   for (int ULSCH_id = 0; ULSCH_id < gNB->max_nb_pusch; ULSCH_id++) {
     NR_gNB_PUSCH *pusch_vars = &gNB->pusch_vars[ULSCH_id];
     for (int i = 0; i < n_buf; i++) {
-      free_and_zero(pusch_vars->ul_ch_estimates[i]);
       free_and_zero(pusch_vars->ptrs_phase_per_slot[i]);
       free_and_zero(pusch_vars->rxdataF_comp[i]);
     }
-    free_and_zero(pusch_vars->ul_ch_estimates);
     free_and_zero(pusch_vars->ptrs_phase_per_slot);
-    free_and_zero(pusch_vars->ul_valid_re_per_slot);
     free_and_zero(pusch_vars->rxdataF_comp);
 
     free_and_zero(pusch_vars->llr);

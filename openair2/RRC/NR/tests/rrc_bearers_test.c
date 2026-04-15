@@ -25,14 +25,10 @@ void exit_function(const char *file, const char *function, const int line, const
 static void test_rrc_pdu_session(void)
 {
   const int pdu_session_id = 3;
-  gNB_RRC_UE_t ue = {0};
-  seq_arr_init(&ue.pduSessions, sizeof(rrc_pdu_session_param_t));
+  gNB_RRC_UE_t ue = {.pduSessions = seq_arr_init(sizeof(rrc_pdu_session_param_t))};
 
   /* test add */
-  pdusession_t p1 = {0};
-  seq_arr_init(&p1.qos, sizeof(nr_rrc_qos_t));
-  p1.pdusession_id = pdu_session_id;
-  p1.n3_incoming.teid = 2002;
+  pdusession_t p1 = {.qos = seq_arr_init(sizeof(nr_rrc_qos_t)), .pdusession_id = pdu_session_id, .n3_incoming.teid = 2002};
   LOG_I(NR_RRC, "Adding first PDU Session with ID %d\n", p1.pdusession_id);
   rrc_pdu_session_param_t *s1 = add_pduSession(&ue.pduSessions, &p1); // add 1st PDU Session
   AssertFatal(s1 != NULL, "Could not add PDU Session\n");
@@ -47,17 +43,14 @@ static void test_rrc_pdu_session(void)
   LOG_A(NR_RRC, "PDU Session find test passed\n");
 
   /* test add duplicate */
-  pdusession_t input2 = {0};
-  seq_arr_init(&input2.qos, sizeof(nr_rrc_qos_t));
-  input2.pdusession_id = pdu_session_id;
-  input2.n3_incoming.teid = 9999;
+  pdusession_t input2 = {.qos = seq_arr_init(sizeof(nr_rrc_qos_t)), .pdusession_id = pdu_session_id, .n3_incoming.teid = 9999};
   rrc_pdu_session_param_t *s2 = add_pduSession(&ue.pduSessions, &input2); // add 2nd PDU Session
   AssertFatal(s2 == NULL, "Duplicated PDU session was added!\n");
   LOG_A(NR_RRC, "Duplicated PDU session test passed\n");
   seq_arr_free(&input2.qos, NULL);
 
   /* add DRB and fetch PDU Session */
-  seq_arr_init(&ue.drbs, sizeof(drb_t));
+  ue.drbs = seq_arr_init(sizeof(drb_t));
   nr_pdcp_configuration_t pdcp = {.drb.discard_timer = 100, .drb.sn_size = 18, .drb.t_reordering = 50};
   drb_t *added = nr_rrc_add_drb(&ue.drbs, pdu_session_id, &pdcp);
   AssertFatal(added != NULL, "Failed to add DRB");
@@ -73,16 +66,12 @@ static void test_rrc_pdu_session(void)
 static void test_rrc_drb(void)
 {
   LOG_I(NR_RRC, "Starting DRB test\n");
-  seq_arr_t pduSessions = {0};
-  seq_arr_t drbs = {0};
-  seq_arr_init(&pduSessions, sizeof(rrc_pdu_session_param_t));
-  seq_arr_init(&drbs, sizeof(drb_t));
+  seq_arr_t pduSessions = seq_arr_init(sizeof(rrc_pdu_session_param_t));
+  seq_arr_t drbs = seq_arr_init(sizeof(drb_t));
 
   /* test add 1 DRB to 1st PDU session */
   const int id1 = 1;
-  pdusession_t s1 = {0};
-  seq_arr_init(&s1.qos, sizeof(nr_rrc_qos_t));
-  s1.pdusession_id = id1;
+  pdusession_t s1 = {.qos = seq_arr_init(sizeof(nr_rrc_qos_t)), .pdusession_id = id1};
   add_pduSession(&pduSessions, &s1); // add PDU session
 
   nr_pdcp_configuration_t pdcp = {.drb.discard_timer = 100, .drb.sn_size = 18, .drb.t_reordering = 50};
@@ -96,9 +85,7 @@ static void test_rrc_drb(void)
 
   /* test add DRB to 2nd PDU session */
   const int id2 = 2;
-  pdusession_t s2 = {0};
-  seq_arr_init(&s2.qos, sizeof(nr_rrc_qos_t));
-  s2.pdusession_id = id2;
+  pdusession_t s2 = {.qos = seq_arr_init(sizeof(nr_rrc_qos_t)), .pdusession_id = id2};
   add_pduSession(&pduSessions, &s2); // add 2nd PDU session
   drb_t *in2 = nr_rrc_add_drb(&drbs, id2, &pdcp); // add DRB to 2nd PDU session
   AssertFatal(in2, "add_rrc_drb failed");
@@ -115,13 +102,10 @@ static void test_rrc_drb(void)
 
 static void test_rrc_qos(void)
 {
-  seq_arr_t pduSessions = {0};
-  seq_arr_init(&pduSessions, sizeof(rrc_pdu_session_param_t));
+  seq_arr_t pduSessions = seq_arr_init(sizeof(rrc_pdu_session_param_t));
 
   const int session_id = 70;
-  pdusession_t in = {0};
-  in.pdusession_id = session_id;
-  seq_arr_init(&in.qos, sizeof(nr_rrc_qos_t));
+  pdusession_t in = {.pdusession_id = session_id, .qos = seq_arr_init(sizeof(nr_rrc_qos_t))};
   add_pduSession(&pduSessions, &in);
   LOG_A(NR_RRC, "Created PDU Session %d for QoS test\n", session_id);
 

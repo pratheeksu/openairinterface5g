@@ -1241,7 +1241,7 @@ void nr_pdsch_channel_estimation(PHY_VARS_NR_UE *ue,
                                  unsigned short p,
                                  unsigned char symbol,
                                  uint32_t pdsch_est_size,
-                                 int32_t dl_ch_estimates[][pdsch_est_size],
+                                 c16_t dl_ch_estimates[][pdsch_est_size],
                                  int rxdataFsize,
                                  c16_t rxdataF[][rxdataFsize],
                                  uint32_t *nvar)
@@ -1249,7 +1249,6 @@ void nr_pdsch_channel_estimation(PHY_VARS_NR_UE *ue,
   // int gNB_id = proc->gNB_id;
   int slot = proc->nr_slot_rx;
   NR_DL_FRAME_PARMS *fp = &ue->frame_parms;
-  const int ch_offset = fp->ofdm_symbol_size * symbol;
   const int symbol_offset = fp->ofdm_symbol_size * symbol;
   int bwp_start_subcarrier = fp->first_carrier_offset + (dlsch->BWPStart + freq_alloc->start[0]) * 12;
 
@@ -1288,7 +1287,7 @@ void nr_pdsch_channel_estimation(PHY_VARS_NR_UE *ue,
 #endif
 
     c16_t *rxF = &rxdataF[aarx][symbol_offset + delta];
-    c16_t *dl_ch = (c16_t *)&dl_ch_estimates[nl * fp->nb_antennas_rx + aarx][ch_offset];
+    c16_t *dl_ch = dl_ch_estimates[aarx];
     memset(dl_ch, 0, sizeof(*dl_ch) * fp->ofdm_symbol_size);
 
     if (config_type == NFAPI_NR_DMRS_TYPE1 && ue->chest_freq == 0) {

@@ -761,10 +761,8 @@ NR_MeasConfig_t *nr_rrc_get_measconfig(const gNB_RRC_INST *rrc, uint64_t nr_cell
   if (cell->mtc != NULL) {
     NR_ReportConfigToAddMod_t *rc_PER = NULL;
     NR_ReportConfigToAddMod_t *rc_A2 = NULL;
-    seq_arr_t rc_A3_seq = {0};
-    seq_arr_t neigh_seq = {0};
-    seq_arr_init(&rc_A3_seq, sizeof(NR_ReportConfigToAddMod_t));
-    seq_arr_init(&neigh_seq, sizeof(nr_neighbour_cell_t));
+    seq_arr_t rc_A3_seq = seq_arr_init(sizeof(NR_ReportConfigToAddMod_t));
+    seq_arr_t neigh_seq = seq_arr_init(sizeof(nr_neighbour_cell_t));
 
     // Get cell info from the cell container
     int band = cell->info.mode == NR_MODE_TDD ? cell->info.tdd.dlul.band : cell->info.fdd.dl.band;

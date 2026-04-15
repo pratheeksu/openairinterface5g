@@ -398,7 +398,7 @@ static void nr_ue_measurement_procedures(uint16_t l,
                                          const UE_nr_rxtx_proc_t *proc,
                                          int number_rbs,
                                          uint32_t pdsch_est_size,
-                                         int32_t dl_ch_estimates[][pdsch_est_size])
+                                         c16_t dl_ch_estimates[][pdsch_est_size])
 {
   NR_DL_FRAME_PARMS *frame_parms=&ue->frame_parms;
   int nr_slot_rx = proc->nr_slot_rx;
@@ -428,12 +428,10 @@ static void nr_ue_measurement_procedures(uint16_t l,
   }
 
   // accumulate and filter timing offset estimation every subframe (instead of every frame)
-  if (( nr_slot_rx == 2) && (l==(2-frame_parms->Ncp))) {
-
+  if ((nr_slot_rx == 2) && (l == (2 - frame_parms->Ncp))) {
     // AGC
     //printf("start adjust gain power avg db %d\n", ue->measurements.rx_power_avg_dB[gNB_id]);
-    phy_adjust_gain_nr (ue,ue->measurements.rx_power_avg_dB[gNB_id],gNB_id);
-    
+    phy_adjust_gain_nr(ue, ue->measurements.rx_power_avg_dB[gNB_id], gNB_id);
   }
 }
 
@@ -581,9 +579,16 @@ static int nr_ue_pdsch_procedures(PHY_VARS_NR_UE *ue,
         dlschCfg->dlDmrsSymbPos,
         dlsch0->Nl);
 
-  const uint32_t pdsch_est_size = ((ue->frame_parms.symbols_per_slot * ue->frame_parms.ofdm_symbol_size + 15) / 16) * 16;
+  const uint32_t pdsch_est_size = ((ue->frame_parms.ofdm_symbol_size + 15) / 16) * 16;
   fourDimArray_t *toFree = NULL;
-  allocCast2D(pdsch_dl_ch_estimates, int32_t, toFree, ue->frame_parms.nb_antennas_rx * dlsch0->Nl, pdsch_est_size, false);
+  allocCast4D(pdsch_dl_ch_estimates,
+              c16_t,
+              toFree,
+              ue->frame_parms.symbols_per_slot,
+              dlsch0->Nl,
+              ue->frame_parms.nb_antennas_rx,
+              pdsch_est_size,
+              false);
 
   c16_t ptrs_phase_per_slot[ue->frame_parms.nb_antennas_rx][NR_SYMBOLS_PER_SLOT];
   memset(ptrs_phase_per_slot, 0, sizeof(ptrs_phase_per_slot));
@@ -618,7 +623,7 @@ static int nr_ue_pdsch_procedures(PHY_VARS_NR_UE *ue,
                                     get_dmrs_port(nl, dlschCfg->dmrs_ports),
                                     m,
                                     pdsch_est_size,
-                                    pdsch_dl_ch_estimates,
+                                    pdsch_dl_ch_estimates[m][nl],
                                     ue->frame_parms.samples_per_slot_wCP,
                                     rxdataF,
                                     &nvar_tmp);
@@ -637,15 +642,23 @@ static int nr_ue_pdsch_procedures(PHY_VARS_NR_UE *ue,
   }
   stop_meas_nr_ue_phy(ue, DLSCH_CHANNEL_ESTIMATION_STATS);
   nvar /= (dlschCfg->number_symbols * dlsch0->Nl * ue->frame_parms.nb_antennas_rx);
-  nr_ue_measurement_procedures(2, ue, proc, freq_alloc.num_rbs, pdsch_est_size, pdsch_dl_ch_estimates);
+  int first_dmrs;
+  for (first_dmrs = dlschCfg->start_symbol; first_dmrs < dlschCfg->start_symbol + dlschCfg->number_symbols; first_dmrs++)
+    if (dlschCfg->dlDmrsSymbPos & (1 << first_dmrs))
+      break;
+  if (first_dmrs != dlschCfg->start_symbol + dlschCfg->number_symbols)
+    nr_ue_measurement_procedures(2, ue, proc, freq_alloc.num_rbs, pdsch_est_size, pdsch_dl_ch_estimates[first_dmrs][0]);
 
   if (ue->chest_time == 1) { // averaging time domain channel estimates
-    nr_chest_time_domain_avg(&ue->frame_parms,
-                             (int32_t **)pdsch_dl_ch_estimates,
-                             dlschCfg->number_symbols,
-                             dlschCfg->start_symbol,
-                             dlschCfg->dlDmrsSymbPos,
-                             freq_alloc.num_rbs);
+    nr_chest_time_domain_avg_ue(&ue->frame_parms,
+                                dlsch[0].Nl,
+                                ue->frame_parms.nb_antennas_rx,
+                                pdsch_est_size,
+                                pdsch_dl_ch_estimates,
+                                dlschCfg->number_symbols,
+                                dlschCfg->start_symbol,
+                                dlschCfg->dlDmrsSymbPos,
+                                freq_alloc.num_rbs);
   }
 
   uint16_t first_symbol_with_data = dlschCfg->start_symbol;
@@ -715,6 +728,7 @@ static int nr_ue_pdsch_procedures(PHY_VARS_NR_UE *ue,
 
     // process DLSCH received symbols in the slot
     // symbol by symbol processing (if data/DMRS are multiplexed is checked inside the function)
+
     if (nr_rx_pdsch(ue,
                     proc,
                     dlsch,
@@ -722,6 +736,8 @@ static int nr_ue_pdsch_procedures(PHY_VARS_NR_UE *ue,
                     m,
                     first_symbol_flag,
                     harq_pid,
+                    dlsch0->Nl,
+                    ue->frame_parms.nb_antennas_rx,
                     pdsch_est_size,
                     pdsch_dl_ch_estimates,
                     llr,
@@ -729,7 +745,6 @@ static int nr_ue_pdsch_procedures(PHY_VARS_NR_UE *ue,
                     rxdataF,
                     &log2_maxh,
                     rx_size_symbol,
-                    ue->frame_parms.nb_antennas_rx,
                     rxdataF_comp,
                     dl_ch_mag,
                     dl_ch_magb,

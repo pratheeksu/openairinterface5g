@@ -7,6 +7,7 @@
 #include <stdint.h>
 #include <pthread.h>
 #include <stdbool.h>
+#include <sys/types.h>
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -29,8 +30,11 @@ void start_background_system(void);
 void lock_memory_to_ram(void);
 
 bool has_cap_sys_nice(void);
+ssize_t get_stack_usage();
 void threadCreate(pthread_t *t, void *(*func)(void *), void *param, char *name, int affinity, int priority);
-
+#define check_vla(decl_vla) \
+  decl_vla;                 \
+  LOG_D(UTIL, "remain stack %lu KB\n", get_stack_usage() / 1024);
 #define SCHED_OAI SCHED_RR
 #define OAI_PRIORITY_RT_LOW sched_get_priority_min(SCHED_OAI)
 #define OAI_PRIORITY_RT ((sched_get_priority_min(SCHED_OAI)+sched_get_priority_max(SCHED_OAI))/2)

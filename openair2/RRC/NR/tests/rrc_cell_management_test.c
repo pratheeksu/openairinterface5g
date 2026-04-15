@@ -76,7 +76,7 @@ static nr_rrc_du_container_t *create_test_du(sctp_assoc_t assoc_id, uint64_t du_
   du->gNB_DU_id = du_id;
   du->gNB_DU_name = strdup(name);
   AssertFatal(du->gNB_DU_name != NULL, "strdup failed for DU name");
-  seq_arr_init(&du->cells, sizeof(nr_rrc_cell_container_t *));
+  du->cells = seq_arr_init(sizeof(nr_rrc_cell_container_t *));
   return du;
 }
 
@@ -298,9 +298,7 @@ static void test_cell_lookup(void)
   AssertFatal(count_du2 == expected_du2_cells, "DU 2 should have %d cells (got %zu)", expected_du2_cells, count_du2);
 
   /* Sub-test 11: Test UE cell association - create test UE context */
-  gNB_RRC_UE_t ue = {0};
-  ue.rrc_ue_id = UE_ID;
-  seq_arr_init(&ue.serving_cells, sizeof(ue_serving_cell_t));
+  gNB_RRC_UE_t ue = {.rrc_ue_id = UE_ID, .serving_cells = seq_arr_init(sizeof(ue_serving_cell_t))};
 
   /* Register F1 UE data for this UE at the CU */
   f1_ue_data_t f1_data = {
@@ -411,8 +409,7 @@ static void test_cell_lookup(void)
   AssertFatal(ue_get_pcell_entry(&ue) == NULL, "PCell should be removed when it has matching assoc_id");
 
   /* Sub-test 18: Test rrc_get_pcell_for_ue() edge case (UE with no serving cells) */
-  gNB_RRC_UE_t ue_empty = {0};
-  seq_arr_init(&ue_empty.serving_cells, sizeof(ue_serving_cell_t));
+  gNB_RRC_UE_t ue_empty = {.serving_cells = seq_arr_init(sizeof(ue_serving_cell_t))};
   AssertFatal(rrc_get_pcell_for_ue(&rrc, &ue_empty) == NULL,
               "rrc_get_pcell_for_ue should return NULL for UE with no serving cells");
   seq_arr_free(&ue_empty.serving_cells, NULL);

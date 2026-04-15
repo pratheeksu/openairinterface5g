@@ -388,19 +388,18 @@ unsigned int nr_get_tx_amp(int power_dBm, int power_max_dBm, int total_nb_rb, in
 }
 
 // compute average channel_level on each antenna
-void nr_channel_level(const int symbol,
-                      const int size_est,
-                      const c16_t ch_estimates_ext[][size_est],
+void nr_channel_level(const int Nl,
                       const int nb_rx,
-                      const int Nl,
-                      int32_t avg[nb_rx * Nl],
-                      const uint32_t len)
+                      const int size,
+                      const uint32_t len,
+                      const c16_t ch_estimates_ext[Nl][nb_rx][size],
+                      int32_t avg[nb_rx * Nl])
 {
   int16_t x = factor2(len);
   int16_t y = len >> x;
   for (int aarx = 0; aarx < nb_rx; aarx++) {
     for (int l = 0; l < Nl; l++) {
-      simde__m128i *ch128 = (simde__m128i *)&ch_estimates_ext[l * nb_rx + aarx][symbol * len];
+      simde__m128i *ch128 = (simde__m128i *)ch_estimates_ext[l][aarx];
       //compute average level
       avg[l * nb_rx + aarx] = simde_mm_average(ch128, len, x, y);
       LOG_D(PHY, "Channel level: %d\n", avg[l * nb_rx + aarx]);
@@ -408,11 +407,16 @@ void nr_channel_level(const int symbol,
   }
 }
 
-void nr_scale_channel(int size, int ch_estimates_ext[][size], int symb, uint32_t len, int nrOfLayers, int nb_rx, int shift_ch_ext)
+void nr_scale_channel(int nrOfLayers,
+                      int nb_rx,
+                      int size,
+                      int len,
+                      c16_t ch_estimates_ext[nrOfLayers][nb_rx][size],
+                      int shift_ch_ext)
 {
   for (int l = 0; l < nrOfLayers; l++) {
     for (int aarx = 0; aarx < nb_rx; aarx++) {
-      simde__m128i *ul_ch128 = (simde__m128i *)&ch_estimates_ext[l * nb_rx + aarx][symb * len];
+      simde__m128i *ul_ch128 = (simde__m128i *)ch_estimates_ext[l][aarx];
       int loop_end = len >> 2;
       for (int i = 0; i < loop_end; i++) {
         ul_ch128[i] = simde_mm_srai_epi16(ul_ch128[i], shift_ch_ext);

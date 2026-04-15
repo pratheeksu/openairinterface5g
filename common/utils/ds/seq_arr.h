@@ -22,7 +22,7 @@
 typedef struct seq_arr_s {
   uint8_t* data;
   size_t size;
-  const size_t elt_size;
+  size_t elt_size;
   size_t cap;
 } seq_arr_t;
 
@@ -32,7 +32,7 @@ typedef struct seq_arr_s {
  * @param arr The sequence container
  * @param elm_sz value returned by the sizeof operator of the type that the container will hold e.g., sizeof(int).
  */
-void seq_arr_init(seq_arr_t* arr, size_t elm_sz);
+seq_arr_t seq_arr_init(size_t elm_sz);
 
 /**
  * Free a sequence container, similar to a destructor

@@ -37,13 +37,11 @@ static void maybe_shrink(seq_arr_t* arr)
   }
 }
 
-void seq_arr_init(seq_arr_t* arr, size_t elt_size) //__attribute__(malloc)
+seq_arr_t seq_arr_init(size_t elt_size) //__attribute__(malloc)
 {
-  assert(arr != NULL);
-  seq_arr_t tmp = {.data = NULL, .size = 0, .elt_size = elt_size, .cap = MIN_SIZE};
-  memcpy(arr, &tmp, sizeof(seq_arr_t));
-  arr->data = calloc(arr->cap, elt_size);
-  assert(arr->data != NULL);
+  void* data = calloc(MIN_SIZE, elt_size);
+  assert(data != NULL);
+  return (seq_arr_t){.data = data, .elt_size = elt_size, .cap = MIN_SIZE};
 }
 
 void seq_arr_free(seq_arr_t* arr, void (*free_func)(void*))

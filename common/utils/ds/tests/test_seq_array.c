@@ -49,8 +49,7 @@ static void dummy_free_func(void* it)
 
 int main()
 {
-  seq_arr_t arr = {0};
-  seq_arr_init(&arr, sizeof(int));
+  seq_arr_t arr = seq_arr_init(sizeof(int));
 
   // Insert data and expand
   for (int i = 0; i < 100; ++i)

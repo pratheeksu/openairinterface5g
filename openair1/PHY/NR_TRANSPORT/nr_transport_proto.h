@@ -98,17 +98,13 @@ int nr_rx_pusch_tp(PHY_VARS_gNB *gNB, uint8_t ulsch_id, uint32_t frame, uint8_t 
 */
 void nr_idft(int32_t *z, uint32_t Msc_PUSCH);
 
-void nr_ulsch_qpsk_qpsk(c16_t *stream0_in, 
-                        c16_t *stream1_in, 
-                        c16_t *stream0_out, 
-                        c16_t *rho01, 
-                        uint32_t length);
+void nr_ulsch_qpsk_qpsk(c16_t *stream0_in, c16_t *stream1_in, int16_t *stream0_out, c16_t *rho01, uint32_t length);
 
 void nr_ulsch_qam16_qam16(c16_t *stream0_in,
                           c16_t *stream1_in,
                           c16_t *ch_mag,
                           c16_t *ch_mag_i,
-                          c16_t *stream0_out,
+                          int16_t *stream0_out,
                           c16_t *rho01,
                           uint32_t length);
 
@@ -116,7 +112,7 @@ void nr_ulsch_qam64_qam64(c16_t *stream0_in,
                           c16_t *stream1_in,
                           c16_t *ch_mag,
                           c16_t *ch_mag_i,
-                          c16_t *stream0_out,
+                          int16_t *stream0_out,
                           c16_t *rho01,
                           uint32_t length);
 
@@ -151,8 +147,6 @@ void nr_ulsch_compute_ML_llr(c16_t *rxdataF_comp0,
                              c16_t *rho1,
                              uint32_t nb_re,
                              uint8_t mod_order);
-
-void nr_ulsch_shift_llr(int16_t **llr_layers, uint32_t nb_re, uint32_t rxdataF_ext_offset, uint8_t mod_order, int shift);
 
 void nr_fill_ulsch(PHY_VARS_gNB *gNB,
                    int frame,

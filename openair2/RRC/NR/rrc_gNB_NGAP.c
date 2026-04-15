@@ -179,7 +179,7 @@ static void cp_pdusession_transfer_to_pdusession(pdusession_t *dst, const pduses
   DevAssert(!dst->qos.data);
   DevAssert(src->nb_qos < MAX_QOS_FLOWS);
   // Initialise mapped QoS list per PDU Session
-  seq_arr_init(&dst->qos, sizeof(nr_rrc_qos_t));
+  dst->qos = seq_arr_init(sizeof(nr_rrc_qos_t));
   // Add QoS flow to list
   for (uint8_t i = 0; i < src->nb_qos; ++i) {
     if (!add_qos(&dst->qos, &src->qos[i])) {

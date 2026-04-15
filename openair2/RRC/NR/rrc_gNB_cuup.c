@@ -180,10 +180,8 @@ static bool has_assoc_id(const void *vval, const void *vit)
  * again. */
 static void remove_unassociated_e1_connections(gNB_RRC_INST *rrc)
 {
-  seq_arr_t affected_du;
-  seq_arr_init(&affected_du, sizeof(sctp_assoc_t));
-  seq_arr_t ue_context_to_remove;
-  seq_arr_init(&ue_context_to_remove, sizeof(rrc_gNB_ue_context_t *));
+  seq_arr_t affected_du = seq_arr_init(sizeof(sctp_assoc_t));
+  seq_arr_t ue_context_to_remove = seq_arr_init(sizeof(rrc_gNB_ue_context_t *));
 
   rrc_gNB_ue_context_t *ue_context_p = NULL;
   RB_FOREACH(ue_context_p, rrc_nr_ue_tree_s, &rrc->rrc_ue_head) {

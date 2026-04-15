@@ -67,9 +67,8 @@ rrc_gNB_ue_context_t *rrc_gNB_allocate_new_ue_context(gNB_RRC_INST *rrc_instance
 rrc_gNB_ue_context_t *rrc_gNB_get_ue_context(gNB_RRC_INST *rrc_instance_pP, ue_id_t ue)
 //------------------------------------------------------------------------------
 {
-  rrc_gNB_ue_context_t temp;
-  /* gNB ue rrc id = 24 bits wide */
-  temp.ue_context.rrc_ue_id = ue;
+  rrc_gNB_ue_context_t temp = (rrc_gNB_ue_context_t){/* gNB ue rrc id = 24 bits wide */
+                                                     .ue_context.rrc_ue_id = ue};
   return RB_FIND(rrc_nr_ue_tree_s, &rrc_instance_pP->rrc_ue_head, &temp);
 }
 
@@ -202,11 +201,11 @@ rrc_gNB_ue_context_t *rrc_gNB_create_ue_context(sctp_assoc_t assoc_id,
   ue->ambr.ul_br = UINT64_MAX;
 
   // Initialise setup PDU Sessions list
-  seq_arr_init(&ue->pduSessions, sizeof(rrc_pdu_session_param_t));
+  ue->pduSessions = seq_arr_init(sizeof(rrc_pdu_session_param_t));
   // Initialise setup DRBs list
-  seq_arr_init(&ue->drbs, sizeof(drb_t));
+  ue->drbs = seq_arr_init(sizeof(drb_t));
   // Initialise serving cells list
-  seq_arr_init(&ue->serving_cells, sizeof(ue_serving_cell_t));
+  ue->serving_cells = seq_arr_init(sizeof(ue_serving_cell_t));
 
   RB_INSERT(rrc_nr_ue_tree_s, &rrc_instance_pP->rrc_ue_head, ue_context_p);
   LOG_UE_EVENT(ue,

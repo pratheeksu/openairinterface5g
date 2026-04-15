@@ -340,14 +340,18 @@ void freq2time(uint16_t ofdm_symbol_size, int16_t *freq_signal, int16_t *time_si
 void nr_est_delay(int ofdm_symbol_size, const c16_t *ls_est, c16_t *ch_estimates_time, delay_t *delay);
 unsigned int nr_get_tx_amp(int power_dBm, int power_max_dBm, int total_nb_rb, int nb_rb);
 void nr_fo_compensation(double fo_Hz, int samples_per_ms, int sample_offset, const c16_t *rxdata_in, c16_t *rxdata_out, int size);
-void nr_channel_level(const int symbol,
-                      const int size_est,
-                      const c16_t ch_estimates_ext[][size_est],
+void nr_channel_level(const int Nl,
                       const int nb_rx,
-                      const int Nl,
-                      int32_t avg[nb_rx * Nl],
-                      const uint32_t len);
-void nr_scale_channel(int size, int ch_estimates_ext[][size], int symb, uint32_t len, int nrOfLayers, int nb_rx, int shift_ch_ext);
+                      const int size,
+                      const uint32_t len,
+                      const c16_t ch_estimates_ext[Nl][nb_rx][size],
+                      int32_t avg[nb_rx * Nl]);
+void nr_scale_channel(int nrOfLayers,
+                      int nb_rx,
+                      int size,
+                      int len,
+                      c16_t ch_estimates_ext[nrOfLayers][nb_rx][size],
+                      int shift_ch_ext);
 bool generate_srs_nr(const NR_DL_FRAME_PARMS *frame_parms,
                      c16_t **txdataF,
                      uint16_t symbol_offset,

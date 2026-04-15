@@ -36,7 +36,9 @@ int nr_pusch_channel_estimation(PHY_VARS_gNB *gNB,
                                 int *max_ch,
                                 uint32_t *nvar,
                                 c16_t *pusch_dmrs_slot_mem,
-                                c16_t *pusch_ch_est_dmrs_pos_slot_mem);
+                                c16_t *pusch_ch_est_dmrs_pos_slot_mem,
+                                int sz,
+                                c16_t ul_ch_estim[][sz]);
 
 void dump_nr_I0_stats(FILE *fd,PHY_VARS_gNB *gNB);
 

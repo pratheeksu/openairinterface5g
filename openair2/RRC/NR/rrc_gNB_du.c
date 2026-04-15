@@ -336,7 +336,7 @@ void rrc_gNB_process_f1_setup_req(f1ap_setup_req_t *req, sctp_assoc_t assoc_id)
   memcpy(du->rrc_ver, req->rrc_ver, sizeof(du->rrc_ver));
 
   // Initialize cell array for this DU
-  seq_arr_init(&du->cells, sizeof(nr_rrc_cell_container_t *));
+  du->cells = seq_arr_init(sizeof(nr_rrc_cell_container_t *));
   nr_rrc_du_container_t *du_collision = rrc_add_du(rrc, du);
   AssertFatal(du_collision == NULL, "rrc_add_du should succeed for new DU (assoc_id %d)", assoc_id);
 
@@ -462,8 +462,7 @@ void rrc_gNB_process_f1_setup_req(f1ap_setup_req_t *req, sctp_assoc_t assoc_id)
 static int invalidate_du_connections(gNB_RRC_INST *rrc, sctp_assoc_t assoc_id)
 {
   int count = 0;
-  seq_arr_t ue_context_to_remove;
-  seq_arr_init(&ue_context_to_remove, sizeof(rrc_gNB_ue_context_t *));
+  seq_arr_t ue_context_to_remove = seq_arr_init(sizeof(rrc_gNB_ue_context_t *));
   rrc_gNB_ue_context_t *ue_context_p = NULL;
   RB_FOREACH(ue_context_p, rrc_nr_ue_tree_s, &rrc->rrc_ue_head) {
     gNB_RRC_UE_t *UE = &ue_context_p->ue_context;

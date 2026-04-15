@@ -23,9 +23,9 @@ void init_rc_subs_data(rc_subs_data_t *rc_subs_data)
 {
   pthread_mutex_lock(&rc_mutex);
   // Initialize sequence array
-  seq_arr_init(&rc_subs_data->rs1_param3, sizeof(ran_param_data_t));
-  seq_arr_init(&rc_subs_data->rs1_param4, sizeof(ran_param_data_t));
-  seq_arr_init(&rc_subs_data->rs4_param202, sizeof(ran_param_data_t));
+  rc_subs_data->rs1_param3 = seq_arr_init(sizeof(ran_param_data_t));
+  rc_subs_data->rs1_param4 = seq_arr_init(sizeof(ran_param_data_t));
+  rc_subs_data->rs4_param202 = seq_arr_init(sizeof(ran_param_data_t));
   pthread_mutex_unlock(&rc_mutex);
 }
 
