@@ -2205,6 +2205,8 @@ void *nas_nrue(void *args_p)
           handle_registration_accept(nas, ba.buf, ba.len);
         } else if (msg_type == FGS_PDU_SESSION_ESTABLISHMENT_ACC) {
           handle_pdu_session_accept(nas, ba.buf, ba.len, nas->UE_id);
+        } else if (msg_type == FGS_SERVICE_ACCEPT) {
+          handle_service_accept(nas, &ba);
         }
 
         // Free NAS buffer memory after use (coming from RRC)
