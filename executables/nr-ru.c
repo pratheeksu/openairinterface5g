@@ -967,7 +967,13 @@ void *ru_thread(void *param)
       if (!wait_free_rx_tti(&gNB->L1_rx_out, rx_tti_busy, proc->frame_rx, proc->tti_rx))
         break; // nothing to wait for: we have to stop
       if (ru->feprx) {
-        ru->feprx(ru,proc->tti_rx);
+        if (ru->dft_in_levdB == -1) {
+          int sigenergy = 0;
+          for (int aa = 0; aa < ru->nb_rx; aa++)
+            sigenergy += signal_energy(ru->common.rxdata[aa] + get_samples_slot_timestamp(fp, proc->tti_rx), 2048);
+          ru->dft_in_levdB = dB_fixed(sigenergy) + 40;
+        }
+        ru->feprx(ru, proc->tti_rx);
         LOG_D(NR_PHY, "Setting %d.%d (%d) to busy\n", proc->frame_rx, proc->tti_rx, proc->tti_rx % RU_RX_SLOT_DEPTH);
         //LOG_M("rxdata.m","rxs",ru->common.rxdata[0],1228800,1,1);
         LOG_D(PHY,"RU proc: frame_rx = %d, tti_rx = %d\n", proc->frame_rx, proc->tti_rx);
@@ -983,8 +989,8 @@ void *ru_thread(void *param)
         prach_item_t *p =
             find_nr_prach(&gNB->prach_list, proc->frame_rx, proc->tti_rx, gNB->frame_parms.nb_antennas_rx, NR_SEARCH_EXIST);
         if (p) {
-          // need to extract RACH data for later processing by rx_nr_prach()
-          rx_nr_prach_ru(p, ru->common.rxdata, ru->nr_frame_parms, ru->N_TA_offset);
+          // need to extract RACH data for lqter processing by rx_nr_prach()
+          rx_nr_prach_ru(p, ru->common.rxdata, ru->nr_frame_parms, ru->N_TA_offset, ru->dft_in_levdB);
         } // end if (prach_id >= 0)
       } // end if (ru->feprx)
     } // end if (slot_type == NR_UPLINK_SLOT || slot_type == NR_MIXED_SLOT) {

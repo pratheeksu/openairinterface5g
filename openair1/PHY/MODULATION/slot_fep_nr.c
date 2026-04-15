@@ -27,7 +27,7 @@ void nr_symbol_fep(const NR_DL_FRAME_PARMS *frame_parms,
   dft_size_idx_t dftsize = get_dft(frame_parms->ofdm_symbol_size);
   for (unsigned char aa = 0; aa < frame_parms->nb_antennas_rx; aa++) {
     if (dft_stats) start_meas(dft_stats);
-    dft(dftsize, (int16_t *)rxdata[aa], (int16_t *)rxdataF[aa], 1);
+    dft(dftsize, (int16_t *)rxdata[aa], (int16_t *)rxdataF[aa], get_dft_scaling(frame_parms->ofdm_symbol_size,1));
     if (dft_stats) stop_meas(dft_stats);
 
     const bool is_sl = (link_type == link_type_sl);
@@ -122,9 +122,11 @@ int nr_symbol_fep_ul(const NR_DL_FRAME_PARMS *fp,
                      c16_t *rxdataF,
                      unsigned char symbol,
                      unsigned char slot,
-                     int sample_offset)
+                     int sample_offset,
+                     uint32_t levdB)
 {
   dft_size_idx_t dftsize = get_dft(fp->ofdm_symbol_size);
+  const uint32_t *scaling_sched = get_dft_scaling(fp->ofdm_symbol_size, levdB);
   // This is for misalignment issues
   int32_t tmp_dft_in[fp->ofdm_symbol_size] __attribute__((aligned(32)));
 
@@ -154,7 +156,7 @@ int nr_symbol_fep_ul(const NR_DL_FRAME_PARMS *fp,
     rxdata_ptr = (int16_t *)&rxdata[rxdata_offset];
   }
 
-  dft(dftsize, rxdata_ptr, (int16_t *)rxdataF, 1);
+  dft(dftsize, rxdata_ptr, (int16_t *)rxdataF, scaling_sched);
 
   return 0;
 }
@@ -203,6 +205,7 @@ void apply_nr_rotation_symbol_RX(const NR_DL_FRAME_PARMS *frame_parms,
   }
 }
 
+// this function is only for phy simulators
 void nr_ofdm_demod_and_rx_rotation(c16_t **rxdata,
                                    c16_t **rxdataF,
                                    const NR_DL_FRAME_PARMS *fp,
@@ -215,7 +218,7 @@ void nr_ofdm_demod_and_rx_rotation(c16_t **rxdata,
   for (int aa = 0; aa < nb_antennas; aa++) {
     for (uint8_t symbol = 0; symbol < fp->symbols_per_slot; symbol++) {
       if (was_symbol_used[symbol] == true) {
-        nr_symbol_fep_ul(fp, &rxdata[aa][0], &rxdataF[aa][slot_offsetF + symbol * fp->ofdm_symbol_size], symbol, slot, 0);
+        nr_symbol_fep_ul(fp, &rxdata[aa][0], &rxdataF[aa][slot_offsetF + symbol * fp->ofdm_symbol_size], symbol, slot, 0, 0);
         apply_nr_rotation_symbol_RX(fp,
                                     &rxdataF[aa][slot_offsetF + symbol * fp->ofdm_symbol_size],
                                     fp->symbol_rotation[linktype],

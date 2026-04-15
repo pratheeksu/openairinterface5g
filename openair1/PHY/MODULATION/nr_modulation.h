@@ -66,7 +66,8 @@ int nr_symbol_fep_ul(const NR_DL_FRAME_PARMS *fp,
                      c16_t *rxdataF,
                      unsigned char symbol,
                      unsigned char slot,
-                     int sample_offset);
+                     int sample_offset,
+                     uint32_t levdB);
 
 /*!
 \brief This function implements the dft transform precoding in PUSCH

@@ -791,6 +791,7 @@ typedef struct {
 
   openair0_device_t rfdevice;
   void *scopeData;
+  int dft_in_levdB;
 } PHY_VARS_UE;
 
 /* this structure is used to pass both UE phy vars and

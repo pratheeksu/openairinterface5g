@@ -737,6 +737,12 @@ int main(int argc, char **argv){
           }
         }
 
+        int sigenergy = 0;
+        ru->dft_in_levdB = dB_fixed(sigenergy);
+
+        for (int aarx = 0; aarx < frame_parms->nb_antennas_rx; aarx++) {
+          sigenergy += signal_energy((int32_t *)ru->common.rxdata[aarx] + rx_prach_start, frame_parms->samples_per_subframe);
+        }
         for (l = 0; l < frame_parms->symbols_per_slot; l++) {
           for (aa = 0; aa < frame_parms->nb_antennas_rx; aa++) {
             nr_symbol_fep_ul(frame_parms,
@@ -744,7 +750,8 @@ int main(int argc, char **argv){
                              (c16_t *)&ru->common.rxdataF[aa][frame_parms->ofdm_symbol_size * l],
                              l,
                              slot,
-                             ru->N_TA_offset);
+                             ru->N_TA_offset,
+                             ru->dft_in_levdB);
           }
         }
 
@@ -754,21 +761,21 @@ int main(int argc, char **argv){
         prach_item_t *in = malloc(sizeof(prach_item_t)
                                   + sizeof(c16_t) * gNB->gNB_config.carrier_config.num_rx_ant.value
                                         * NUMBER_OF_NR_RU_PRACH_OCCASIONS_MAX * NR_PRACH_SEQ_LEN_L);
-        *in = (prach_item_t){.frame = frame,
-                             .slot = slot,
-                             .pdu = *prach_pdu,
-                             .rootSequenceIndex = occ->prach_root_sequence_index.value,
-                             .numrootSequenceIndex = occ->num_root_sequences.value,
-                             .msg1_frequencystart = occ->k1.value,
-                             .mu = cfg->prach_sub_c_spacing.value,
-                             .prach_sequence_length = cfg->prach_sequence_length.value,
-                             .restricted_set = cfg->restricted_set_config.value,
-                             .numerology_index = gNB->frame_parms.numerology_index,
-                             .nb_rx = gNB->gNB_config.carrier_config.num_rx_ant.value,
-                             .Xu = gNB->X_u,
-                             .rx_prach = &gNB->rx_prach,
-                             .prach_buf = (void *)(in + 1)};
-        rx_nr_prach_ru(in, ru->common.rxdata, ru->nr_frame_parms, ru->N_TA_offset);
+        *in = (prach_item_t) {.frame = frame,
+                           .slot = slot,
+                           .pdu = *prach_pdu,
+                           .rootSequenceIndex = occ->prach_root_sequence_index.value,
+                           .numrootSequenceIndex = occ->num_root_sequences.value,
+                           .msg1_frequencystart = occ->k1.value,
+                           .mu = cfg->prach_sub_c_spacing.value,
+                           .prach_sequence_length = cfg->prach_sequence_length.value,
+                           .restricted_set = cfg->restricted_set_config.value,
+                           .numerology_index = gNB->frame_parms.numerology_index,
+                           .nb_rx = gNB->gNB_config.carrier_config.num_rx_ant.value,
+                           .Xu = gNB->X_u,
+                           .rx_prach = &gNB->rx_prach,
+ .prach_buf = (void *)(in + 1)};
+        rx_nr_prach_ru(in, ru->common.rxdata, ru->nr_frame_parms, ru->N_TA_offset, ru->dft_in_levdB);
         if (n_frames == 1)
           LOG_I(PHY,
                 "ncs %d,num_seq %d\n",
