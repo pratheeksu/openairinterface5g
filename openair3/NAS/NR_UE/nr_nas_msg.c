@@ -1884,6 +1884,18 @@ static void send_nas_uplink_data_req(nr_ue_nas_t *nas, const as_nas_info_t *init
   itti_send_msg_to_task(TASK_RRC_NRUE, nas->UE_id, msg);
 }
 
+/** Send initial NAS to RRC as NAS_INITIAL_UL_TRANSFER_REQ (e.g. paging Service Request, TS 24.501 §5.6.1).
+ *  RRC buffers for RRCSetupComplete dedicatedNAS when no SRB (TS 38.331 §5.3.3.4). */
+static void send_nas_initial_ul_transfer_req(nr_ue_nas_t *nas, const as_nas_info_t *initial_nas_msg)
+{
+  MessageDef *msg = itti_alloc_new_message(TASK_NAS_NRUE, nas->UE_id, NAS_INITIAL_UL_TRANSFER_REQ);
+  ul_info_transfer_req_t *req = &NAS_INITIAL_UL_TRANSFER_REQ(msg);
+  req->UEid = nas->UE_id;
+  req->nasMsg.nas_data = (uint8_t *)initial_nas_msg->nas_data;
+  req->nasMsg.length = initial_nas_msg->length;
+  itti_send_msg_to_task(TASK_RRC_NRUE, nas->UE_id, msg);
+}
+
 static void send_nas_detach_req(nr_ue_nas_t *nas, bool wait_release)
 {
   MessageDef *msg = itti_alloc_new_message(TASK_NAS_NRUE, nas->UE_id, NAS_DETACH_REQ);
@@ -2170,8 +2182,11 @@ void *nas_nrue(void *args_p)
           LOG_E(NAS, "[UE %ld] Failed to generate Service Request after paging\n", nas->UE_id);
           break;
         }
-        send_nas_uplink_data_req(nas, &initialNasMsg);
-        LOG_I(NAS, "[UE %ld] Paging received: Service Request sent\n", nas->UE_id);
+        send_nas_initial_ul_transfer_req(nas, &initialNasMsg);
+        LOG_I(NAS,
+              "[UE %ld] Paging: Service Request (%u B) sent to RRC (NAS_INITIAL_UL_TRANSFER_REQ)\n",
+              nas->UE_id,
+              (unsigned)initialNasMsg.length);
         break;
       }
 

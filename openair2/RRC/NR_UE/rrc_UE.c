@@ -2066,15 +2066,37 @@ static void nr_rrc_ue_decode_NR_BCCH_DL_SCH_Message(NR_UE_RRC_INST_t *rrc,
   SEQUENCE_free(&asn_DEF_NR_BCCH_DL_SCH_Message, bcch_message, ASFM_FREE_EVERYTHING);
 }
 
-static void rrc_ue_generate_RRCSetupComplete(const NR_UE_RRC_INST_t *rrc, const uint8_t Transaction_id)
+static void rrc_ue_generate_RRCSetupComplete(NR_UE_RRC_INST_t *rrc, const uint8_t Transaction_id)
 {
   uint8_t buffer[100];
   as_nas_info_t initialNasMsg;
 
   if (IS_SA_MODE(get_softmodem_params())) {
+    /* 3GPP TS 38.331:
+     * - 5.3.3.1: RRC connection establishment is also used to transfer the initial NAS dedicated information
+     *   message from the UE to the network.
+     * - 5.3.3.4: set the dedicatedNAS-Message to include the information received from upper layers.
+     * In paging-triggered service resumption (TS 24.501 service request procedure), the Service Request NAS PDU
+     * is therefore carried here as the initial NAS message in RRCSetupComplete. */
     nr_ue_nas_t *nas = get_ue_nas_info(rrc->ue_id);
-    // Send Initial NAS message (Registration Request) before Security Mode control procedure
-    generateRegistrationRequest(&initialNasMsg, nas, false);
+    if (rrc->pending_initial_nas.nas_data && rrc->pending_initial_nas.length > 0) {
+      /* Deferred NAS PDU is placed in dedicatedNAS-Message (TS 38.331 §5.3.3.4). It is the initial NAS message that
+       * starts CM-IDLE to CM-CONNECTED transition (TS 33.501 §6.8.1.2.1, TS 24.501). */
+      initialNasMsg = rrc->pending_initial_nas;
+      /* Clear RRC copy of pointer after shallow copy: NAS payload is owned by initialNasMsg */
+      rrc->pending_initial_nas.nas_data = NULL;
+      rrc->pending_initial_nas.length = 0;
+      LOG_I(NR_RRC, "[UE %ld] Using pending initial NAS message for RRCSetupComplete\n", rrc->ue_id);
+      /* TS 33.501 §6.8.1.2.2: UE derives KgNB from KAMF using NAS UL COUNT of the NAS message that initiated
+       * CM-IDLE to CM-CONNECTED transition. §6.2.3.2 / Annex A.9 tie initial KgNB to ngKSI + that COUNT. In this case,
+       * NAS holds the derived KgNB value: copy into RRC so AS SMC and RRC keys (§6.2.3.1, §6.5) match after RRC release
+       * cleared AS keys (§6.8.1.2.1). */
+      if (nas->security_container && nas->security_container->integrity_context)
+        memcpy(rrc->kgnb, nas->security.kgnb, sizeof(rrc->kgnb));
+    } else {
+      // Send Initial NAS message (Registration Request) before Security Mode control procedure
+      generateRegistrationRequest(&initialNasMsg, nas, false);
+    }
     if (!initialNasMsg.nas_data) {
       LOG_E(NR_RRC, "Failed to complete RRCSetup. NAS InitialUEMessage message not found.\n");
       return;
@@ -2742,6 +2764,22 @@ static int nr_rrc_ue_decode_dcch(NR_UE_RRC_INST_t *rrc,
   return 0;
 }
 
+/** @brief Encode NAS in ULInformationTransfer, submit to PDCP on SRB2 if established else SRB1. */
+static void nr_rrc_ue_send_ul_information_transfer_nas(NR_UE_RRC_INST_t *rrc, uint32_t nas_length, uint8_t *nas_pdu)
+{
+  uint8_t *buffer = NULL;
+  const int enc_bytes = do_NR_ULInformationTransfer(&buffer, nas_length, nas_pdu);
+  const rb_id_t srb_id = rrc->Srb[2] == RB_ESTABLISHED ? 2 : 1;
+  LOG_D(NR_RRC,
+        "[UE %ld] PDCP_DATA_REQ ULInformationTransfer (NAS %u B) -> SRB%d encoded %d B\n",
+        rrc->ue_id,
+        nas_length,
+        (int)srb_id,
+        enc_bytes);
+  nr_pdcp_data_req_srb(rrc->ue_id, srb_id, 0, enc_bytes, buffer, deliver_pdu_srb_rlc, NULL);
+  free(buffer);
+}
+
 static void apply_ema(val_init_t *vi_rsrp_dBm, float filter_coeff_rsrp, int rsrp_dBm)
 {
   int *quant = &vi_rsrp_dBm->val;
@@ -3259,18 +3297,57 @@ void *rrc_nrue(void *notUsed)
     break;
 
   case NAS_UPLINK_DATA_REQ: {
-    uint32_t length;
-    uint8_t *buffer = NULL;
     ul_info_transfer_req_t *req = &NAS_UPLINK_DATA_REQ(msg_p);
-    /* Create message for PDCP (ULInformationTransfer_t) */
-    length = do_NR_ULInformationTransfer(&buffer, req->nasMsg.length, req->nasMsg.nas_data);
-    /* Transfer data to PDCP */
-    // check if SRB2 is created, if yes request data_req on SRB2
-    // error: the remote gNB is hardcoded here
-    rb_id_t srb_id = rrc->Srb[2] == RB_ESTABLISHED ? 2 : 1;
-    nr_pdcp_data_req_srb(rrc->ue_id, srb_id, 0, length, buffer, deliver_pdu_srb_rlc, NULL);
+    /* ULInformationTransfer (TS 38.331) requires an established UL-DCCH SRB: not used for CM-IDLE initial NAS
+     * (that path uses RRCSetupComplete dedicatedNAS-Message (TS 38.331 §5.3.3.4, TS 33.501 §6.8.1.2.1)). */
+    if (rrc->Srb[1] != RB_ESTABLISHED && rrc->Srb[2] != RB_ESTABLISHED) {
+      LOG_W(NR_RRC,
+            "[UE %ld] NAS UL requested but no SRB established: dropping UL request (%u B)\n",
+            rrc->ue_id,
+            req->nasMsg.length);
+      free(req->nasMsg.nas_data);
+      break;
+    }
+    nr_rrc_ue_send_ul_information_transfer_nas(rrc, req->nasMsg.length, req->nasMsg.nas_data);
     free(req->nasMsg.nas_data);
-    free(buffer);
+    break;
+  }
+
+  case NAS_INITIAL_UL_TRANSFER_REQ: {
+    ul_info_transfer_req_t *req = &NAS_INITIAL_UL_TRANSFER_REQ(msg_p);
+    if (rrc->Srb[1] != RB_ESTABLISHED && rrc->Srb[2] != RB_ESTABLISHED) {
+      /* No UL-DCCH SRB yet: cannot use ULInformationTransfer (TS 38.331). Buffer NAS for dedicatedNAS-Message in
+       * RRCSetupComplete (§5.3.3.4). Typical source is Service Request from 5GMM-IDLE (TS 24.501 §5.6.1). */
+      free(rrc->pending_initial_nas.nas_data);
+      rrc->pending_initial_nas.nas_data = req->nasMsg.nas_data;
+      rrc->pending_initial_nas.length = req->nasMsg.length;
+      LOG_I(NR_RRC,
+            "[UE %ld] Initial NAS UL: no SRB yet; buffered %u B for RRCSetupComplete dedicatedNAS (RRC state=%d)\n",
+            rrc->ue_id,
+            req->nasMsg.length,
+            rrc->nrRrcState);
+      if (rrc->nrRrcState == RRC_STATE_IDLE_NR) {
+        RA_trigger_t prev_trigger = rrc->ra_trigger;
+        rrc->ra_trigger = RRC_CONNECTION_SETUP;
+        nr_rrc_ue_prepare_RRCSetupRequest(rrc);
+        nr_mac_rrc_message_t rrc_msg = {0};
+        rrc_msg.payload_type = NR_MAC_RRC_START_RA;
+        nr_rrc_send_msg_to_mac(rrc, &rrc_msg);
+        LOG_I(NR_RRC,
+              "[UE %ld] Triggering MAC RA for RRCSetupComplete pending NAS (prev_trigger=%d)\n",
+              rrc->ue_id,
+              prev_trigger);
+      }
+      break;
+    }
+    LOG_W(NR_RRC,
+          "[UE %ld] Initial NAS UL requested but SRB established: dropping request (length=%u)\n",
+          rrc->ue_id,
+          req->nasMsg.length);
+    free(rrc->pending_initial_nas.nas_data);
+    rrc->pending_initial_nas.nas_data = NULL;
+    rrc->pending_initial_nas.length = 0;
+    free(req->nasMsg.nas_data);
     break;
   }
 

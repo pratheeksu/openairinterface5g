@@ -2042,6 +2042,22 @@ void nr_rrc_mac_config_req_paging_ue_id(module_id_t module_id, uint64_t fiveG_S_
   pthread_mutex_unlock(&mac->if_mutex);
 }
 
+void nr_rrc_mac_start_ra(module_id_t module_id)
+{
+  NR_UE_MAC_INST_t *mac = get_mac_inst(module_id);
+  int ret = pthread_mutex_lock(&mac->if_mutex);
+  AssertFatal(!ret, "mutex failed %d\n", ret);
+
+  reset_ra(mac, false);
+  reset_mac_inst(mac);
+  /* Setup-style RA must fetch Msg3 from SRB0, not use a C-RNTI MAC CE. */
+  mac->msg3_C_RNTI = false;
+  mac->state = UE_PERFORMING_RA;
+
+  ret = pthread_mutex_unlock(&mac->if_mutex);
+  AssertFatal(!ret, "mutex failed %d\n", ret);
+}
+
 void nr_rrc_mac_config_req_sib1(module_id_t module_id, int cc_idP, NR_SIB1_t *sib1, bool can_start_ra)
 {
   NR_UE_MAC_INST_t *mac = get_mac_inst(module_id);
