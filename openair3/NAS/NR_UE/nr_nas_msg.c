@@ -2227,6 +2227,11 @@ void *nas_nrue(void *args_p)
         }
 
         fgs_nas_msg_t msg_type = get_msg_type(ba.buf, ba.len);
+        LOG_D(NAS,
+              "[UE %ld] NAS_CONN_ESTABLI_CNF decoded NAS msg_type=%s (%d)\n",
+              nas->UE_id,
+              print_info(msg_type, message_text_info, sizeofArray(message_text_info)),
+              msg_type);
         if (msg_type == FGS_REGISTRATION_ACCEPT) {
           handle_registration_accept(nas, ba.buf, ba.len);
         } else if (msg_type == FGS_PDU_SESSION_ESTABLISHMENT_ACC) {
