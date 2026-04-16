@@ -167,7 +167,7 @@ static void send_ssb_rsrp_meas(PHY_VARS_NR_UE *ue,
   nr_downlink_indication_t dl_indication = {0};
   fapi_nr_rx_indication_t rx_ind = {0};
   nr_fill_dl_indication(&dl_indication, NULL, &rx_ind, proc, ue, NULL);
-  nr_fill_rx_indication(&rx_ind, FAPI_NR_MEAS_IND, ue, NULL, NULL, 1, proc, &l1_measurements, NULL);
+  nr_fill_rx_indication(&rx_ind, FAPI_NR_MEAS_IND, ue, 0, 0, NULL, 1, proc, &l1_measurements, NULL);
   ue->if_inst->dl_indication(&dl_indication);
 }
 

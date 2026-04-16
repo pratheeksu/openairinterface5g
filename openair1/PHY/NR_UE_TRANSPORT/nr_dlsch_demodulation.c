@@ -856,12 +856,12 @@ static void nr_dlsch_layer_demapping(const uint8_t Nl,
                                      const uint8_t mod_order,
                                      const int llrLayerSize,
                                      const int16_t llr_layers[NR_SYMBOLS_PER_SLOT][Nl][llrLayerSize],
-                                     const NR_UE_DLSCH_t *dlsch,
+                                     const fapi_nr_dl_config_dlsch_pdu_rel15_t *dlsch_config,
                                      const uint32_t re_len[NR_SYMBOLS_PER_SLOT],
                                      int16_t *llr)
 {
-  const int s0 = dlsch->dlsch_config.start_symbol;
-  const int s1 = dlsch->dlsch_config.number_symbols;
+  const int s0 = dlsch_config->start_symbol;
+  const int s1 = dlsch_config->number_symbols;
 
   int k = 0;
   switch (Nl) {
@@ -901,28 +901,28 @@ static int nr_dlsch_llr(const NR_UE_DLSCH_t *dlsch,
                         const c16_t dl_ch_magb[rx_size_symbol],
                         const c16_t dl_ch_magr[rx_size_symbol],
                         const int nb_antennas_rx,
-                        const c16_t rxdataF_comp[dlsch->Nl][nb_antennas_rx][rx_size_symbol],
+                        const c16_t rxdataF_comp[dlsch->cw_info.Nl][nb_antennas_rx][rx_size_symbol],
                         const int llrSize,
-                        int16_t layer_llr[dlsch->Nl][llrSize])
+                        int16_t layer_llr[dlsch->cw_info.Nl][llrSize])
 {
-  switch (dlsch->dlsch_config.qamModOrder) {
+  switch (dlsch->cw_info.qamModOrder) {
     case 2 :
-      for (int l = 0; l < dlsch[0].Nl; l++)
+      for (int l = 0; l < dlsch->cw_info.Nl; l++)
         nr_qpsk_llr(rxdataF_comp[l][0], layer_llr[l], len);
       break;
 
     case 4 :
-      for (int l = 0; l < dlsch[0].Nl; l++)
+      for (int l = 0; l < dlsch->cw_info.Nl; l++)
         nr_16qam_llr(rxdataF_comp[l][0], dl_ch_mag, layer_llr[l], len);
       break;
 
     case 6 :
-      for(int l=0; l < dlsch[0].Nl; l++)
+      for(int l=0; l < dlsch->cw_info.Nl; l++)
         nr_64qam_llr(rxdataF_comp[l][0], dl_ch_mag, dl_ch_magb, layer_llr[l], len);
       break;
 
     case 8:
-      for(int l=0; l < dlsch[0].Nl; l++)
+      for(int l=0; l < dlsch->cw_info.Nl; l++)
         nr_256qam_llr(rxdataF_comp[l][0],
                       dl_ch_mag,
                       dl_ch_magb,
@@ -943,30 +943,32 @@ static int nr_dlsch_llr(const NR_UE_DLSCH_t *dlsch,
 /* Main Function */
 int nr_rx_pdsch(PHY_VARS_NR_UE *ue,
                 const UE_nr_rxtx_proc_t *proc,
-                NR_UE_DLSCH_t dlsch[2],
+                NR_UE_DLSCH_t *dlsch,
                 const freq_alloc_bitmap_t *freq_alloc,
+                fapi_nr_dl_config_dlsch_pdu_rel15_t *dlsch_config,
+                NR_DL_UE_HARQ_t *dlsch_harq,
                 unsigned char symbol,
                 bool first_symbol_flag,
                 unsigned char harq_pid,
                 uint32_t pdsch_est_size,
                 int32_t dl_ch_estimates[][pdsch_est_size],
-                int16_t *llr[2],
+                int16_t *llr,
                 uint32_t dl_valid_re[NR_SYMBOLS_PER_SLOT],
                 c16_t rxdataF[][ue->frame_parms.samples_per_slot_wCP],
                 int32_t *log2_maxh,
                 int rx_size_symbol,
                 int nbRx,
-                c16_t rxdataF_comp[][dlsch->Nl][nbRx][rx_size_symbol],
-                c16_t dl_ch_mag[][dlsch->Nl][nbRx][rx_size_symbol],
-                c16_t dl_ch_magb[][dlsch->Nl][nbRx][rx_size_symbol],
-                c16_t dl_ch_magr[][dlsch->Nl][nbRx][rx_size_symbol],
+                c16_t rxdataF_comp[][dlsch->cw_info.Nl][nbRx][rx_size_symbol],
+                c16_t dl_ch_mag[][dlsch->cw_info.Nl][nbRx][rx_size_symbol],
+                c16_t dl_ch_magb[][dlsch->cw_info.Nl][nbRx][rx_size_symbol],
+                c16_t dl_ch_magr[][dlsch->cw_info.Nl][nbRx][rx_size_symbol],
                 c16_t ptrs_phase_per_slot[][NR_SYMBOLS_PER_SLOT],
                 int32_t ptrs_re_per_slot[][NR_SYMBOLS_PER_SLOT],
                 uint32_t nvar,
                 pdsch_scope_req_t *scope_req)
 {
   NR_DL_FRAME_PARMS *fp = &ue->frame_parms;
-  const int nl = dlsch[0].Nl;
+  const int nl = dlsch->cw_info.Nl;
   const int n_rx = fp->nb_antennas_rx;
   const int matrixSz = n_rx * nl;
   __attribute__((aligned(32))) int32_t dl_ch_estimates_ext[matrixSz][rx_size_symbol];
@@ -978,72 +980,8 @@ int nr_rx_pdsch(PHY_VARS_NR_UE *ue,
   const int gNB_id = proc->gNB_id;
   uint8_t slot = 0;
 
-  int32_t codeword_TB0 = -1;
-  int32_t codeword_TB1 = -1;
-
   uint32_t nb_re_pdsch = -1;
-
-  NR_DL_UE_HARQ_t *dlsch0_harq, *dlsch1_harq = NULL;
-  dlsch0_harq = &ue->dl_harq_processes[0][harq_pid];
-  if (NR_MAX_NB_LAYERS>4)
-    dlsch1_harq = &ue->dl_harq_processes[1][harq_pid];
-
-  if (dlsch0_harq && dlsch1_harq){
-
-    LOG_D(PHY,
-          "AbsSubframe %d.%d / Sym %d harq_pid %d, harq status %d.%d \n",
-          frame,
-          nr_slot_rx,
-          symbol,
-          harq_pid,
-          dlsch0_harq->status,
-          dlsch1_harq->status);
-
-    if ((dlsch0_harq->status == NR_ACTIVE) && (dlsch1_harq->status == NR_ACTIVE)){
-      codeword_TB0 = dlsch0_harq->codeword; // SV: where is this set? revisit for DL MIMO.
-      codeword_TB1 = dlsch1_harq->codeword;
-      dlsch0_harq = &ue->dl_harq_processes[codeword_TB0][harq_pid];
-      dlsch1_harq = &ue->dl_harq_processes[codeword_TB1][harq_pid];
-
-      DEBUG_HARQ("[DEMOD] I am assuming both TBs are active, in cw0 %d and cw1 %d \n", codeword_TB0, codeword_TB1);
-
-    } else if ((dlsch0_harq->status == NR_ACTIVE) && (dlsch1_harq->status != NR_ACTIVE) ) {
-      codeword_TB0 = dlsch0_harq->codeword;
-      dlsch0_harq = &ue->dl_harq_processes[codeword_TB0][harq_pid];
-      dlsch1_harq = NULL;
-
-      DEBUG_HARQ("[DEMOD] I am assuming only TB0 is active, in cw %d \n", codeword_TB0);
-
-    } else if ((dlsch0_harq->status != NR_ACTIVE) && (dlsch1_harq->status == NR_ACTIVE)){
-      codeword_TB1 = dlsch1_harq->codeword;
-      dlsch0_harq  = NULL;
-      dlsch1_harq  = &ue->dl_harq_processes[codeword_TB1][harq_pid];
-
-      DEBUG_HARQ("[DEMOD] I am assuming only TB1 is active, it is in cw %d\n", codeword_TB1);
-      LOG_E(PHY, "[DEMOD] slot %d TB0 not active and TB1 active case is not supported\n", nr_slot_rx);
-      return -1;
-
-    } else {
-      LOG_E(PHY, "[DEMOD] slot %d: no active DLSCH (2 layers case)\n", nr_slot_rx);
-      return (-1);
-    }
-  } else if (dlsch0_harq) {
-    if (dlsch0_harq->status == NR_ACTIVE) {
-      codeword_TB0 = dlsch0_harq->codeword;
-      dlsch0_harq = &ue->dl_harq_processes[0][harq_pid];
-      DEBUG_HARQ("[DEMOD] I am assuming only TB0 is active\n");
-    } else {
-      LOG_E(PHY, "[DEMOD] slot %d nr_rx_pdsch no active DLSCH (one layer case)\n", nr_slot_rx);
-      return (-1);
-    }
-  } else {
-    LOG_E(PHY, "[DEMOD] slot %d Inconsistent call to nr_rx_pdsch (no layer 0)\n", nr_slot_rx);
-    return -1;
-  }
-
-  DEBUG_HARQ("[DEMOD] cw for TB0 = %d, cw for TB1 = %d\n", codeword_TB0, codeword_TB1);
-  fapi_nr_dl_config_dlsch_pdu_rel15_t *dlsch_config = &dlsch[0].dlsch_config;
-  DevAssert(dlsch0_harq);
+  DevAssert(dlsch_harq);
 
   if (gNB_id > 2) {
     LOG_E(PHY, "Illegal gNB_id %d\n", gNB_id);
@@ -1228,7 +1166,7 @@ int nr_rx_pdsch(PHY_VARS_NR_UE *ue,
                                   fp,
                                   symbol,
                                   nb_re_pdsch,
-                                  dlsch_config->qamModOrder,
+                                  dlsch->cw_info.qamModOrder,
                                   nb_rb_pdsch,
                                   *log2_maxh); // log2_maxh+I0_shift
     stop_meas_nr_ue_phy(ue, DLSCH_CHANNEL_COMPENSATION_STATS);
@@ -1285,7 +1223,7 @@ int nr_rx_pdsch(PHY_VARS_NR_UE *ue,
                       dl_ch_magb[symbol],
                       dl_ch_magr[symbol],
                       dl_ch_estimates_ext,
-                      dlsch_config->qamModOrder,
+                      dlsch->cw_info.qamModOrder,
                       *log2_maxh,
                       symbol,
                       nb_re_pdsch,
@@ -1311,14 +1249,14 @@ int nr_rx_pdsch(PHY_VARS_NR_UE *ue,
   int nbSymb = 0;
   int pduBitmap = 0;
 
-  if(dlsch0_harq->status == NR_ACTIVE) {
+  if(dlsch_harq->status == NR_ACTIVE) {
     startSymbIdx = dlsch_config->start_symbol;
     nbSymb = dlsch_config->number_symbols;
     pduBitmap = dlsch_config->pduBitmap;
   }
 
   /* Check for PTRS bitmap and process it respectively */
-  if((pduBitmap & 0x1) && (dlsch[0].rnti_type == TYPE_C_RNTI_)) {
+  if((pduBitmap & 0x1) && (dlsch->rnti_type == TYPE_C_RNTI_)) {
     nr_pdsch_ptrs_processing(nbRx,
                              ptrs_phase_per_slot,
                              ptrs_re_per_slot,
@@ -1326,13 +1264,13 @@ int nr_rx_pdsch(PHY_VARS_NR_UE *ue,
                              nl,
                              rxdataF_comp,
                              fp,
-                             dlsch0_harq,
-                             dlsch1_harq,
+                             dlsch_config,
                              nr_slot_rx,
                              symbol,
                              freq_alloc->num_rbs,
-                             dlsch[0].rnti,
-                             dlsch);
+                             dlsch->rnti,
+                             &dlsch->ptrs_symbols,
+                             &dlsch->ptrs_symbol_index);
     dl_valid_re[symbol] -= ptrs_re_per_slot[0][symbol];
   }
   /* at last symbol in a slot calculate LLR's for whole slot */
@@ -1340,7 +1278,7 @@ int nr_rx_pdsch(PHY_VARS_NR_UE *ue,
     /* create LLR layer buffer */
     int max_symb_re = 0;
     GET_ARRAY_MAX(dl_valid_re, NR_SYMBOLS_PER_SLOT, max_symb_re);
-    const int llr_per_symbol = max_symb_re * dlsch->dlsch_config.qamModOrder;
+    const int llr_per_symbol = max_symb_re * dlsch->cw_info.qamModOrder;
     __attribute__((aligned(32))) int16_t layer_llr[NR_SYMBOLS_PER_SLOT][nl][llr_per_symbol];
 
     // Generate LLR from PTRS compensated signal
@@ -1359,14 +1297,9 @@ int nr_rx_pdsch(PHY_VARS_NR_UE *ue,
     }
     stop_meas_nr_ue_phy(ue, DLSCH_LLR_STATS);
     start_meas_nr_ue_phy(ue, DLSCH_LAYER_DEMAPPING);
-    nr_dlsch_layer_demapping(nl, dlsch_config->qamModOrder, llr_per_symbol, layer_llr, dlsch, dl_valid_re, llr[0]);
+    nr_dlsch_layer_demapping(nl, dlsch->cw_info.qamModOrder, llr_per_symbol, layer_llr, dlsch_config, dl_valid_re, llr);
     stop_meas_nr_ue_phy(ue, DLSCH_LAYER_DEMAPPING);
-  /*
-    for (int i=0; i < 2; i++){
-      snprintf(filename, 50,  "llr%d_symb_%d_nr_slot_rx_%d.m", i, symbol, nr_slot_rx);
-      write_output(filename,"llr",  &llr[i][0], (NR_SYMBOLS_PER_SLOT*nb_rb_pdsch*NR_NB_SC_PER_RB*dlsch1_harq->Qm) - 4*(nb_rb_pdsch*4*dlsch1_harq->Qm), 1, 0);
-    }
-  */
+
     if (UEScopeHasTryLock(ue)) {
       metadata mt = {.frame = proc->frame_rx, .slot = proc->nr_slot_rx };
       int total_valid_res = 0;
