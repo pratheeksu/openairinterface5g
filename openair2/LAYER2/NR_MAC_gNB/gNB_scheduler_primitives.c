@@ -3011,6 +3011,8 @@ static void init_bler_stats(const NR_bler_options_t *bler_options, NR_bler_stats
 NR_UE_info_t *get_new_nr_ue_inst(uid_allocator_t *uia, rnti_t rnti, NR_CellGroupConfig_t *CellGroup, const nr_mac_config_t *config)
 {
   NR_UE_info_t *UE = calloc_or_fail(1, sizeof(NR_UE_info_t));
+  for (int i = 0; i < MAX_NUM_OF_SSB; i++)
+    UE->beam_rsrp[i] = UE->beam_sinr[i] = INT16_MIN;
   UE->uid = uid_linear_allocator_new(uia);
   UE->rnti = rnti;
   UE->CellGroup = CellGroup;

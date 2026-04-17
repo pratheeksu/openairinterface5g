@@ -787,6 +787,11 @@ typedef struct NR_UE_info {
   measgap_config_t measgap_config;
   // UE selected beam index
   uint16_t UE_beam_index;
+  /// Per-SSB L1-RSRP table, indexed by SSB index (resource_id from CSI report).
+  /// INT16_MIN means no measurement received yet for that beam.
+  int16_t beam_rsrp[MAX_NUM_OF_SSB];
+  /// Per-SSB L1-SINR×10 table, same indexing. INT16_MIN means no data.
+  int16_t beam_sinr[MAX_NUM_OF_SSB];
   float ul_thr_ue;
   float dl_thr_ue;
   long pdsch_HARQ_ACK_Codebook;
@@ -898,6 +903,9 @@ struct nr_dl_candidate {
     uint16_t cqi;                  ///< UE-reported wideband CQI
     uint8_t  csi_ri;               ///< UE-reported rank indicator (0 = rank-1); forced to 0 for DCI 1_0
     int      csi_pm_index;         ///< PM index derived from UE-reported PMI + antenna config
+    const int16_t *beam_rsrp;      ///< per-SSB L1-RSRP; points into NR_UE_info_t::beam_rsrp. INT16_MIN = no data
+    const int16_t *beam_sinr;      ///< per-SSB L1-SINR×10; same indexing. INT16_MIN = no data
+
     /* ── gNB decisions (written by the named pipeline stage) ───────────────── */
     /* dl_ri_pmi_select: rank and precoding */
     int alloc_nrOfLayers;          ///< decided rank; default = csi_ri + 1
@@ -945,7 +953,8 @@ typedef void (*nr_dl_mcs_select_fn)(const gNB_MAC_INST *mac,
                                    int n_candidates);
 
 /// Beam allocation: assigns beam structure index to each candidate.
-/// beam_index_list maps SSB id -> beam index (same as mac->beam_index_list).
+/// beam_index_list maps SSB id -> beam index (same as mac->beam_index_list);
+/// custom implementations can use it with cand->beam_rsrp[] to pick the best beam.
 typedef int (*nr_dl_beam_select_fn)(NR_beam_info_t *beam_info,
                                    const int16_t *beam_index_list,
                                    nr_dl_candidate_t *candidates,
@@ -1024,6 +1033,8 @@ struct nr_ul_candidate {
 
     /* ── UE CSI observations (set by collect, read-only after) ─────────────── */
     uint16_t cqi;                ///< wideband CQI (from CSI report)
+    const int16_t *beam_rsrp;   ///< per-SSB L1-RSRP; points into NR_UE_info_t::beam_rsrp. INT16_MIN = no data.
+    const int16_t *beam_sinr;   ///< per-SSB L1-SINR×10; same indexing. INT16_MIN = no data.
 
     /* ── gNB decisions (written by the named pipeline stage) ───────────────── */
     /* ul_ri_tpmi_select: rank and precoding */

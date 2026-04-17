@@ -2281,6 +2281,8 @@ static int collect_ul_candidates(gNB_MAC_INST *mac,
     cand.nssai_sst = nssai_sst;
     cand.nssai_sd = nssai_sd;
     cand.cqi = cqi;
+    cand.beam_rsrp = UE->beam_rsrp;
+    cand.beam_sinr = UE->beam_sinr;
 
     /* Check if retransmission is necessary */
     int ul_harq_pid = sched_ctrl->retrans_ul_harq.head;
