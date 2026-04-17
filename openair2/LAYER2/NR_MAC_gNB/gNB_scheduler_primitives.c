@@ -111,14 +111,6 @@ uint8_t get_dl_nrOfLayers(const NR_UE_sched_ctrl_t *sched_ctrl, const nr_dci_for
     return sched_ctrl->CSI_report.cri_ri_li_pmi_cqi_report.ri + 1;
 }
 
-int get_ul_nrOfLayers(const NR_UE_sched_ctrl_t *sched_ctrl, const nr_dci_format_t dci_format)
-{
-  if(dci_format == NR_UL_DCI_FORMAT_0_0)
-    return 1;
-  else
-    return sched_ctrl->srs_feedback.ul_ri + 1;
-}
-
 // Table 5.2.2.2.1-3 and Table 5.2.2.2.1-4 in 38.214
 void get_k1_k2_indices(const int layers, const int N1, const int N2, const int i13, int *k1, int *k2)
 {
@@ -702,6 +694,32 @@ bool nr_find_nb_rb(uint16_t Qm,
   return *tbs >= bytes && *nb_rb <= nb_rb_max;
 }
 
+int find_largest_free_block(const uint16_t *vrb_map, uint16_t slbitmap,
+                           int bwp_start, int bwp_size, int *out_start)
+{
+  int best_start = 0, best_len = 0;
+  int cur_start = 0, cur_len = 0;
+  for (int rb = 0; rb < bwp_size; rb++) {
+    if (!(vrb_map[rb + bwp_start] & slbitmap)) {
+      if (cur_len == 0)
+        cur_start = rb;
+      cur_len++;
+    } else {
+      if (cur_len > best_len) {
+        best_start = cur_start;
+        best_len = cur_len;
+      }
+      cur_len = 0;
+    }
+  }
+  if (cur_len > best_len) {
+    best_start = cur_start;
+    best_len = cur_len;
+  }
+  *out_start = best_start;
+  return best_len;
+}
+
 bool get_rb_alloc(int rbSize_min,
                   int rbSize_max,
                   int bwpStart,
@@ -811,44 +829,23 @@ NR_pusch_dmrs_t get_ul_dmrs_params(const NR_ServingCellConfigCommon_t *scc,
 
 #define BLER_UPDATE_FRAME 10
 #define BLER_FILTER 0.9f
-int get_mcs_from_bler(const NR_bler_options_t *bler_options,
-                      const NR_mac_dir_stats_t *stats,
-                      NR_bler_stats_t *bler_stats,
-                      int max_mcs,
-                      frame_t frame)
+int nr_adapt_mcs_from_bler(int current_mcs,
+                           int min_mcs,
+                           int max_mcs,
+                           float bler,
+                           float bler_lower,
+                           float bler_upper,
+                           int num_sched)
 {
-  int diff = frame - bler_stats->last_frame;
-  if (diff < 0) // wrap around
-    diff += 1024;
-
-  max_mcs = min(max_mcs, bler_options->max_mcs);
-  const uint8_t old_mcs = min(bler_stats->mcs, max_mcs);
-  if (diff < BLER_UPDATE_FRAME)
-    return old_mcs; // no update
-
-  // last update is longer than x frames ago
-  const int num_dl_sched = (int)(stats->rounds[0] - bler_stats->rounds[0]);
-  const int num_dl_retx = (int)(stats->rounds[1] - bler_stats->rounds[1]);
-  const float bler_window = num_dl_sched > 0 ? (float) num_dl_retx / num_dl_sched : bler_stats->bler;
-  bler_stats->bler = BLER_FILTER * bler_stats->bler + (1 - BLER_FILTER) * bler_window;
-
-  int new_mcs = old_mcs;
-  if (bler_stats->bler < bler_options->lower && old_mcs < max_mcs && num_dl_sched > 3)
-    new_mcs += 1;
-  else if (bler_stats->bler > bler_options->upper || num_dl_sched <= 3) // above threshold or no activity
-    new_mcs -= 1;
-  // else we are within threshold boundaries
-
-  new_mcs = max(new_mcs, bler_options->min_mcs);
-  bler_stats->last_frame = frame;
-  bler_stats->mcs = new_mcs;
-  memcpy(bler_stats->rounds, stats->rounds, sizeof(stats->rounds));
-  LOG_D(MAC, "frame %4d MCS %d -> %d (num_dl_sched %d, num_dl_retx %d, BLER wnd %.3f avg %.6f)\n",
-        frame, old_mcs, new_mcs, num_dl_sched, num_dl_retx, bler_window, bler_stats->bler);
-  return new_mcs;
+  int mcs = current_mcs;
+  if (bler < bler_lower && mcs < max_mcs && num_sched > 3)
+    mcs++;
+  else if (bler > bler_upper || num_sched <= 3) // above threshold or no activity
+    mcs--;
+  return max(min_mcs, min(mcs, max_mcs));
 }
 
-bool update_dl_bler_stats(const NR_bler_options_t *bler_options,
+bool update_bler_stats(const NR_bler_options_t *bler_options,
                           const NR_mac_dir_stats_t *stats,
                           NR_bler_stats_t *bler_stats,
                           frame_t frame)
