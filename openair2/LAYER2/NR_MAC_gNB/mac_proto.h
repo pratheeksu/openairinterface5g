@@ -541,13 +541,6 @@ void nr_mac_set_rssi_threshold(nr_power_control_t *pc, int rssi_threshold);
 void nr_mac_signal_dtx(nr_power_control_t *pc);
 int nr_mac_get_tpc(nr_power_control_t *pc);
 
-int collect_ul_candidates(gNB_MAC_INST *mac,
-                          NR_UE_info_t *UE_list[],
-                          nr_ul_candidate_t *candidates,
-                          int max_candidates,
-                          frame_t frame, slot_t slot,
-                          int sched_frame, int sched_slot);
-
 void nr_ul_ri_tpmi_select_default(gNB_MAC_INST *mac,
                                   nr_ul_candidate_t *cands, int n_cand);
 
@@ -555,17 +548,21 @@ int nr_ul_tda_select_default(gNB_MAC_INST *mac,
                              nr_ul_candidate_t *cands, int n_cand,
                              frame_t sched_frame, slot_t sched_slot, int k2);
 
-int nr_ul_beam_alloc_default(NR_beam_info_t *beam_info,
-                             const int16_t *beam_index_list,
-                             nr_ul_candidate_t *candidates,
-                             int n_candidates,
-                             frame_t frame, slot_t slot,
-                             frame_t sched_frame, slot_t sched_slot,
-                             int slots_per_frame);
+int nr_ul_beam_select_default(NR_beam_info_t *beam_info,
+                              const int16_t *beam_index_list,
+                              nr_ul_candidate_t *candidates,
+                              int n_candidates,
+                              frame_t frame, slot_t slot,
+                              frame_t sched_frame, slot_t sched_slot,
+                              int slots_per_frame);
+
+void nr_ul_mcs_select_default(const gNB_MAC_INST *mac,
+                              nr_ul_candidate_t *candidates,
+                              int n_candidates);
 
 int nr_ul_proportional_fair(const nr_ul_sched_params_t *params,
-                             const nr_ul_candidate_t *candidates,
-                             nr_ul_alloc_t *allocs,
+                             nr_ul_candidate_t *candidates,
+                             int *sched_indices,
                              int n_candidates);
 
 bool nr_ul_check_phr(const nr_ul_sched_params_t *params,

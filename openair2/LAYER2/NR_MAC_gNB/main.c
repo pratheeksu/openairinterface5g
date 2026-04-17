@@ -304,8 +304,9 @@ void mac_top_init_gNB(ngran_node_t node_type,
 
       RC.nrmac[i]->ul_ri_tpmi_select = nr_ul_ri_tpmi_select_default;
       RC.nrmac[i]->ul_tda_select = nr_ul_tda_select_default;
-      RC.nrmac[i]->ul_beam_alloc = nr_ul_beam_alloc_default;
-      RC.nrmac[i]->ul_sched_policy = nr_ul_proportional_fair;
+      RC.nrmac[i]->ul_beam_select = nr_ul_beam_select_default;
+      RC.nrmac[i]->ul_mcs_select = nr_ul_mcs_select_default;
+      RC.nrmac[i]->ul_rb_alloc = nr_ul_proportional_fair;
 
       if (get_softmodem_params()->phy_test) {
         RC.nrmac[i]->pre_processor_dl = nr_preprocessor_phytest;

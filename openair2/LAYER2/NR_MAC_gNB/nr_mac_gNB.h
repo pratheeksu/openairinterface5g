@@ -972,7 +972,6 @@ typedef int (*nr_dl_rb_alloc_fn)(const nr_dl_sched_params_t *params,
 /* UL scheduling refactored data structures */
 struct nr_ul_sched_params;
 typedef struct nr_ul_candidate nr_ul_candidate_t;
-typedef struct nr_ul_alloc nr_ul_alloc_t;
 
 typedef struct nr_ul_sched_params {
     struct gNB_MAC_INST_s *mac;
@@ -981,11 +980,11 @@ typedef struct nr_ul_sched_params {
     slot_t   dci_slot;           ///< DCI slot (current DL slot)
     frame_t  frame;              ///< scheduled PUSCH frame (future UL slot)
     slot_t   slot;               ///< scheduled PUSCH slot (future UL slot)
-    int      beam_idx;
+    int      num_beams;
     int      max_num_ue;
     uint16_t slbitmap;
-    uint16_t *vrb_map_UL;
-    int      n_rb_avail;
+    uint16_t *vrb_map_UL[MAX_NUM_BEAM_PERIODS]; ///< per-beam VRB maps, mutable
+    int      n_rb_avail[MAX_NUM_BEAM_PERIODS];   ///< available RBs per beam
     int      min_rb;
     int      min_mcs;
     float    bler_lower;
@@ -997,7 +996,9 @@ typedef struct nr_ul_sched_params {
 } nr_ul_sched_params_t;
 
 struct nr_ul_candidate {
+    /* ── UE identity / scheduling state (set by collect, never modified after) ── */
     NR_UE_info_t *UE;
+    uint16_t rnti;               ///< UE RNTI (convenience)
     bool     is_retx;
     int8_t   retx_harq_pid;
     int      retx_rbSize;
@@ -1008,12 +1009,6 @@ struct nr_ul_candidate {
     int      current_mcs;
     int      max_mcs;
     int      mcs_table;
-    int      nrOfLayers;
-    int      beam_index;
-    int      dci_beam_idx;       ///< beam idx for the DCI slot (set by upfront beam alloc; -1 = failed)
-    int      alloc_beam_idx;     ///< beam idx for the scheduled PUSCH slot (set by upfront beam alloc; -1 = failed)
-    bool     dci_beam_new;       ///< true if dci_beam was newly allocated by the upfront pass
-    bool     sched_beam_new;     ///< true if alloc_beam was newly allocated by the upfront pass
     int      bwp_start;
     int      bwp_size;
     int      ph;
@@ -1021,30 +1016,37 @@ struct nr_ul_candidate {
     int      snrx10;             ///< PUSCH SINR × 10 (for SINR-based MCS in harq_round_max==1)
     bool     bler_updated;       ///< true if BLER was refreshed this frame
     int      last_num_sched;     ///< scheduling count at last BLER update (activity guard)
-    /* QoS / slice / channel info — not used by built-in PF, exposed for external policies */
-    uint16_t rnti;               ///< UE RNTI (convenience)
     uint64_t fiveQI;             ///< 5QI from first DRB's QoS config (0 if none)
     int      priority;           ///< LC priority from first DRB (0 if none)
     uint8_t  nssai_sst;          ///< slice/service type from first DRB (0 if none)
     uint32_t nssai_sd;           ///< slice differentiator from first DRB (0xFFFFFF if none)
-    uint16_t cqi;                ///< wideband CQI (from CSI report)
-    int      tpmi;               ///< TPMI (set by ul_ri_tpmi_select from SRS feedback)
-    /* Per-candidate TDA (set by ul_tda_select). Default impl assigns same TDA to all cands;
-       a custom impl can assign different TDAs per UE (e.g., beamforming-aware). */
-    int      tda;               ///< TDA index
-    NR_tda_info_t tda_info;     ///< resolved TDA info
-    uint16_t slbitmap;           ///< symbol bitmap derived from tda_info
-};
+    int      beam_index;
 
-struct nr_ul_alloc {
-    int      candidate_idx;      ///< index into the candidates array
-    uint16_t rbStart;
-    uint16_t rbSize;
-    uint8_t  mcs;
-    /* CCE validation results — set by commit_ul_alloc via validate callback */
-    int      cce_index;
-    int      aggregation_level;
-    NR_sched_pdcch_t sched_pdcch;
+    /* ── UE CSI observations (set by collect, read-only after) ─────────────── */
+    uint16_t cqi;                ///< wideband CQI (from CSI report)
+
+    /* ── gNB decisions (written by the named pipeline stage) ───────────────── */
+    /* ul_ri_tpmi_select: rank and precoding */
+    int      alloc_nrOfLayers;   ///< decided rank; default from SRS feedback
+    int      alloc_tpmi;         ///< decided TPMI; default from SRS feedback
+    /* ul_tda_select: time-domain allocation */
+    int      alloc_tda;          ///< TDA index
+    NR_tda_info_t alloc_tda_info; ///< resolved TDA info
+    uint16_t alloc_slbitmap;     ///< symbol bitmap derived from alloc_tda_info
+    /* ul_beam_select: beam assignment (DCI slot + PUSCH slot) */
+    int      alloc_dci_beam_idx;   ///< beam idx for the DCI slot; -1 = failed
+    int      alloc_beam_idx;       ///< beam idx for the scheduled PUSCH slot; -1 = failed
+    bool     alloc_dci_beam_new;   ///< true if dci_beam was newly allocated
+    bool     alloc_sched_beam_new; ///< true if sched_beam was newly allocated
+    /* ul_mcs_select: MCS from BLER/SINR */
+    int      alloc_mcs;          ///< MCS target; SINR-based (harq_round_max==1) or BLER-based
+    /* ul_rb_alloc: frequency-domain assignment */
+    int      alloc_rbStart;      ///< allocated RB start (within BWP)
+    int      alloc_rbSize;       ///< number of RBs allocated
+    /* commit_ul_alloc: CCE validation */
+    int      alloc_cce_index;
+    int      alloc_aggregation_level;
+    NR_sched_pdcch_t alloc_sched_pdcch;
 };
 
 typedef struct {
@@ -1058,21 +1060,15 @@ typedef struct {
     nr_ul_phr_suggestion_t same_rb_min_mcs;
 } nr_ul_phr_advice_t;
 
-typedef int (*nr_ul_beam_alloc_fn)(NR_beam_info_t *beam_info,
-                                   const int16_t *beam_index_list,
-                                   nr_ul_candidate_t *candidates,
-                                   int n_candidates,
-                                   frame_t frame, slot_t slot,
-                                   frame_t sched_frame, slot_t sched_slot,
-                                   int slots_per_frame);
+typedef int (*nr_ul_beam_select_fn)(NR_beam_info_t *beam_info,
+                                    const int16_t *beam_index_list,
+                                    nr_ul_candidate_t *candidates,
+                                    int n_candidates,
+                                    frame_t frame, slot_t slot,
+                                    frame_t sched_frame, slot_t sched_slot,
+                                    int slots_per_frame);
 
-/// UL scheduling policy: returns number of scheduled UEs; allocs[0..ret-1] are densely packed.
-typedef int (*nr_ul_sched_policy_fn)(const nr_ul_sched_params_t *params,
-                                     const nr_ul_candidate_t *candidates,
-                                     nr_ul_alloc_t *allocs,
-                                     int n_candidates);
-
-/// UL RI/TPMI selection: sets nrOfLayers and tpmi per candidate from SRS feedback.
+/// UL RI/TPMI selection: sets alloc_nrOfLayers and alloc_tpmi per candidate from SRS feedback.
 /// Default: reads from srs_feedback (current OAI behavior).
 /// Custom: joint rank/TPMI search from H matrix, ML-based, etc.
 typedef void (*nr_ul_ri_tpmi_select_fn)(gNB_MAC_INST *mac,
@@ -1080,10 +1076,24 @@ typedef void (*nr_ul_ri_tpmi_select_fn)(gNB_MAC_INST *mac,
 
 /// UL TDA selection: picks TDA per candidate (default: same TDA for all), validates retx
 /// feasibility, drops infeasible cands (compact). Returns surviving cand count.
-/// Each surviving cand has tda/tda_info/slbitmap populated. Retx cands have retx_rbSize set.
+/// Each surviving cand has alloc_tda/alloc_tda_info/alloc_slbitmap populated. Retx cands have retx_rbSize set.
 typedef int (*nr_ul_tda_select_fn)(gNB_MAC_INST *mac,
                                    nr_ul_candidate_t *cands, int n_cand,
                                    frame_t sched_frame, slot_t sched_slot, int k2);
+
+/// MCS selection: sets alloc_mcs from BLER/SINR state for every candidate.
+/// Runs after beam_select so alloc_nrOfLayers (for SINR lookup) and beam info are available.
+/// Also persists the decision to ul_bler_stats.mcs for continuity across slots.
+typedef void (*nr_ul_mcs_select_fn)(const gNB_MAC_INST *mac,
+                                    nr_ul_candidate_t *candidates,
+                                    int n_candidates);
+
+/// UL scheduling policy: beam loop is inside the policy for cross-beam scheduling.
+/// Returns number of scheduled UEs; sched_indices[0..ret-1] hold their indices.
+typedef int (*nr_ul_rb_alloc_fn)(const nr_ul_sched_params_t *params,
+                                 nr_ul_candidate_t *candidates,
+                                 int *sched_indices,
+                                 int n_candidates);
 
 typedef struct f1_config_t {
   f1ap_setup_req_t *setup_req;
@@ -1201,11 +1211,12 @@ typedef struct gNB_MAC_INST_s {
   nr_dl_mcs_select_fn dl_mcs_select;
   nr_dl_rb_alloc_fn dl_rb_alloc;
 
-  /// UL RI/TPMI + TDA selection + beam allocation + scheduling policy
+  /// UL RI/TPMI + TDA selection + beam selection + MCS selection + RB allocation
   nr_ul_ri_tpmi_select_fn ul_ri_tpmi_select;
   nr_ul_tda_select_fn   ul_tda_select;
-  nr_ul_beam_alloc_fn   ul_beam_alloc;
-  nr_ul_sched_policy_fn ul_sched_policy;
+  nr_ul_beam_select_fn  ul_beam_select;
+  nr_ul_mcs_select_fn   ul_mcs_select;
+  nr_ul_rb_alloc_fn     ul_rb_alloc;
 
   nr_mac_config_t radio_config;
   nr_rlc_configuration_t rlc_config;
