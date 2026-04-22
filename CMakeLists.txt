@@ -714,7 +714,7 @@ set(SCHED_NR_SRC
 )
 add_library(SCHED_NR_LIB ${SCHED_NR_SRC})
 target_link_libraries(SCHED_NR_LIB PRIVATE asn1_nr_rrc_hdrs UTIL)
-target_link_libraries(SCHED_NR_LIB PRIVATE NFAPI_LIB) # some FAPI messages pack "subPDUs"
+target_link_libraries(SCHED_NR_LIB PRIVATE nfapi_nr_lib) # some FAPI messages pack "subPDUs"
 
 set(SCHED_SRC_RU
   ${OPENAIR1_DIR}/SCHED/ru_procedures.c
@@ -745,22 +745,23 @@ target_link_libraries(SCHED_NR_UE_LIB PRIVATE asn1_lte_rrc_hdrs asn1_nr_rrc_hdrs
 
 # nFAPI
 #################################
-set(NFAPI_SRC
-  ${NFAPI_DIR}/nfapi/src/nfapi_p4.c
-  ${NFAPI_DIR}/nfapi/src/nfapi_lte_p5.c
-  ${NFAPI_DIR}/nfapi/src/nfapi_nr_p5.c
-  ${NFAPI_DIR}/nfapi/src/nfapi_lte_p7.c
-  ${NFAPI_DIR}/nfapi/src/nfapi_nr_p7.c
-)
-add_library(NFAPI_LIB ${NFAPI_SRC})
-target_link_libraries(NFAPI_LIB PUBLIC nfapi_common)
-target_link_libraries(NFAPI_LIB PUBLIC nr_fapi_p5 nr_fapi_p7)
-target_link_libraries(NFAPI_LIB PRIVATE z)
+add_library(nfapi_nr_lib
+        ${NFAPI_DIR}/nfapi/src/nfapi_nr_p5.c
+        ${NFAPI_DIR}/nfapi/src/nfapi_nr_p7.c)
+target_link_libraries(nfapi_nr_lib PUBLIC nfapi_common nr_fapi_p5 nr_fapi_p7)
+target_link_libraries(nfapi_nr_lib PRIVATE z)
+
+add_library(nfapi_lte_lib
+        ${NFAPI_DIR}/nfapi/src/nfapi_p4.c
+        ${NFAPI_DIR}/nfapi/src/nfapi_lte_p5.c
+        ${NFAPI_DIR}/nfapi/src/nfapi_lte_p7.c)
+target_link_libraries(nfapi_lte_lib PUBLIC nfapi_common)
+target_link_libraries(nfapi_lte_lib PRIVATE z)
 
 if(OAI_WLS)
-  target_compile_definitions(NFAPI_LIB PRIVATE ENABLE_WLS)
+  target_compile_definitions(nfapi_nr_lib PRIVATE ENABLE_WLS)
 else()
-  target_compile_definitions(NFAPI_LIB PRIVATE ENABLE_SOCKET)
+  target_compile_definitions(nfapi_nr_lib PRIVATE ENABLE_SOCKET)
 endif()
 include_directories(${NFAPI_DIR}/nfapi/public_inc)
 include_directories(${NFAPI_DIR}/nfapi/inc)
@@ -774,6 +775,7 @@ set(NFAPI_PNF_SRC
 add_library(NFAPI_PNF_LIB ${NFAPI_PNF_SRC})
 target_link_libraries(NFAPI_PNF_LIB PRIVATE asn1_lte_rrc_hdrs asn1_nr_rrc_hdrs)
 target_link_libraries(NFAPI_PNF_LIB PUBLIC nr_fapi_p7)
+target_link_libraries(NFAPI_PNF_LIB PUBLIC nfapi_nr_lib nfapi_lte_lib)
 
 if(OAI_WLS)
   target_compile_definitions(NFAPI_PNF_LIB PRIVATE ENABLE_WLS)
@@ -790,6 +792,8 @@ set(NFAPI_VNF_SRC
 add_library(NFAPI_VNF_LIB ${NFAPI_VNF_SRC})
 target_link_libraries(NFAPI_VNF_LIB PRIVATE asn1_lte_rrc_hdrs asn1_nr_rrc_hdrs)
 target_link_libraries(NFAPI_VNF_LIB PRIVATE nr_fapi_p5 nr_fapi_p7)
+target_link_libraries(NFAPI_VNF_LIB PUBLIC nfapi_nr_lib nfapi_lte_lib)
+
 if(OAI_AERIAL)
   target_compile_definitions(NFAPI_VNF_LIB PRIVATE ENABLE_AERIAL)
 endif()
@@ -1750,7 +1754,7 @@ add_dependencies(lte-softmodem oai_iqplayer)
 target_link_libraries(lte-softmodem PRIVATE
   -Wl,--start-group
   lte_rrc nr_rrc s1ap m2ap x2ap m3ap GTPV1U SECURITY UTIL SCTP_CLIENT MME_APP SCHED_LIB SCHED_RU_LIB
-  PHY_COMMON PHY PHY_RU  L2 L2_LTE NFAPI_LIB NFAPI_VNF_LIB NFAPI_PNF_LIB NFAPI_USER_LIB MISC_NFAPI_LTE_LIB
+  PHY_COMMON PHY PHY_RU  L2 L2_LTE NFAPI_VNF_LIB NFAPI_PNF_LIB NFAPI_USER_LIB MISC_NFAPI_LTE_LIB
   ${NAS_UE_LIB} ITTI SIMU radio_common softmodem_common
   -Wl,--end-group dl)
 
@@ -1804,7 +1808,7 @@ target_link_libraries(lte-uesoftmodem PRIVATE
   -Wl,--start-group
   lte_rrc nr_rrc s1ap x2ap m2ap m3ap
   SECURITY UTIL SCTP_CLIENT MME_APP SCHED_RU_LIB SCHED_UE_LIB PHY_COMMON
-  PHY_UE PHY_RU L2_UE L2_LTE SIMU NFAPI_LIB NFAPI_PNF_LIB NFAPI_USER_LIB MISC_NFAPI_LTE_LIB
+  PHY_UE PHY_RU L2_UE L2_LTE SIMU NFAPI_PNF_LIB NFAPI_USER_LIB MISC_NFAPI_LTE_LIB
   ${NAS_UE_LIB} ITTI radio_common softmodem_common
   -Wl,--end-group dl)
 
@@ -1853,7 +1857,7 @@ target_link_libraries(nr-softmodem PRIVATE
   -Wl,--start-group
   UTIL SCTP_CLIENT SCHED_LIB SCHED_NR_LIB PHY_NR PHY PHY_NR_COMMON NR_PHY_RU GTPV1U SECURITY
   ITTI ${NAS_UE_LIB} nr_rrc
-  ngap s1ap L2_LTE_NR L2_NR MAC_NR_COMMON NFAPI_LIB NFAPI_VNF_LIB NFAPI_PNF_LIB NFAPI_USER_LIB SIMU
+  ngap s1ap L2_LTE_NR L2_NR MAC_NR_COMMON NFAPI_VNF_LIB NFAPI_PNF_LIB NFAPI_USER_LIB SIMU
   x2ap f1ap m2ap m3ap e1ap radio_common
   time_management softmodem_common
   -Wl,--end-group dl)
@@ -1921,7 +1925,7 @@ add_executable(nr-uesoftmodem
 target_link_libraries(nr-uesoftmodem PRIVATE
   -Wl,--start-group
   nr_rrc SECURITY UTIL SCHED_NR_UE_LIB
-  PHY_NR_COMMON PHY_NR_UE NR_L2_UE MAC_NR_COMMON NFAPI_LIB
+  PHY_NR_COMMON PHY_NR_UE NR_L2_UE MAC_NR_COMMON nfapi_nr_lib
   ITTI SIMU radio_common
   time_management softmodem_common
   -Wl,--end-group dl)
@@ -2141,7 +2145,7 @@ if (${T_TRACER})
         params_libconfig
         oai_eth_transpro UTIL
         SECURITY SCHED_LIB SCHED_NR_LIB SCHED_RU_LIB SCHED_UE_LIB SCHED_NR_UE_LIB
-        NFAPI_LIB NFAPI_PNF_LIB NFAPI_VNF_LIB NFAPI_USER_LIB
+        nfapi_lte_lib nfapi_nr_lib NFAPI_PNF_LIB NFAPI_VNF_LIB NFAPI_USER_LIB
         MISC_NFAPI_LTE_LIB
         PHY_COMMON PHY PHY_UE PHY_NR PHY_NR_COMMON PHY_NR_UE PHY_RU NR_PHY_RU
         L2 L2_LTE L2_NR L2_LTE_NR L2_UE NR_L2_UE MAC_NR_COMMON MAC_UE_NR ngap
