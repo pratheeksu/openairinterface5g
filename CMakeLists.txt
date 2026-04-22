@@ -749,7 +749,8 @@ set(NFAPI_SRC
   ${NFAPI_DIR}/nfapi/src/nfapi_p4.c
   ${NFAPI_DIR}/nfapi/src/nfapi_lte_p5.c
   ${NFAPI_DIR}/nfapi/src/nfapi_nr_p5.c
-  ${NFAPI_DIR}/nfapi/src/nfapi_p7.c
+  ${NFAPI_DIR}/nfapi/src/nfapi_lte_p7.c
+  ${NFAPI_DIR}/nfapi/src/nfapi_nr_p7.c
 )
 add_library(NFAPI_LIB ${NFAPI_SRC})
 target_link_libraries(NFAPI_LIB PUBLIC nfapi_common)
