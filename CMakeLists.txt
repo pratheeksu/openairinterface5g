@@ -747,7 +747,8 @@ target_link_libraries(SCHED_NR_UE_LIB PRIVATE asn1_lte_rrc_hdrs asn1_nr_rrc_hdrs
 #################################
 set(NFAPI_SRC
   ${NFAPI_DIR}/nfapi/src/nfapi_p4.c
-  ${NFAPI_DIR}/nfapi/src/nfapi_p5.c
+  ${NFAPI_DIR}/nfapi/src/nfapi_lte_p5.c
+  ${NFAPI_DIR}/nfapi/src/nfapi_nr_p5.c
   ${NFAPI_DIR}/nfapi/src/nfapi_p7.c
 )
 add_library(NFAPI_LIB ${NFAPI_SRC})
