@@ -32,10 +32,8 @@
 #define PRINT_CRC_CHECK(a)
 #endif
 
-#ifdef ENABLE_CUDA
-
-  #include <cuda_runtime.h>
-
+#ifdef LDPC_CUDA
+#include <cuda_runtime.h>
 #endif
 
 void free_gNB_ulsch(NR_gNB_ULSCH_t *ulsch, uint16_t N_RB_UL)
@@ -81,7 +79,7 @@ NR_gNB_ULSCH_t new_gNB_ulsch(uint8_t max_ldpc_iterations, uint16_t N_RB_UL)
   ulsch.harq_process = harq;
   harq->b = malloc16_clear(ulsch_bytes * sizeof(*harq->b));
 // Allocate one contiguous buffer fr all c/d arrays to simplify addressing for GPU LDPC offload
-  #ifdef ENABLE_CUDA
+#ifdef LDPC_CUDA
     cudaError_t err = cudaHostAlloc((void**)&harq->c, a_segments * 8448 * sizeof(*harq->c), cudaHostAllocMapped);
     AssertFatal(err == cudaSuccess, "CUDA cudaHostAlloc failed for harq->c: %s\n", cudaGetErrorString(err));
     
@@ -234,7 +232,7 @@ int nr_ulsch_decoding(PHY_VARS_gNB *phy_vars_gNB,
     uint8_t ULSCH_id = ULSCH_ids[pusch_id];
     NR_gNB_ULSCH_t *ulsch = &phy_vars_gNB->ulsch[ULSCH_id];
     NR_UL_gNB_HARQ_t *harq_process = ulsch->harq_process;
-#ifdef ENABLE_CUDA
+#ifdef LDPC_CUDA
     int16_t *ulsch_llr = phy_vars_gNB->pusch_vars[ULSCH_id].llr_dev;
 #else
     int16_t *ulsch_llr = phy_vars_gNB->pusch_vars[ULSCH_id].llr;

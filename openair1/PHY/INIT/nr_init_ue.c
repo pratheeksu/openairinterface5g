@@ -18,7 +18,7 @@
 #include "SCHED_NR_UE/harq_nr.h"
 #include "nr-uesoftmodem.h"
 #include "common/config/config_userapi.h"
-#ifdef ENABLE_CUDA
+#ifdef LDPC_CUDA
 #include <cuda_runtime.h>
 #endif
 extern uint32_t use_gpu;
@@ -266,7 +266,7 @@ int init_nr_ue_signal(PHY_VARS_NR_UE *ue, int nb_connected_gNB)
     ue->received_config_request = false;
 
   ue->use_gpu = use_gpu;
-#ifdef ENABLE_CUDA
+#ifdef LDPC_CUDA
   for (int j=0;j<10;j++) {
     for (int i=0;i<2;i++) {
       cudaError_t err = cudaHostAlloc((void**)&ue->llr[j][i],(66 * 3 * 8448) * sizeof(int16_t),cudaHostAllocMapped);
@@ -333,7 +333,7 @@ void term_nr_ue_signal(PHY_VARS_NR_UE *ue)
   }
 
   
-#ifdef ENABLE_CUDA
+#ifdef LDPC_CUDA
   for (int j=0;j<10;j++) {
    cudaFreeHost(ue->llr[j][0]);
    cudaFreeHost(ue->llr[j][1]);
@@ -357,7 +357,7 @@ void free_nr_ue_dl_harq(NR_DL_UE_HARQ_t harq_list[2][NR_MAX_HARQ_PROCESSES], int
       free_and_zero(harq_list[j][i].c);
       free_and_zero(harq_list[j][i].d);
       free_and_zero(harq_list[j][i].b);
-#ifdef ENABLE_CUDA
+#ifdef LDPC_CUDA
       cudaFreeHost(harq_list[j][i].c);
 #else
       free_and_zero(harq_list[j][i].c);
@@ -413,7 +413,7 @@ void nr_init_dl_harq_processes(NR_DL_UE_HARQ_t harq_list[2][NR_MAX_HARQ_PROCESSE
 
       const int sz=3*8448*sizeof(int16_t);
       harq_list[j][i].b = malloc16_clear(a_segments * 1056);
-#ifdef ENABLE_CUDA
+#ifdef LDPC_CUDA
       cudaError_t err = cudaHostAlloc((void**)&harq_list[j][i].c,a_segments*sizeof(uint8_t *)*1056,cudaHostAllocMapped);
       AssertFatal(err == cudaSuccess,"CUDA Error (harq.c): %s\n",cudaGetErrorString(err));
       err = cudaHostGetDevicePointer((void**)&harq_list[j][i].cdev,(void*)harq_list[j][i].c,0);
@@ -446,7 +446,7 @@ void nr_init_ul_harq_processes(NR_UL_UE_HARQ_t harq_list[NR_MAX_HARQ_PROCESSES],
     
     harq_list[i].payload_AB = malloc16_clear(ulsch_bytes);
 
-#ifdef ENABLE_CUDA
+#ifdef LDPC_CUDA
     uint8_t *tmp_c, *tmp_d;
     size_t total_c_size = a_segments * 8448;
     size_t total_d_size = a_segments * 68 * 384 * sizeof(uint32_t);

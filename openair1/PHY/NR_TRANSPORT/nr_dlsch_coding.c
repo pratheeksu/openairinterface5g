@@ -20,7 +20,7 @@
 #include <syscall.h>
 #include <openair2/UTIL/OPT/opt.h>
 
-#ifdef ENABLE_CUDA
+#ifdef LDPC_CUDA
 #include <cuda_runtime.h>
 #endif
 // #define DEBUG_DLSCH_CODING
@@ -37,7 +37,7 @@ void free_gNB_dlsch(NR_gNB_DLSCH_t *dlsch, uint16_t N_RB, const NR_DL_FRAME_PARM
   }
 
   if (dlsch->b) {
-#ifdef ENABLE_CUDA	  
+#ifdef LDPC_CUDA
     if (use_gpumem) 
       cudaFreeHost(dlsch->b);
     else	  
@@ -75,7 +75,7 @@ NR_gNB_DLSCH_t new_gNB_dlsch(NR_DL_FRAME_PARMS *frame_parms, uint16_t N_RB, int 
   bzero(dlsch.b, dlsch_bytes);
 
   dlsch.c = (uint8_t **)malloc16(a_segments * sizeof(uint8_t *));
-#ifdef ENABLE_CUDA
+#ifdef LDPC_CUDA
   cudaError_t err=cudaHostAlloc((void**)&dlsch.c_devh,a_segments*sizeof(uint8_t*),cudaHostAllocMapped);
   AssertFatal(err == cudaSuccess,"CUDA Error (dlsch->c_devh): %s\n", cudaGetErrorString(err));
   err=cudaHostGetDevicePointer((void**)&dlsch.c_dev,(void*)dlsch.c_devh,0);
@@ -86,7 +86,7 @@ NR_gNB_DLSCH_t new_gNB_dlsch(NR_DL_FRAME_PARMS *frame_parms, uint16_t N_RB, int 
     // [hna] 8448 is the maximum CB size in NR
     //       68*348 = 68*(maximum size of Zc)
     //       In section 5.3.2 in 38.212, the for loop is up to N + 2*Zc (maximum size of N is 66*Zc, therefore 68*Zc)
-#ifdef ENABLE_CUDA
+#ifdef LDPC_CUDA
     if (use_gpumem) {
       err=cudaHostAlloc((void**)&dlsch.c[r],(8448/8)*sizeof(uint8_t),cudaHostAllocMapped);
       AssertFatal(err == cudaSuccess,"CUDA Error (dlsch->c[%d]): %s\n", r,cudaGetErrorString(err));
@@ -242,7 +242,7 @@ int nr_dlsch_encoding(PHY_VARS_gNB *gNB,
     TB_parameters->nb_layers = rel15->nrOfLayers;
     TB_parameters->rv_index = rel15->rvIndex[0];
 
-#ifdef ENABLE_CUDA
+#ifdef LDPC_CUDA
     if (gNB->use_gpu) TB_parameters->c_dev = (uint8_t**)dlsch->c_dev;
 #endif  
     int nb_re_dmrs =

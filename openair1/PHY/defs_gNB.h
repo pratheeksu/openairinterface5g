@@ -107,7 +107,7 @@ typedef struct {
   uint8_t *b;
   /// Pointers to transport block segments
   uint8_t **c;
-#ifdef ENABLE_CUDA
+#ifdef LDPC_CUDA
   /// Pointers to transport block segments (contains pointers in c above)
   uint8_t *c_devh;
   /// Pointers to transport block segments (GPU mapping)
@@ -259,7 +259,7 @@ typedef struct {
   /// \brief llr values.
   /// - first index: ? [0..1179743] (hard coded)
   int16_t *llr;
-#ifdef ENABLE_CUDA
+#ifdef LDPC_CUDA
   /// \brief llr values link to device memory
   int16_t* llr_dev; 
 #endif

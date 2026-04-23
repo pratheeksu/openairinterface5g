@@ -211,8 +211,9 @@ if(CMAKE_C_COMPILER_ID STREQUAL "Clang" OR CMAKE_CXX_COMPILER_ID STREQUAL "Clang
   set(commonOpts "${commonOpts} -Wno-unused-command-line-argument")
 endif()
 
-if (ENABLE_CUDA)
-  set(commonOpts "${commonOpts} -DENABLE_CUDA")
+if (ENABLE_LDPC_CUDA)
+  # TODO only on specific targets!!
+  set(commonOpts "${commonOpts} -DLDPC_CUDA")
 endif()
 
 set(CMAKE_C_FLAGS
@@ -1077,7 +1078,7 @@ target_link_libraries(PHY_UE PRIVATE asn1_lte_rrc_hdrs asn1_nr_rrc_hdrs UTIL)
 add_library(PHY_NR_COMMON ${PHY_NR_SRC_COMMON})
 target_link_libraries(PHY_NR_COMMON PUBLIC UTIL)
 
-if (ENABLE_CUDA)
+if (ENABLE_LDPC_CUDA)
   find_package(CUDA REQUIRED)
   if (NOT CUDA_FOUND)
     message(FATAL_ERROR "no CUDA found")
@@ -2009,7 +2010,7 @@ target_link_libraries(ldpctest PRIVATE
   # --whole-archive links 'check_crc' in the executable even though it is note used, see 'man ld'
   -Wl,--whole-archive crc_byte -Wl,--no-whole-archive
 )
-if (ENABLE_CUDA)
+if (ENABLE_LDPC_CUDA)
   # ldpctest.c uses cudaHostAlloc(), so include dir/link libr to make available
   # TODO don't write it directly into ldpctest, but separate compilation unit?
   find_package(CUDA REQUIRED)

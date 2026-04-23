@@ -16,7 +16,7 @@
 #include "openair1/PHY/defs_nr_common.h"
 #include "coding_unitary_defs.h"
 #include "common/utils/LOG/log.h"
-#ifdef ENABLE_CUDA
+#ifdef LDPC_CUDA
 #include <cuda_runtime.h>
 #endif
 
@@ -117,7 +117,7 @@ one_measurement_t test_ldpc(short max_iterations,
   double sigma;
   sigma = 1.0 / sqrt(2 * SNR);
   cpu_meas_enabled = 1;
-#ifdef ENABLE_CUDA
+#ifdef LDPC_CUDA
   uint8_t **test_input,*test_input_p;
 #else
   uint8_t *test_input[n_segments * NR_MAX_NB_LAYERS];
@@ -264,12 +264,12 @@ one_measurement_t test_ldpc(short max_iterations,
 
 //  ldpc_toCompare.LDPCinit();
   // generate input block
-#ifdef ENABLE_CUDA
+#ifdef LDPC_CUDA
   cudaHostAlloc((void**)&test_input_p,n_segments*sizeof(uint8_t*),cudaHostAllocMapped);
   test_input=(uint8_t **)test_input_p;
 #endif
   for (int j = 0; j < n_segments; j++) {
-#ifdef ENABLE_CUDA
+#ifdef LDPC_CUDA
     cudaHostAlloc((void**)&test_input[j],((K + 7) & ~7) / 8,cudaHostAllocMapped); 
 #else
     test_input[j] = malloc16(((K + 7) & ~7) / 8);
@@ -428,14 +428,14 @@ one_measurement_t test_ldpc(short max_iterations,
   ret.errors_bit_uncoded = ret.errors_bit_uncoded / (double)((Kb + nrows - no_punctured_columns - 2) * Zc - removed_bit);
 
   for (int j = 0; j < n_segments; j++) {
-#ifdef ENABLE_CUDA
+#ifdef LDPC_CUDA
     cudaFreeHost(test_input[j]);
 #else
     free(test_input[j]);
 #endif
     free(channel_input[j]);
   }
-#ifdef ENABLE_CUDA
+#ifdef LDPC_CUDA
   cudaFreeHost(test_input);
 #endif
   free(channel_input_optim);
@@ -465,7 +465,7 @@ one_measurement_t test_ldpc(short max_iterations,
 }
 
 configmodule_interface_t *uniqCfg = NULL;
-#ifdef ENABLE_CUDA
+#ifdef LDPC_CUDA
 extern int pageable,integrated;
 #endif
 int main(int argc, char *argv[])
@@ -587,7 +587,7 @@ int main(int argc, char *argv[])
 
   // find minimum value in all sets of lifting size
   Zc = 0;
-#ifdef ENABLE_CUDA
+#ifdef LDPC_CUDA
   cudaError_t err = cudaHostAlloc((void**)&estimated_output,sizeof(uint8_t)* n_segments * Kprime,cudaHostAllocMapped);
   if (err != cudaSuccess) {
     printf("[DEBUG] CUDA Error String: %s\n", cudaGetErrorString(err));

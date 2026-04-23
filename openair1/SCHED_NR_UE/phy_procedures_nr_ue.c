@@ -51,7 +51,7 @@ fifo_dump_emos_UE emos_dump_UE;
 #include "T.h"
 #include "instrumentation.h"
 
-#ifdef ENABLE_CUDA
+#ifdef LDPC_CUDA
 #include <cuda_runtime.h>
 #endif
 
@@ -1295,7 +1295,7 @@ void pdsch_processing(PHY_VARS_NR_UE *ue, const UE_nr_rxtx_proc_t *proc, nr_phy_
     const uint32_t rx_llr_buf_sz = ALIGNARRAYSIZE(G, 32); // each LLR is 2 bytes hence 64 byte aligned
     const uint32_t nb_codewords = NR_MAX_NB_LAYERS > 4 ? 2 : 1;
     int16_t* llr[2];
-#ifdef ENABLE_CUDA
+#ifdef LDPC_CUDA
     for (int i = 0; i < nb_codewords; i++) {
       llr[i]=ue->llr_dev[nr_slot_rx%10][i];
       LOG_D(NR_PHY,"nr_slot_rx %d, llr[%d] %p\n",nr_slot_rx,i,llr[i]);
@@ -1340,7 +1340,7 @@ void pdsch_processing(PHY_VARS_NR_UE *ue, const UE_nr_rxtx_proc_t *proc, nr_phy_
     if (ue->phy_sim_pdsch_llr)
       memcpy(ue->phy_sim_pdsch_llr, llr[0], sizeof(int16_t) * rx_llr_buf_sz);
 
-#ifndef ENABLE_CUDA
+#ifndef LDPC_CUDA
     for (int i=0; i<nb_codewords; i++)
       free(llr[i]);
 #endif

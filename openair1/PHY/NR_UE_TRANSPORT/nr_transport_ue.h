@@ -80,7 +80,7 @@ typedef struct {
   uint8_t *b;
   /// Pointer to transport block segments
   uint8_t *c;
-#ifdef ENABLE_CUDA
+#ifdef LDPC_CUDA
   /// Pointer to transport block segments (GPU pointer for c when using shared memory, should be the same on Jetson
   uint8_t *cdev;
 #endif
