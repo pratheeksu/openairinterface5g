@@ -21,9 +21,6 @@
 #include "PHY/NR_UE_TRANSPORT/nr_transport_proto_ue.h"
 #include "SCHED_NR_UE/phy_sch_processing_time.h"
 #include "PHY/NR_UE_ESTIMATION/nr_estimation.h"
-#ifdef EMOS
-#include "SCHED/phy_procedures_emos.h"
-#endif
 #include "executables/softmodem-common.h"
 #include "executables/nr-uesoftmodem.h"
 #include "SCHED_NR_UE/pucch_uci_ue_nr.h"
@@ -41,10 +38,6 @@
 #endif
 
 #include "common/utils/LOG/log.h"
-
-#ifdef EMOS
-fifo_dump_emos_UE emos_dump_UE;
-#endif
 
 #include "UTIL/OPT/opt.h"
 #include "intertask_interface.h"
@@ -1362,10 +1355,6 @@ void pdsch_processing(PHY_VARS_NR_UE *ue, const UE_nr_rxtx_proc_t *proc, nr_phy_
           ue->Mod_id,frame_rx,ue->total_TBS[gNB_id],
           ue->total_TBS_last[gNB_id],(float) ue->bitrate[gNB_id]/1000.0);
   }
-
-#ifdef EMOS
-  phy_procedures_emos_UE_RX(ue,slot,gNB_id);
-#endif
 
   LOG_D(PHY," ****** end RX-Chain  for AbsSubframe %d.%d ******  \n", frame_rx%1024, nr_slot_rx);
   UEscopeCopy(ue, commonRxdataF, rxdataF, sizeof(int32_t), ue->frame_parms.nb_antennas_rx, rxdataF_sz, 0);
