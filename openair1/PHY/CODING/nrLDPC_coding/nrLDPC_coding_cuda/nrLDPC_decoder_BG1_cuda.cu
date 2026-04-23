@@ -32,7 +32,7 @@
 #include <cuda_runtime.h>
 #include <stdint.h>
 #include <stdio.h>
-#include "nrLDPC_types.h"
+#include "openair1/PHY/CODING/nrLDPC_decoder/nrLDPC_types.h"
 
 #include "nrLDPC_CUDA_lut.h"
 #include "nrLDPC_CUDA_CnProcKernel_BG1.h"

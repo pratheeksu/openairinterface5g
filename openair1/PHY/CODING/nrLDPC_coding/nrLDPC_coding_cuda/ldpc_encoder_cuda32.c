@@ -22,13 +22,12 @@
 #include "PHY/sse_intrin.h"
 #include "openair1/PHY/CODING/nrLDPC_extern.h"
 
-#include "ldpc_generate_coefficient.c"
-
 #include <cuda_runtime.h>
 
 //#define DEBUG_LDPC 1
 
 #include "ldpc_encode_parity_check_cuda.c"
+
 uint32_t *c_dev;
 uint32_t **c_host;
 uint32_t *c_devh[4];

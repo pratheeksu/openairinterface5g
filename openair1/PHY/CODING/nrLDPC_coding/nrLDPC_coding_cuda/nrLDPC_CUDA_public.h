@@ -17,7 +17,6 @@
 #include <cuda_runtime.h>
 #include <stdint.h>
 #include <stdio.h>
-#include "nrLDPC_types.h"
 
 #include <cuda_runtime.h>
 #include <stdint.h>

@@ -16,7 +16,6 @@
 #include <cuda_runtime.h>
 #include <stdint.h>
 #include <stdio.h>
-#include "nrLDPC_types.h"
 #include "nrLDPC_CUDA_public.h"
 #include "nrLDPC_CUDA_shared_param.h"
 

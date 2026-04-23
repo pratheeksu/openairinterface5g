@@ -1,8 +1,6 @@
 #include <stdio.h>
 #include <stdint.h>
-#if USE_CUDA
 #include <cuda_runtime.h>
-#endif
 // generated code for Zc=384, byte encoding
 __global__ void ldpc_BG1_Zc384_worker(uint32_t *c[4],uint32_t *d[4]) {
   uint32_t *c32=c[blockIdx.x];

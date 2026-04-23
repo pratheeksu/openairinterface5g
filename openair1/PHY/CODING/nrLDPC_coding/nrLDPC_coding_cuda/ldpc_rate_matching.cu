@@ -19,7 +19,7 @@
  *      contact@openairinterface.org
  */
 #include <stdio.h>
-#include "nr_rate_matching.h"
+#include "openair1/PHY/CODING/nrLDPC_coding/nrLDPC_coding_segment/nr_rate_matching.h"
 
 __device__ __forceinline__ int clamp_i16_to_i8(int x)
 {

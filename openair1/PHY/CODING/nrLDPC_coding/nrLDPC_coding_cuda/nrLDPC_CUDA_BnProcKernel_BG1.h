@@ -14,7 +14,7 @@
 #include <cuda_runtime.h>
 #include <stdint.h>
 #include <stdio.h>
-#include "nrLDPC_types.h"
+#include "openair1/PHY/CODING/nrLDPC_decoder/nrLDPCdecoder_defs.h"
 
 __device__ __forceinline__ void unpack_and_sign_extend(uint32_t packed, uint32_t *val_lo, uint32_t *val_hi)
 {

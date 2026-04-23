@@ -14,12 +14,6 @@
  */
 #include <stdint.h>
 #include "PHY/sse_intrin.h"
-#include "nrLDPCdecoder_defs.h"
-#include "nrLDPC_types.h"
-#include "nrLDPC_init.h"
-#include "nrLDPC_mPass.h"
-#include "nrLDPC_cnProc.h"
-#include "nrLDPC_bnProc.h"
 #include "log.h"
 #include "openair1/PHY/CODING/coding_defs.h"
 
