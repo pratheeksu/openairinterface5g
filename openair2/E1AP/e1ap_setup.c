@@ -5,6 +5,10 @@
 #include <string.h>
 #include <inttypes.h>
 #include <arpa/inet.h>
+#include <unistd.h>
+#include <sys/socket.h>
+#include <sys/types.h>
+#include <netdb.h>
 #include "common/utils/LOG/log.h"
 #include "common/utils/nr/nr_common.h"
 #include "assertions.h"
@@ -32,12 +36,66 @@ static void get_NGU_S1U_addr(char **addr, uint16_t *port)
   LOG_I(GTPU, "Configuring GTPu\n");
   sprintf(gtpupath, "%s.[%i].%s", GNB_CONFIG_STRING_GNB_LIST, 0, GNB_CONFIG_STRING_NETWORK_INTERFACES_CONFIG);
   GET_PARAMS(NETParams, GNBNETPARAMS_DESC, gtpupath);
+  char amfprefix[MAX_OPTNAME_SIZE * 2 + 8];
+  sprintf(amfprefix, "%s.[%i]", GNB_CONFIG_STRING_GNB_LIST, 0);
+  GET_PARAMS_LIST(NGParamList, NGParams, GNBNGPARAMS_DESC, GNB_CONFIG_STRING_AMF_IP_ADDRESS, amfprefix);
 
   char *address;
-  if (NETParams[GNB_IPV4_ADDRESS_FOR_NG_AMF_IDX].strptr != NULL) {
+  if (IS_SA_MODE(get_softmodem_params())) {
     LOG_I(GTPU, "SA mode \n");
+    struct in_addr tmp;
+    char res_buf[INET_ADDRSTRLEN];
+    int ret = inet_pton(AF_INET, *(NGParamList.paramarray[0][GNB_AMF_IPV4_ADDRESS_IDX].strptr), &tmp);
+
+    if (ret == 0) {
+      const char *port_str = "2152";
+      struct addrinfo hints, *res;
+      memset(&hints, 0x00, sizeof(hints));
+      hints.ai_family = AF_UNSPEC;
+      hints.ai_socktype = SOCK_STREAM;
+      int h_addr;
+      LOG_I(GTPU,
+            "AMF Domain Name used for auto-detection of NG-U: %s\n",
+            *(NGParamList.paramarray[0][GNB_AMF_IPV4_ADDRESS_IDX].strptr));
+      h_addr = getaddrinfo(*(NGParamList.paramarray[0][GNB_AMF_IPV4_ADDRESS_IDX].strptr), port_str, &hints, &res);
+      if (h_addr != 0) {
+        LOG_W(GTPU, "Invalid AMF address\n");
+        exit(-1);
+      }
+      struct sockaddr_in *addr = (struct sockaddr_in *)res->ai_addr;
+      inet_ntop(AF_INET, &addr->sin_addr, res_buf, INET_ADDRSTRLEN);
+      LOG_I(GTPU, "Resolved IPv4 address: %s\n", res_buf);
+      freeaddrinfo(res);
+    }
+    if (strcmp(gnb_ipv4_address_for_NGU, "127.0.0.1") == 0) {
+      int sock = socket(AF_INET, SOCK_DGRAM, 0);
+      if (sock < 0) {
+        LOG_E(GTPU, "Failed to create socket for auto-detecting gNB IPv4 address\n");
+      }
+
+      struct sockaddr_in dst;
+      dst.sin_family = AF_INET;
+      dst.sin_port = htons(0);
+      inet_pton(AF_INET, res_buf, &dst.sin_addr);
+      connect(sock, (struct sockaddr *)&dst, sizeof(dst));
+      if (connect(sock, (struct sockaddr *)&dst, sizeof(dst)) < 0) {
+        LOG_E(GTPU, "Failed to connect socket for auto-detecting gNB IPv4 address\n");
+        close(sock);
+      }
+
+      struct sockaddr_in src;
+      socklen_t len = sizeof(src);
+      getsockname(sock, (struct sockaddr *)&src, &len);
+      char buf[INET_ADDRSTRLEN];
+      inet_ntop(AF_INET, &src.sin_addr, buf, sizeof(buf));
+      close(sock);
+      address = strdup(buf);
+      LOG_I(GTPU, "Auto-detected gNB local IPv4 address for NG-U: %s\n", buf);
+    } else {
+      address = strdup(gnb_ipv4_address_for_NGU);
+      LOG_I(GTPU, "Parsed gNB local IPv4 address for NG-U: %s\n", address);
+    }
     AssertFatal(gnb_ipv4_address_for_NGU != NULL, "NG-U IPv4 address is NULL: could not read IPv4 address\n");
-    address = strdup(gnb_ipv4_address_for_NGU);
     *port = gnb_port_for_NGU;
   } else {
     LOG_I(GTPU, "NSA mode \n");
