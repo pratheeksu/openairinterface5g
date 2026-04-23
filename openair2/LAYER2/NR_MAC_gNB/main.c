@@ -173,7 +173,8 @@ size_t dump_mac_stats(gNB_MAC_INST *gNB, char *output, size_t strlen, bool reset
     float pucch_snr_diff = (pucch_snr * 10.0f - sched_ctrl->pucch_pc.target_snrx10) / 10.0f;
     output = st_append(output,
                        end,
-                       ", dlsch_errors %"PRIu64", pucch0_DTX %d (SNR %.1f%+.1f dB), BLER %.5f MCS (%d) %d CCE fail %d, goodput %.2f Mbps\n",
+                       ", dlsch_errors %" PRIu64
+                       ", pucch0_DTX %d (SNR %.1f%+.1f dB), BLER %.5f MCS (%d) %d CCE fail %d, goodput %.2f Mbps\n",
                        stats->dl.errors,
                        stats->pucch0_DTX,
                        pucch_snr,
@@ -198,25 +199,29 @@ size_t dump_mac_stats(gNB_MAC_INST *gNB, char *output, size_t strlen, bool reset
 
     float snr = nr_mac_get_snr(&sched_ctrl->pusch_pc);
     float diff_target = (snr * 10.0f - sched_ctrl->pusch_pc.target_snrx10) / 10.0f;
+    output = st_append(
+        output,
+        end,
+        ", ulsch_errors %" PRIu64
+        ", ulsch_DTX %d, BLER %.5f MCS (%d) %d (Qm %d deltaMCS %d dB) NPRB %d SNR %.1f (%+.1f) dB CCE fail %d, goodput %.2f Mbps\n",
+        stats->ul.errors,
+        stats->ulsch_DTX,
+        sched_ctrl->ul_bler_stats.bler,
+        UE->current_UL_BWP.mcs_table,
+        sched_ctrl->ul_bler_stats.mcs,
+        nr_get_Qm_ul(sched_ctrl->ul_bler_stats.mcs, UE->current_UL_BWP.mcs_table),
+        UE->mac_stats.deltaMCS,
+        UE->mac_stats.NPRB,
+        snr,
+        diff_target,
+        sched_ctrl->ul_cce_fail,
+        UE->ul_thr_ue / 1e6);
     output = st_append(output,
                        end,
-                       ", ulsch_errors %"PRIu64", ulsch_DTX %d, BLER %.5f MCS (%d) %d (Qm %d deltaMCS %d dB) NPRB %d SNR %.1f (%+.1f) dB CCE fail %d, goodput %.2f Mbps\n",
-                       stats->ul.errors,
-                       stats->ulsch_DTX,
-                       sched_ctrl->ul_bler_stats.bler,
-                       UE->current_UL_BWP.mcs_table,
-                       sched_ctrl->ul_bler_stats.mcs,
-                       nr_get_Qm_ul(sched_ctrl->ul_bler_stats.mcs,UE->current_UL_BWP.mcs_table),
-                       UE->mac_stats.deltaMCS,
-                       UE->mac_stats.NPRB,
-                       snr,
-                       diff_target,
-                       sched_ctrl->ul_cce_fail,
-                       UE->ul_thr_ue / 1e6);
-   output = st_append(output,
-                       end,
-                       "UE %04x: MAC:    TX %14"PRIu64" RX %14"PRIu64" bytes\n",
-                       UE->rnti, stats->dl.total_bytes, stats->ul.total_bytes);
+                       "UE %04x: MAC:    TX %14" PRIu64 " RX %14" PRIu64 " bytes\n",
+                       UE->rnti,
+                       stats->dl.total_bytes,
+                       stats->ul.total_bytes);
 
     for (int i = 0; i < seq_arr_size(&sched_ctrl->lc_config); i++) {
       const nr_lc_config_t *c = seq_arr_at(&sched_ctrl->lc_config, i);

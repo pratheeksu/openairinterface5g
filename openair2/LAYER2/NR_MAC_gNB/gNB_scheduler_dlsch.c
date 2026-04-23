@@ -432,20 +432,18 @@ static bool dlsch_to_schedule(const NR_UE_sched_ctrl_t *sched_ctrl)
   return false;
 }
 
-
 // Find the largest contiguous block of free RBs in VRB map.
 // Returns true if any free RBs found, with rbStart and rbSize set.
 static int collect_dl_candidates(gNB_MAC_INST *mac,
                                  NR_UE_info_t **UE_list,
                                  nr_dl_candidate_t *candidates,
-                          int max_candidates,
-                          frame_t frame,
-                          slot_t slot)
+                                 int max_candidates,
+                                 frame_t frame,
+                                 slot_t slot)
 {
   int n = 0;
   const frame_structure_t *fs = &mac->frame_structure;
-  const float dl_slots_per_s = (float)get_dl_slots_per_period(fs) / fs->numb_slots_period
-                                * fs->numb_slots_frame * 100;
+  const float dl_slots_per_s = (float)get_dl_slots_per_period(fs) / fs->numb_slots_period * fs->numb_slots_frame * 100;
 
   UE_iterator(UE_list, UE) {
     if (n >= max_candidates)
@@ -492,47 +490,46 @@ static int collect_dl_candidates(gNB_MAC_INST *mac,
             break;
           }
         }
-        if (fiveQI > 0) break;
+        if (fiveQI > 0)
+          break;
       }
     }
     uint16_t cqi = sched_ctrl->CSI_report.cri_ri_li_pmi_cqi_report.wb_cqi_1tb;
-    uint8_t csi_ri = (current_BWP->dci_format == NR_DL_DCI_FORMAT_1_0)
-                     ? 0 : sched_ctrl->CSI_report.cri_ri_li_pmi_cqi_report.ri;
-    int csi_pm_index = get_pm_index(mac, UE, current_BWP->dci_format, csi_ri + 1,
-                                    mac->radio_config.pdsch_AntennaPorts.XP);
+    uint8_t csi_ri = (current_BWP->dci_format == NR_DL_DCI_FORMAT_1_0) ? 0 : sched_ctrl->CSI_report.cri_ri_li_pmi_cqi_report.ri;
+    int csi_pm_index = get_pm_index(mac, UE, current_BWP->dci_format, csi_ri + 1, mac->radio_config.pdsch_AntennaPorts.XP);
 
     if (harq_pid >= 0) {
       /* retransmission candidate */
       const NR_UE_harq_t *harq = &sched_ctrl->harq_processes[harq_pid];
       candidates[n++] = (nr_dl_candidate_t){
-        /* identity / scheduling state */
-        .UE = UE,
-        .rnti = UE->rnti,
-        .is_retx = true,
-        .retx_harq_pid = harq_pid,
-        .retx_rbSize = harq->sched_pdsch.rbSize,
-        .avg_throughput = UE->dl_thr_ue,
-        .bler = sched_ctrl->dl_bler_stats.bler,
-        .current_mcs = harq->sched_pdsch.mcs,
-        .max_mcs = max_mcs,
-        .mcs_table = current_BWP->mcsTableIdx,
-        .bwp_start = bwp_info.bwpStart,
-        .bwp_size = bwp_info.bwpSize,
-        .fiveQI = fiveQI,
-        .priority = lc_priority,
-        .nssai_sst = nssai_sst,
-        .nssai_sd = nssai_sd,
-        /* CSI observations */
-        .cqi = cqi,
-        .csi_ri = csi_ri,
-        .csi_pm_index = csi_pm_index,
-        .beam_rsrp = UE->beam_rsrp,
-        .beam_sinr = UE->beam_sinr,
-        /* alloc decisions — zeroed here, written by pipeline stages */
-        .alloc_nrOfLayers = 0,
-        .alloc_beam_dir = UE->UE_beam_index,
-        .alloc_beam_idx = 0,
-        .alloc_new_beam = false,
+          /* identity / scheduling state */
+          .UE = UE,
+          .rnti = UE->rnti,
+          .is_retx = true,
+          .retx_harq_pid = harq_pid,
+          .retx_rbSize = harq->sched_pdsch.rbSize,
+          .avg_throughput = UE->dl_thr_ue,
+          .bler = sched_ctrl->dl_bler_stats.bler,
+          .current_mcs = harq->sched_pdsch.mcs,
+          .max_mcs = max_mcs,
+          .mcs_table = current_BWP->mcsTableIdx,
+          .bwp_start = bwp_info.bwpStart,
+          .bwp_size = bwp_info.bwpSize,
+          .fiveQI = fiveQI,
+          .priority = lc_priority,
+          .nssai_sst = nssai_sst,
+          .nssai_sd = nssai_sd,
+          /* CSI observations */
+          .cqi = cqi,
+          .csi_ri = csi_ri,
+          .csi_pm_index = csi_pm_index,
+          .beam_rsrp = UE->beam_rsrp,
+          .beam_sinr = UE->beam_sinr,
+          /* alloc decisions — zeroed here, written by pipeline stages */
+          .alloc_nrOfLayers = 0,
+          .alloc_beam_dir = UE->UE_beam_index,
+          .alloc_beam_idx = 0,
+          .alloc_new_beam = false,
       };
     } else {
       /* new transmission candidate */
@@ -548,36 +545,36 @@ static int collect_dl_candidates(gNB_MAC_INST *mac,
       bool bler_updated = update_bler_stats(bo, stats, &sched_ctrl->dl_bler_stats, frame);
 
       candidates[n++] = (nr_dl_candidate_t){
-        /* identity / scheduling state */
-        .UE = UE,
-        .rnti = UE->rnti,
-        .is_retx = false,
-        .retx_harq_pid = -1,
-        .pending_bytes = sched_ctrl->num_total_bytes,
-        .avg_throughput = UE->dl_thr_ue,
-        .bler = sched_ctrl->dl_bler_stats.bler,
-        .current_mcs = min(sched_ctrl->dl_bler_stats.mcs, max_mcs),
-        .max_mcs = max_mcs,
-        .last_num_sched = sched_ctrl->dl_bler_stats.last_num_sched,
-        .bler_updated = bler_updated,
-        .mcs_table = current_BWP->mcsTableIdx,
-        .bwp_start = bwp_info.bwpStart,
-        .bwp_size = bwp_info.bwpSize,
-        .fiveQI = fiveQI,
-        .priority = lc_priority,
-        .nssai_sst = nssai_sst,
-        .nssai_sd = nssai_sd,
-        /* CSI observations */
-        .cqi = cqi,
-        .csi_ri = csi_ri,
-        .csi_pm_index = csi_pm_index,
-        .beam_rsrp = UE->beam_rsrp,
-        .beam_sinr = UE->beam_sinr,
-        /* alloc decisions — zeroed here, written by pipeline stages */
-        .alloc_nrOfLayers = 0,
-        .alloc_beam_dir = UE->UE_beam_index,
-        .alloc_beam_idx = 0,
-        .alloc_new_beam = false,
+          /* identity / scheduling state */
+          .UE = UE,
+          .rnti = UE->rnti,
+          .is_retx = false,
+          .retx_harq_pid = -1,
+          .pending_bytes = sched_ctrl->num_total_bytes,
+          .avg_throughput = UE->dl_thr_ue,
+          .bler = sched_ctrl->dl_bler_stats.bler,
+          .current_mcs = min(sched_ctrl->dl_bler_stats.mcs, max_mcs),
+          .max_mcs = max_mcs,
+          .last_num_sched = sched_ctrl->dl_bler_stats.last_num_sched,
+          .bler_updated = bler_updated,
+          .mcs_table = current_BWP->mcsTableIdx,
+          .bwp_start = bwp_info.bwpStart,
+          .bwp_size = bwp_info.bwpSize,
+          .fiveQI = fiveQI,
+          .priority = lc_priority,
+          .nssai_sst = nssai_sst,
+          .nssai_sd = nssai_sd,
+          /* CSI observations */
+          .cqi = cqi,
+          .csi_ri = csi_ri,
+          .csi_pm_index = csi_pm_index,
+          .beam_rsrp = UE->beam_rsrp,
+          .beam_sinr = UE->beam_sinr,
+          /* alloc decisions — zeroed here, written by pipeline stages */
+          .alloc_nrOfLayers = 0,
+          .alloc_beam_dir = UE->UE_beam_index,
+          .alloc_beam_idx = 0,
+          .alloc_new_beam = false,
       };
     }
   }
@@ -585,9 +582,7 @@ static int collect_dl_candidates(gNB_MAC_INST *mac,
   return n;
 }
 
-void nr_dl_ri_pmi_select_default(const gNB_MAC_INST *mac,
-                                 nr_dl_candidate_t *candidates,
-                                 int n_candidates)
+void nr_dl_ri_pmi_select_default(const gNB_MAC_INST *mac, nr_dl_candidate_t *candidates, int n_candidates)
 {
   for (int i = 0; i < n_candidates; i++) {
     nr_dl_candidate_t *cand = &candidates[i];
@@ -595,8 +590,8 @@ void nr_dl_ri_pmi_select_default(const gNB_MAC_INST *mac,
     NR_UE_DL_BWP_t *dl_bwp = &cand->UE->current_DL_BWP;
     if (cand->is_retx) {
       cand->alloc_nrOfLayers = sched_ctrl->harq_processes[cand->retx_harq_pid].sched_pdsch.nrOfLayers;
-      cand->alloc_pm_index = get_pm_index(mac, cand->UE, dl_bwp->dci_format, cand->alloc_nrOfLayers,
-                                          mac->radio_config.pdsch_AntennaPorts.XP);
+      cand->alloc_pm_index =
+          get_pm_index(mac, cand->UE, dl_bwp->dci_format, cand->alloc_nrOfLayers, mac->radio_config.pdsch_AntennaPorts.XP);
     } else {
       cand->alloc_nrOfLayers = cand->csi_ri + 1;
       cand->alloc_pm_index = cand->csi_pm_index;
@@ -628,11 +623,12 @@ static int compare_dl_beam_priority(const void *a, const void *b)
 }
 
 int nr_dl_beam_select_default(NR_beam_info_t *beam_info,
-                             const int16_t *beam_index_list,
-                             nr_dl_candidate_t *candidates,
-                             int n_candidates,
-                             frame_t frame, slot_t slot,
-                             int slots_per_frame)
+                              const int16_t *beam_index_list,
+                              nr_dl_candidate_t *candidates,
+                              int n_candidates,
+                              frame_t frame,
+                              slot_t slot,
+                              int slots_per_frame)
 {
   /* Sort candidates so retx claim beam slots first, then new-tx in PF
    * priority order (lowest avg throughput first). */
@@ -640,9 +636,7 @@ int nr_dl_beam_select_default(NR_beam_info_t *beam_info,
 
   int out = 0;
   for (int i = 0; i < n_candidates; i++) {
-    NR_beam_alloc_t beam = beam_allocation_procedure(beam_info, frame, slot,
-                                                     candidates[i].alloc_beam_dir,
-                                                     slots_per_frame);
+    NR_beam_alloc_t beam = beam_allocation_procedure(beam_info, frame, slot, candidates[i].alloc_beam_dir, slots_per_frame);
     if (beam.idx < 0)
       continue;
 
@@ -658,10 +652,7 @@ int nr_dl_beam_select_default(NR_beam_info_t *beam_info,
 // Default TDA selector: picks the slot-wide TDA index from get_dl_tda(),
 // then resolves tda_info per candidate using each UE's own BWP / search
 // space / coreset. Compacts out candidates whose resolved TDA is invalid.
-int nr_dl_tda_select_default(const gNB_MAC_INST *mac,
-                             nr_dl_candidate_t *candidates,
-                             int n_candidates,
-                             frame_t frame, slot_t slot)
+int nr_dl_tda_select_default(const gNB_MAC_INST *mac, nr_dl_candidate_t *candidates, int n_candidates, frame_t frame, slot_t slot)
 {
   int tda = get_dl_tda(mac, slot);
   AssertFatal(tda >= 0, "Unable to find PDSCH time domain allocation in list\n");
@@ -675,8 +666,12 @@ int nr_dl_tda_select_default(const gNB_MAC_INST *mac,
     int coresetid = sched_ctrl->coreset->controlResourceSetId;
     NR_tda_info_t tda_info = get_dl_tda_info(dl_bwp,
                                              sched_ctrl->search_space->searchSpaceType->present,
-                                             tda, scc->dmrs_TypeA_Position,
-                                             1, TYPE_C_RNTI_, coresetid, false);
+                                             tda,
+                                             scc->dmrs_TypeA_Position,
+                                             1,
+                                             TYPE_C_RNTI_,
+                                             coresetid,
+                                             false);
     if (!tda_info.valid_tda)
       continue;
 
@@ -690,9 +685,7 @@ int nr_dl_tda_select_default(const gNB_MAC_INST *mac,
   return out;
 }
 
-void nr_dl_mcs_select_default(const gNB_MAC_INST *mac,
-                             nr_dl_candidate_t *candidates,
-                             int n_candidates)
+void nr_dl_mcs_select_default(const gNB_MAC_INST *mac, nr_dl_candidate_t *candidates, int n_candidates)
 {
   const NR_bler_options_t *bo = &mac->dl_bler;
   for (int i = 0; i < n_candidates; i++) {
@@ -705,8 +698,13 @@ void nr_dl_mcs_select_default(const gNB_MAC_INST *mac,
     } else if (!cand->bler_updated) {
       mcs = cand->current_mcs;
     } else {
-      mcs = nr_adapt_mcs_from_bler(cand->current_mcs, bo->min_mcs, cand->max_mcs,
-                                   cand->bler, bo->lower, bo->upper, cand->last_num_sched);
+      mcs = nr_adapt_mcs_from_bler(cand->current_mcs,
+                                   bo->min_mcs,
+                                   cand->max_mcs,
+                                   cand->bler,
+                                   bo->lower,
+                                   bo->upper,
+                                   cand->last_num_sched);
     }
     cand->alloc_mcs = mcs;
     /* Persist for all candidates — BLER-based MCS ramps even for UEs the
@@ -718,36 +716,37 @@ void nr_dl_mcs_select_default(const gNB_MAC_INST *mac,
 
 /* ---- CCE/PUCCH validation, called from inside the scheduling policy ---- */
 
-static bool nr_dl_validate_cce_pucch(const nr_dl_sched_params_t *params,
-                                     nr_dl_candidate_t *cand)
+static bool nr_dl_validate_cce_pucch(const nr_dl_sched_params_t *params, nr_dl_candidate_t *cand)
 {
   NR_UE_info_t *UE = cand->UE;
   NR_UE_sched_ctrl_t *sched_ctrl = &UE->UE_sched_ctrl;
 
   int agg_level = sched_ctrl->aggregation_level;
   NR_sched_pdcch_t sched_pdcch = sched_ctrl->sched_pdcch;
-  int CCEIndex = get_cce_index(params->mac, params->CC_id, params->slot, UE->rnti,
-                               &agg_level, cand->alloc_beam_idx,
-                               sched_ctrl->search_space, sched_ctrl->coreset,
-                               &sched_pdcch, sched_ctrl->pdcch_cl_adjust);
+  int CCEIndex = get_cce_index(params->mac,
+                               params->CC_id,
+                               params->slot,
+                               UE->rnti,
+                               &agg_level,
+                               cand->alloc_beam_idx,
+                               sched_ctrl->search_space,
+                               sched_ctrl->coreset,
+                               &sched_pdcch,
+                               sched_ctrl->pdcch_cl_adjust);
   if (CCEIndex < 0) {
     sched_ctrl->dl_cce_fail++;
-    LOG_D(NR_MAC, "[UE %04x][%4d.%2d] could not find free CCE for DL DCI\n",
-          UE->rnti, params->frame, params->slot);
+    LOG_D(NR_MAC, "[UE %04x][%4d.%2d] could not find free CCE for DL DCI\n", UE->rnti, params->frame, params->slot);
     return false;
   }
 
-  int harq_pid = cand->is_retx ? cand->retx_harq_pid
-                                : sched_ctrl->available_dl_harq.head;
+  int harq_pid = cand->is_retx ? cand->retx_harq_pid : sched_ctrl->available_dl_harq.head;
   int pucch_alloc = -1;
   if (!get_FeedbackDisabled(UE->sc_info.downlinkHARQ_FeedbackDisabled_r17, harq_pid)) {
     NR_UE_UL_BWP_t *ul_bwp = &UE->current_UL_BWP;
     int r_pucch = nr_get_pucch_resource(sched_ctrl->coreset, ul_bwp->pucch_Config, CCEIndex);
-    pucch_alloc = nr_acknack_scheduling(params->mac, UE, params->frame, params->slot,
-                                        UE->UE_beam_index, r_pucch, 0);
+    pucch_alloc = nr_acknack_scheduling(params->mac, UE, params->frame, params->slot, UE->UE_beam_index, r_pucch, 0);
     if (pucch_alloc < 0) {
-      LOG_D(NR_MAC, "[UE %04x][%4d.%2d] could not find PUCCH for DL DCI\n",
-            UE->rnti, params->frame, params->slot);
+      LOG_D(NR_MAC, "[UE %04x][%4d.%2d] could not find PUCCH for DL DCI\n", UE->rnti, params->frame, params->slot);
       return false;
     }
   }
@@ -761,8 +760,7 @@ static bool nr_dl_validate_cce_pucch(const nr_dl_sched_params_t *params,
 
 // Validate CCE/PUCCH and mark VRBs for a candidate whose alloc_rbStart/rbSize/mcs
 // have already been set. Returns false if validation fails (UE should be skipped).
-static bool commit_alloc(const nr_dl_sched_params_t *params,
-                         nr_dl_candidate_t *cand)
+static bool commit_alloc(const nr_dl_sched_params_t *params, nr_dl_candidate_t *cand)
 {
   if (!nr_dl_validate_cce_pucch(params, cand))
     return false;
@@ -770,8 +768,12 @@ static bool commit_alloc(const nr_dl_sched_params_t *params,
   int beam = cand->alloc_beam_idx;
 
   /* Mark CCE as used so subsequent UEs in the same slot see it as taken */
-  fill_pdcch_vrb_map(params->mac, params->CC_id, &cand->alloc_sched_pdcch,
-                     cand->alloc_cce_index, cand->alloc_aggregation_level, beam);
+  fill_pdcch_vrb_map(params->mac,
+                     params->CC_id,
+                     &cand->alloc_sched_pdcch,
+                     cand->alloc_cce_index,
+                     cand->alloc_aggregation_level,
+                     beam);
 
   uint16_t *vrb_map = params->vrb_map[beam];
   for (int rb = 0; rb < cand->alloc_rbSize; rb++)
@@ -783,18 +785,21 @@ static bool commit_alloc(const nr_dl_sched_params_t *params,
 // Use inside the policy loops: sets RB/MCS on candidate, validates CCE/PUCCH,
 // records index; continues on failure, returns on max_num_ue.
 #define COMMIT_ALLOC(params, idx, cand, rbStart, rbSize, mcs, sched_indices, n_sched) \
-  do {                                                                                 \
-    (cand)->alloc_rbStart = (rbStart);                                                 \
-    (cand)->alloc_rbSize  = (rbSize);                                                  \
-    (cand)->alloc_mcs     = (mcs);                                                     \
-    if (!commit_alloc(params, cand))                                                   \
-      continue;                                                                        \
-    (sched_indices)[(n_sched)++] = (idx);                                              \
-    if ((n_sched) >= (params)->max_num_ue)                                             \
-      return (n_sched);                                                                \
+  do {                                                                                \
+    (cand)->alloc_rbStart = (rbStart);                                                \
+    (cand)->alloc_rbSize = (rbSize);                                                  \
+    (cand)->alloc_mcs = (mcs);                                                        \
+    if (!commit_alloc(params, cand))                                                  \
+      continue;                                                                       \
+    (sched_indices)[(n_sched)++] = (idx);                                             \
+    if ((n_sched) >= (params)->max_num_ue)                                            \
+      return (n_sched);                                                               \
   } while (0)
 
-typedef struct { float weight; int idx; } pf_entry_t;
+typedef struct {
+  float weight;
+  int idx;
+} pf_entry_t;
 
 static int compare_pf_weight_desc(const void *a, const void *b)
 {
@@ -808,10 +813,7 @@ static int compare_dl_beam_idx(const void *a, const void *b)
   return ((const nr_dl_candidate_t *)a)->alloc_beam_idx - ((const nr_dl_candidate_t *)b)->alloc_beam_idx;
 }
 
-int nr_dl_proportional_fair(const nr_dl_sched_params_t *params,
-                            nr_dl_candidate_t *candidates,
-                            int *sched_indices,
-                            int n_candidates)
+int nr_dl_proportional_fair(const nr_dl_sched_params_t *params, nr_dl_candidate_t *candidates, int *sched_indices, int n_candidates)
 {
   const int min_rbSize = 5;
   int n_scheduled = 0;
@@ -842,13 +844,17 @@ int nr_dl_proportional_fair(const nr_dl_sched_params_t *params,
 
       int needed_rbs = candidates[i].retx_rbSize;
       int rbStart, rbSize;
-      if (!get_rb_alloc(needed_rbs, candidates[i].bwp_size, candidates[i].bwp_start,
-                        candidates[i].bwp_size, vrb_map, candidates[i].alloc_slbitmap,
-                        &rbStart, &rbSize))
+      if (!get_rb_alloc(needed_rbs,
+                        candidates[i].bwp_size,
+                        candidates[i].bwp_start,
+                        candidates[i].bwp_size,
+                        vrb_map,
+                        candidates[i].alloc_slbitmap,
+                        &rbStart,
+                        &rbSize))
         continue;
 
-      COMMIT_ALLOC(params, i, &candidates[i], rbStart, needed_rbs,
-                   candidates[i].alloc_mcs, sched_indices, n_scheduled);
+      COMMIT_ALLOC(params, i, &candidates[i], rbStart, needed_rbs, candidates[i].alloc_mcs, sched_indices, n_scheduled);
     }
 
     /* Phase 2: No-data UEs (TA command or beam switch MAC CE, no RLC data) */
@@ -857,13 +863,17 @@ int nr_dl_proportional_fair(const nr_dl_sched_params_t *params,
         continue;
 
       int rbStart, rbSize;
-      if (!get_rb_alloc(min_rbSize, candidates[i].bwp_size, candidates[i].bwp_start,
-                        candidates[i].bwp_size, vrb_map, candidates[i].alloc_slbitmap,
-                        &rbStart, &rbSize))
+      if (!get_rb_alloc(min_rbSize,
+                        candidates[i].bwp_size,
+                        candidates[i].bwp_start,
+                        candidates[i].bwp_size,
+                        vrb_map,
+                        candidates[i].alloc_slbitmap,
+                        &rbStart,
+                        &rbSize))
         continue;
 
-      COMMIT_ALLOC(params, i, &candidates[i], rbStart, min_rbSize,
-                   candidates[i].alloc_mcs, sched_indices, n_scheduled);
+      COMMIT_ALLOC(params, i, &candidates[i], rbStart, min_rbSize, candidates[i].alloc_mcs, sched_indices, n_scheduled);
     }
 
     /* Phase 3: New data UEs — PF priority, largest free block */
@@ -874,8 +884,10 @@ int nr_dl_proportional_fair(const nr_dl_sched_params_t *params,
       if (candidates[i].is_retx || candidates[i].pending_bytes == 0)
         continue;
 
-      float weight = dl_pf_weight(candidates[i].alloc_mcs, candidates[i].mcs_table,
-                                  candidates[i].alloc_nrOfLayers, candidates[i].avg_throughput);
+      float weight = dl_pf_weight(candidates[i].alloc_mcs,
+                                  candidates[i].mcs_table,
+                                  candidates[i].alloc_nrOfLayers,
+                                  candidates[i].avg_throughput);
 
       entries[n_new].weight = weight;
       entries[n_new].idx = i;
@@ -889,9 +901,8 @@ int nr_dl_proportional_fair(const nr_dl_sched_params_t *params,
     for (int e = 0; e < n_new; e++) {
       int i = entries[e].idx;
       int rbStart;
-      int max_rbSize = find_largest_free_block(vrb_map, candidates[i].alloc_slbitmap,
-                                               candidates[i].bwp_start, candidates[i].bwp_size,
-                                               &rbStart);
+      int max_rbSize =
+          find_largest_free_block(vrb_map, candidates[i].alloc_slbitmap, candidates[i].bwp_start, candidates[i].bwp_size, &rbStart);
       if (max_rbSize < min_rbSize)
         break;
 
@@ -900,33 +911,37 @@ int nr_dl_proportional_fair(const nr_dl_sched_params_t *params,
       uint8_t Qm = nr_get_Qm_dl(mcs, candidates[i].mcs_table);
       uint16_t R = nr_get_code_rate_dl(mcs, candidates[i].mcs_table);
       NR_pdsch_dmrs_t dmrs = get_dl_dmrs_params(params->mac->common_channels->ServingCellConfigCommon,
-                                                 &candidates[i].UE->current_DL_BWP,
-                                                 &candidates[i].alloc_tda_info, candidates[i].alloc_nrOfLayers);
+                                                &candidates[i].UE->current_DL_BWP,
+                                                &candidates[i].alloc_tda_info,
+                                                candidates[i].alloc_nrOfLayers);
       const int oh = 3 * 4 + (candidates[i].UE->UE_sched_ctrl.ta_apply ? 2 : 0);
       uint32_t tbs;
       uint16_t rbSize;
-      nr_find_nb_rb(Qm, R, 1, candidates[i].alloc_nrOfLayers,
+      nr_find_nb_rb(Qm,
+                    R,
+                    1,
+                    candidates[i].alloc_nrOfLayers,
                     candidates[i].alloc_tda_info.nrOfSymbols,
                     dmrs.N_PRB_DMRS * dmrs.N_DMRS_SLOT,
                     candidates[i].pending_bytes + oh,
-                    min_rbSize, max_rbSize,
-                    &tbs, &rbSize);
+                    min_rbSize,
+                    max_rbSize,
+                    &tbs,
+                    &rbSize);
 
-      COMMIT_ALLOC(params, i, &candidates[i], rbStart, rbSize,
-                   mcs, sched_indices, n_scheduled);
+      COMMIT_ALLOC(params, i, &candidates[i], rbStart, rbSize, mcs, sched_indices, n_scheduled);
     }
   }
 
   return n_scheduled;
 }
 
-
 static void nr_dl_schedule(gNB_MAC_INST *mac,
-                  post_process_pdsch_t *pp_pdsch,
-                  NR_UE_info_t **UE_list,
-                  int max_num_ue,
-                  int num_beams,
-                  int n_rb_sched[num_beams])
+                           post_process_pdsch_t *pp_pdsch,
+                           NR_UE_info_t **UE_list,
+                           int max_num_ue,
+                           int num_beams,
+                           int n_rb_sched[num_beams])
 {
   frame_t frame = pp_pdsch->frame;
   slot_t slot = pp_pdsch->slot;
@@ -968,15 +983,15 @@ static void nr_dl_schedule(gNB_MAC_INST *mac,
   int sched_indices[MAX_MOBILES_PER_GNB];
 
   nr_dl_sched_params_t params = {
-    .mac = mac,
-    .CC_id = CC_id,
-    .frame = frame,
-    .slot = slot,
-    .num_beams = num_beams,
-    .max_num_ue = max_num_ue,
-    .min_mcs = mac->dl_bler.min_mcs,
-    .bler_lower = mac->dl_bler.lower,
-    .bler_upper = mac->dl_bler.upper,
+      .mac = mac,
+      .CC_id = CC_id,
+      .frame = frame,
+      .slot = slot,
+      .num_beams = num_beams,
+      .max_num_ue = max_num_ue,
+      .min_mcs = mac->dl_bler.min_mcs,
+      .bler_lower = mac->dl_bler.lower,
+      .bler_upper = mac->dl_bler.upper,
   };
   for (int b = 0; b < num_beams; b++) {
     params.vrb_map[b] = mac->common_channels[CC_id].vrb_map[b];
@@ -993,9 +1008,7 @@ static void nr_dl_schedule(gNB_MAC_INST *mac,
     scheduled[sched_indices[j]] = true;
   for (int i = 0; i < n; i++) {
     if (!scheduled[i])
-      reset_beam_status(&mac->beam_info, frame, slot,
-                        candidates[i].alloc_beam_dir, slots_per_frame,
-                        candidates[i].alloc_new_beam);
+      reset_beam_status(&mac->beam_info, frame, slot, candidates[i].alloc_beam_dir, slots_per_frame, candidates[i].alloc_new_beam);
   }
 
   /* Step 7: Persist MCS, apply CCE/PUCCH, compute TBS, post_process */
@@ -1037,28 +1050,33 @@ static void nr_dl_schedule(gNB_MAC_INST *mac,
       NR_pdsch_dmrs_t dmrs = get_dl_dmrs_params(scc, dl_bwp, &tda_info, l);
 
       sched_pdsch = (NR_sched_pdsch_t){
-        .rbStart = cand->alloc_rbStart,
-        .mcs = mcs,
-        .R = R,
-        .Qm = Qm,
-        .dl_harq_pid = sched_ctrl->available_dl_harq.head,
-        .pucch_allocation = alloc,
-        .pm_index = cand->alloc_pm_index,
-        .nrOfLayers = l,
-        .bwp_info = bwp_info,
-        .dmrs_parms = dmrs,
-        .time_domain_allocation = tda,
-        .tda_info = tda_info,
+          .rbStart = cand->alloc_rbStart,
+          .mcs = mcs,
+          .R = R,
+          .Qm = Qm,
+          .dl_harq_pid = sched_ctrl->available_dl_harq.head,
+          .pucch_allocation = alloc,
+          .pm_index = cand->alloc_pm_index,
+          .nrOfLayers = l,
+          .bwp_info = bwp_info,
+          .dmrs_parms = dmrs,
+          .time_domain_allocation = tda,
+          .tda_info = tda_info,
       };
 
       /* Compute actual TBS (policy allocated max rbSize, nr_find_nb_rb gives actual) */
       const int oh = 3 * 4 + (sched_ctrl->ta_apply ? 2 : 0);
-      nr_find_nb_rb(Qm, R, 1, l,
+      nr_find_nb_rb(Qm,
+                    R,
+                    1,
+                    l,
                     tda_info.nrOfSymbols,
                     dmrs.N_PRB_DMRS * dmrs.N_DMRS_SLOT,
                     sched_ctrl->num_total_bytes + oh,
-                    5, cand->alloc_rbSize,
-                    &sched_pdsch.tb_size, &sched_pdsch.rbSize);
+                    5,
+                    cand->alloc_rbSize,
+                    &sched_pdsch.tb_size,
+                    &sched_pdsch.rbSize);
 
       sched_pdsch.action = NULL;
       int srb1 = 1;
@@ -1092,7 +1110,6 @@ void nr_dlsch_preprocessor(gNB_MAC_INST *mac, post_process_pdsch_t *pp_pdsch)
 
   nr_dl_schedule(mac, pp_pdsch, UE_info->connected_ue_list, max_sched_ues, num_beams, n_rb_sched);
 }
-
 
 nfapi_nr_dl_tti_pdsch_pdu_rel15_t *prepare_pdsch_pdu(nfapi_nr_dl_tti_request_pdu_t *dl_tti_pdsch_pdu,
                                                      const gNB_MAC_INST *mac,
@@ -1174,18 +1191,14 @@ nfapi_nr_dl_tti_pdsch_pdu_rel15_t *prepare_pdsch_pdu(nfapi_nr_dl_tti_request_pdu
 
 // Resolve HARQ PID, remove from available/retrans list, set up feedback.
 // Sets sched_pdsch->dl_harq_pid. Returns the harq process pointer.
-static NR_UE_harq_t *setup_dl_harq_process(NR_UE_sched_ctrl_t *sched_ctrl,
-                                            NR_sched_pdsch_t *sched_pdsch,
-                                            rnti_t rnti)
+static NR_UE_harq_t *setup_dl_harq_process(NR_UE_sched_ctrl_t *sched_ctrl, NR_sched_pdsch_t *sched_pdsch, rnti_t rnti)
 {
   int8_t current_harq_pid = sched_pdsch->dl_harq_pid;
 
   if (current_harq_pid < 0) {
     /* PP has not selected a specific HARQ Process, get a new one */
     current_harq_pid = sched_ctrl->available_dl_harq.head;
-    AssertFatal(current_harq_pid >= 0,
-                "no free HARQ process available for UE %04x\n",
-                rnti);
+    AssertFatal(current_harq_pid >= 0, "no free HARQ process available for UE %04x\n", rnti);
     remove_front_nr_list(&sched_ctrl->available_dl_harq);
     sched_pdsch->dl_harq_pid = current_harq_pid;
   } else {
@@ -1247,8 +1260,15 @@ static void generate_dl_mac_pdu(gNB_MAC_INST *mac,
             "Mismatch between scheduled TBS and buffered TB for HARQ PID %d. No RTX control in phy-test mode. "
             "Possible causes: presence of CSI-RS or DLSCH scheduled in the mixed slot.\n",
             current_harq_pid);
-    T(T_GNB_MAC_RETRANSMISSION_DL_PDU_WITH_DATA, T_INT(module_id), T_INT(0), T_INT(rnti),
-      T_INT(frame), T_INT(slot), T_INT(current_harq_pid), T_INT(harq->round), T_BUFFER(harq->transportBlock.buf, TBS));
+    T(T_GNB_MAC_RETRANSMISSION_DL_PDU_WITH_DATA,
+      T_INT(module_id),
+      T_INT(0),
+      T_INT(rnti),
+      T_INT(frame),
+      T_INT(slot),
+      T_INT(current_harq_pid),
+      T_INT(harq->round),
+      T_BUFFER(harq->transportBlock.buf, TBS));
     UE->mac_stats.dl.total_rbs_retx += sched_pdsch->rbSize;
     mac->mac_stats.dl.used_prb_aggregate += sched_pdsch->rbSize;
   } else { /* initial transmission */
@@ -1279,22 +1299,17 @@ static void generate_dl_mac_pdu(gNB_MAC_INST *mac,
         if (sched_ctrl->rlc_status[lcid].bytes_in_buffer == 0)
           continue; // no data for this LC        tbs_size_t len = 0;
 
-        int lcid_bytes=0;
-        while (bufEnd-buf > sizeof(NR_MAC_SUBHEADER_LONG) + 1 ) {
+        int lcid_bytes = 0;
+        while (bufEnd - buf > sizeof(NR_MAC_SUBHEADER_LONG) + 1) {
           // we do not know how much data we will get from RLC, i.e., whether it
           // will be longer than 256B or not. Therefore, reserve space for long header, then
           // fetch data, then fill real length
           NR_MAC_SUBHEADER_LONG *header = (NR_MAC_SUBHEADER_LONG *) buf;
           /* limit requested number of bytes to what preprocessor specified, or
            * such that TBS is full */
-          const rlc_buffer_occupancy_t ndata = min(sched_ctrl->rlc_status[lcid].bytes_in_buffer,
-                                                   bufEnd-buf-sizeof(NR_MAC_SUBHEADER_LONG));
-          tbs_size_t len = nr_mac_rlc_data_req(module_id,
-                                               rnti,
-                                               true,
-                                               lcid,
-                                               ndata,
-                                               (char *)buf+sizeof(NR_MAC_SUBHEADER_LONG));
+          const rlc_buffer_occupancy_t ndata =
+              min(sched_ctrl->rlc_status[lcid].bytes_in_buffer, bufEnd - buf - sizeof(NR_MAC_SUBHEADER_LONG));
+          tbs_size_t len = nr_mac_rlc_data_req(module_id, rnti, true, lcid, ndata, (char *)buf + sizeof(NR_MAC_SUBHEADER_LONG));
           LOG_D(NR_MAC,
                 "%4d.%2d RNTI %04x: %d bytes from %s %d (ndata %d, remaining size %ld)\n",
                 frame,
@@ -1304,17 +1319,23 @@ static void generate_dl_mac_pdu(gNB_MAC_INST *mac,
                 lcid < 4 ? "DCCH" : "DTCH",
                 lcid,
                 ndata,
-                bufEnd-buf-sizeof(NR_MAC_SUBHEADER_LONG));
+                bufEnd - buf - sizeof(NR_MAC_SUBHEADER_LONG));
 
           if (len == 0)
             break;
 
-          T(T_GNB_MAC_LCID_DL, T_INT(rnti), T_INT(frame), T_INT(slot), T_INT(lcid), T_INT(len * 8), T_INT(nr_rlc_tx_list_occupancy(rnti, lcid)));
+          T(T_GNB_MAC_LCID_DL,
+            T_INT(rnti),
+            T_INT(frame),
+            T_INT(slot),
+            T_INT(lcid),
+            T_INT(len * 8),
+            T_INT(nr_rlc_tx_list_occupancy(rnti, lcid)));
           header->R = 0;
           header->F = 1;
           header->LCID = lcid;
           header->L = htons(len);
-          buf += len+sizeof(NR_MAC_SUBHEADER_LONG);
+          buf += len + sizeof(NR_MAC_SUBHEADER_LONG);
           dlsch_total_bytes += len;
           lcid_bytes += len;
           sdus += 1;
@@ -1387,8 +1408,14 @@ static void generate_dl_mac_pdu(gNB_MAC_INST *mac,
       LOG_D(NR_MAC, "%d.%2d UE %04x TA scheduled, setting next TA frame to %d\n", frame, slot, UE->rnti, sched_ctrl->ta_frame);
     }
 
-    T(T_GNB_MAC_DL_PDU_WITH_DATA, T_INT(module_id), T_INT(0), T_INT(rnti),
-      T_INT(frame), T_INT(slot), T_INT(current_harq_pid), T_BUFFER(harq->transportBlock.buf, TBS));
+    T(T_GNB_MAC_DL_PDU_WITH_DATA,
+      T_INT(module_id),
+      T_INT(0),
+      T_INT(rnti),
+      T_INT(frame),
+      T_INT(slot),
+      T_INT(current_harq_pid),
+      T_BUFFER(harq->transportBlock.buf, TBS));
     T(T_GNB_MAC_DL, T_INT(rnti), T_INT(frame), T_INT(slot), T_INT(sched_pdsch->mcs), T_INT(TBS));
   }
 }
@@ -1432,12 +1459,12 @@ void post_process_dlsch(gNB_MAC_INST *nr_mac, post_process_pdsch_t *pdsch, NR_UE
   int8_t current_harq_pid = sched_pdsch->dl_harq_pid;
   NR_tda_info_t *tda_info = &sched_pdsch->tda_info;
   NR_pdsch_dmrs_t *dmrs_parms = &sched_pdsch->dmrs_parms;
-  NR_sched_pucch_t *pucch = sched_pdsch->pucch_allocation >= 0
-                           ? &sched_ctrl->sched_pucch[sched_pdsch->pucch_allocation] : NULL;
+  NR_sched_pucch_t *pucch = sched_pdsch->pucch_allocation >= 0 ? &sched_ctrl->sched_pucch[sched_pdsch->pucch_allocation] : NULL;
   UE->mac_stats.dl.rounds[harq->round]++;
   int tpc = nr_mac_get_tpc(&sched_ctrl->pucch_pc);
   LOG_D(NR_MAC,
-        "%4d.%2d [DLSCH/PDSCH/PUCCH] RNTI %04x DCI L %d start %3d RBs %3d startSymbol %2d nb_symbol %2d dmrspos %x MCS %2d nrOfLayers %d TBS %4d HARQ PID %2d round %d RV %d NDI %d dl_data_to_ULACK %d (%d.%d) PUCCH allocation %d TPC %d\n",
+        "%4d.%2d [DLSCH/PDSCH/PUCCH] RNTI %04x DCI L %d start %3d RBs %3d startSymbol %2d nb_symbol %2d dmrspos %x MCS %2d "
+        "nrOfLayers %d TBS %4d HARQ PID %2d round %d RV %d NDI %d dl_data_to_ULACK %d (%d.%d) PUCCH allocation %d TPC %d\n",
         frame,
         slot,
         rnti,
@@ -1472,10 +1499,10 @@ void post_process_dlsch(gNB_MAC_INST *nr_mac, post_process_pdsch_t *pdsch, NR_UE
     nfapi_nr_dl_tti_request_pdu_t *dl_tti_pdcch_pdu = &pdsch->dl_req->dl_tti_pdu_list[pdsch->dl_req->nPDUs];
     memset(dl_tti_pdcch_pdu, 0, sizeof(nfapi_nr_dl_tti_request_pdu_t));
     dl_tti_pdcch_pdu->PDUType = NFAPI_NR_DL_TTI_PDCCH_PDU_TYPE;
-    dl_tti_pdcch_pdu->PDUSize = (uint8_t)(2+sizeof(nfapi_nr_dl_tti_pdcch_pdu));
+    dl_tti_pdcch_pdu->PDUSize = (uint8_t)(2 + sizeof(nfapi_nr_dl_tti_pdcch_pdu));
     pdsch->dl_req->nPDUs += 1;
     pdcch_pdu = &dl_tti_pdcch_pdu->pdcch_pdu.pdcch_pdu_rel15;
-    LOG_D(NR_MAC,"Trying to configure DL pdcch for UE %04x, bwp %d, cs %d\n", UE->rnti, bwp_id, coresetid);
+    LOG_D(NR_MAC, "Trying to configure DL pdcch for UE %04x, bwp %d, cs %d\n", UE->rnti, bwp_id, coresetid);
     NR_ControlResourceSet_t *coreset = sched_ctrl->coreset;
     nr_configure_pdcch(pdcch_pdu, coreset, &sched_ctrl->sched_pdcch);
     nr_mac->pdcch_pdu_idx[CC_id][coresetid] = pdcch_pdu;
@@ -1514,8 +1541,7 @@ void post_process_dlsch(gNB_MAC_INST *nr_mac, post_process_pdsch_t *pdsch, NR_UE
                                                                    nl_tbslbrm,
                                                                    pduindex);
 
-
-  LOG_D(NR_MAC,"Configuring DCI/PDCCH in %d.%d at CCE %d, rnti %x\n", frame,slot,sched_ctrl->cce_index,rnti);
+  LOG_D(NR_MAC, "Configuring DCI/PDCCH in %d.%d at CCE %d, rnti %x\n", frame, slot, sched_ctrl->cce_index, rnti);
   /* Fill PDCCH DL DCI PDU */
   nfapi_nr_dl_dci_pdu_t *dci_pdu = prepare_dci_pdu(pdcch_pdu,
                                                    scc,
@@ -1542,9 +1568,9 @@ void post_process_dlsch(gNB_MAC_INST *nr_mac, post_process_pdsch_t *pdsch, NR_UE
                                                        false);
 
   NR_PDSCH_Config_t *pdsch_Config = current_BWP->pdsch_Config;
-  AssertFatal(pdsch_Config == NULL
-              || pdsch_Config->resourceAllocation == NR_PDSCH_Config__resourceAllocation_resourceAllocationType1,
-              "Only frequency resource allocation type 1 is currently supported\n");
+  AssertFatal(
+      pdsch_Config == NULL || pdsch_Config->resourceAllocation == NR_PDSCH_Config__resourceAllocation_resourceAllocationType1,
+      "Only frequency resource allocation type 1 is currently supported\n");
 
   LOG_D(NR_MAC,
         "%4d.%2d DCI type 1 payload: freq_alloc %d (%d,%d,%d), "

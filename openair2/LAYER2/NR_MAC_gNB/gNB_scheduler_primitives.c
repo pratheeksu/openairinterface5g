@@ -694,8 +694,7 @@ bool nr_find_nb_rb(uint16_t Qm,
   return *tbs >= bytes && *nb_rb <= nb_rb_max;
 }
 
-int find_largest_free_block(const uint16_t *vrb_map, uint16_t slbitmap,
-                           int bwp_start, int bwp_size, int *out_start)
+int find_largest_free_block(const uint16_t *vrb_map, uint16_t slbitmap, int bwp_start, int bwp_size, int *out_start)
 {
   int best_start = 0, best_len = 0;
   int cur_start = 0, cur_len = 0;
@@ -829,13 +828,7 @@ NR_pusch_dmrs_t get_ul_dmrs_params(const NR_ServingCellConfigCommon_t *scc,
 
 #define BLER_UPDATE_FRAME 10
 #define BLER_FILTER 0.9f
-int nr_adapt_mcs_from_bler(int current_mcs,
-                           int min_mcs,
-                           int max_mcs,
-                           float bler,
-                           float bler_lower,
-                           float bler_upper,
-                           int num_sched)
+int nr_adapt_mcs_from_bler(int current_mcs, int min_mcs, int max_mcs, float bler, float bler_lower, float bler_upper, int num_sched)
 {
   int mcs = current_mcs;
   if (bler < bler_lower && mcs < max_mcs && num_sched > 3)
@@ -846,9 +839,9 @@ int nr_adapt_mcs_from_bler(int current_mcs,
 }
 
 bool update_bler_stats(const NR_bler_options_t *bler_options,
-                          const NR_mac_dir_stats_t *stats,
-                          NR_bler_stats_t *bler_stats,
-                          frame_t frame)
+                       const NR_mac_dir_stats_t *stats,
+                       NR_bler_stats_t *bler_stats,
+                       frame_t frame)
 {
   int diff = frame - bler_stats->last_frame;
   if (diff < 0) // wrap around
@@ -865,8 +858,13 @@ bool update_bler_stats(const NR_bler_options_t *bler_options,
   bler_stats->last_frame = frame;
   bler_stats->last_num_sched = num_dl_sched;
   memcpy(bler_stats->rounds, stats->rounds, sizeof(stats->rounds));
-  LOG_D(MAC, "frame %4d BLER update (num_sched %d, num_retx %d, BLER wnd %.3f avg %.6f)\n",
-        frame, num_dl_sched, num_dl_retx, bler_window, bler_stats->bler);
+  LOG_D(MAC,
+        "frame %4d BLER update (num_sched %d, num_retx %d, BLER wnd %.3f avg %.6f)\n",
+        frame,
+        num_dl_sched,
+        num_dl_retx,
+        bler_window,
+        bler_stats->bler);
   return true;
 }
 
@@ -3668,7 +3666,6 @@ void nr_mac_update_timers(module_id_t module_id)
       nr_timer_stop(&sched_ctrl->tci_beam_switch);
       beam_switching_procedure(mac, UE, sched_ctrl->UE_mac_ce_ctrl.tci_state_ind.tciStateId);
     }
-
   }
 }
 

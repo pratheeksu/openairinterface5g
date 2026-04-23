@@ -424,8 +424,7 @@ bool nr_find_nb_rb(uint16_t Qm,
  * \param rbSize_ptr Pointer returning the size of the found free block of RBs
  * \return Indicates if a free block of RBs of the required size could be found and *rbStart_ptr and *rbSize_ptr are set accordingly
  */
-int find_largest_free_block(const uint16_t *vrb_map, uint16_t slbitmap,
-                            int bwp_start, int bwp_size, int *out_start);
+int find_largest_free_block(const uint16_t *vrb_map, uint16_t slbitmap, int bwp_start, int bwp_size, int *out_start);
 
 bool get_rb_alloc(int rbSize_min,
                   int rbSize_max,
@@ -447,28 +446,22 @@ int nr_adapt_mcs_from_bler(int current_mcs,
                            int num_sched);
 
 bool update_bler_stats(const NR_bler_options_t *bler_options,
-                          const NR_mac_dir_stats_t *stats,
-                          NR_bler_stats_t *bler_stats,
-                          frame_t frame);
+                       const NR_mac_dir_stats_t *stats,
+                       NR_bler_stats_t *bler_stats,
+                       frame_t frame);
 
-void nr_dl_ri_pmi_select_default(const gNB_MAC_INST *mac,
-                                 nr_dl_candidate_t *candidates,
-                                 int n_candidates);
-void nr_dl_mcs_select_default(const gNB_MAC_INST *mac,
-                             nr_dl_candidate_t *candidates,
-                             int n_candidates);
+void nr_dl_ri_pmi_select_default(const gNB_MAC_INST *mac, nr_dl_candidate_t *candidates, int n_candidates);
+void nr_dl_mcs_select_default(const gNB_MAC_INST *mac, nr_dl_candidate_t *candidates, int n_candidates);
 
 int nr_dl_beam_select_default(NR_beam_info_t *beam_info,
-                             const int16_t *beam_index_list,
-                             nr_dl_candidate_t *candidates,
-                             int n_candidates,
-                             frame_t frame, slot_t slot,
-                             int slots_per_frame);
+                              const int16_t *beam_index_list,
+                              nr_dl_candidate_t *candidates,
+                              int n_candidates,
+                              frame_t frame,
+                              slot_t slot,
+                              int slots_per_frame);
 
-int nr_dl_tda_select_default(const gNB_MAC_INST *mac,
-                             nr_dl_candidate_t *candidates,
-                             int n_candidates,
-                             frame_t frame, slot_t slot);
+int nr_dl_tda_select_default(const gNB_MAC_INST *mac, nr_dl_candidate_t *candidates, int n_candidates, frame_t frame, slot_t slot);
 
 int nr_dl_proportional_fair(const nr_dl_sched_params_t *params,
                             nr_dl_candidate_t *candidates,
@@ -541,32 +534,35 @@ void nr_mac_set_rssi_threshold(nr_power_control_t *pc, int rssi_threshold);
 void nr_mac_signal_dtx(nr_power_control_t *pc);
 int nr_mac_get_tpc(nr_power_control_t *pc);
 
-void nr_ul_ri_tpmi_select_default(gNB_MAC_INST *mac,
-                                  nr_ul_candidate_t *cands, int n_cand);
+void nr_ul_ri_tpmi_select_default(gNB_MAC_INST *mac, nr_ul_candidate_t *cands, int n_cand);
 
 int nr_ul_tda_select_default(gNB_MAC_INST *mac,
-                             nr_ul_candidate_t *cands, int n_cand,
-                             frame_t sched_frame, slot_t sched_slot, int k2);
+                             nr_ul_candidate_t *cands,
+                             int n_cand,
+                             frame_t sched_frame,
+                             slot_t sched_slot,
+                             int k2);
 
 int nr_ul_beam_select_default(NR_beam_info_t *beam_info,
                               const int16_t *beam_index_list,
                               nr_ul_candidate_t *candidates,
                               int n_candidates,
-                              frame_t frame, slot_t slot,
-                              frame_t sched_frame, slot_t sched_slot,
+                              frame_t frame,
+                              slot_t slot,
+                              frame_t sched_frame,
+                              slot_t sched_slot,
                               int slots_per_frame);
 
-void nr_ul_mcs_select_default(const gNB_MAC_INST *mac,
-                              nr_ul_candidate_t *candidates,
-                              int n_candidates);
+void nr_ul_mcs_select_default(const gNB_MAC_INST *mac, nr_ul_candidate_t *candidates, int n_candidates);
 
 int nr_ul_proportional_fair(const nr_ul_sched_params_t *params,
-                             nr_ul_candidate_t *candidates,
-                             int *sched_indices,
-                             int n_candidates);
+                            nr_ul_candidate_t *candidates,
+                            int *sched_indices,
+                            int n_candidates);
 
 bool nr_ul_check_phr(const nr_ul_sched_params_t *params,
                      const nr_ul_candidate_t *cand,
-                     uint16_t rbSize, uint8_t mcs,
+                     uint16_t rbSize,
+                     uint8_t mcs,
                      nr_ul_phr_advice_t *advice);
 #endif /*__LAYER2_NR_MAC_PROTO_H__*/
