@@ -142,7 +142,7 @@ int nr_ulsch_decoding(PHY_VARS_gNB *phy_vars_gNB,
 
     // The harq_pid is not unique among the active HARQ processes in the instance so we use ULSCH_id instead
     TB_parameters->harq_unique_pid = (phy_vars_gNB->max_nb_pusch * harq_pid) + ULSCH_id;
-    AssertFatal(TB_parameters->harq_unique_pid < (16*phy_vars_gNB->max_nb_pusch),"harq_unique_pid >= %d, harq_pid %d, ULSCH_id %d\n",16*phy_vars_gNB->max_nb_pusch,harq_pid,ULSCH_id);
+    AssertFatal(TB_parameters->harq_unique_pid < 0xffffffff,"harq_unique_pid >= %d, harq_pid %d, ULSCH_id %d\n",16*phy_vars_gNB->max_nb_pusch,harq_pid,ULSCH_id);
 
     // ------------------------------------------------------------------
     TB_parameters->nb_rb = pusch_pdu->rb_size;
