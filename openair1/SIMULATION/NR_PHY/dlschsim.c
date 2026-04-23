@@ -43,6 +43,7 @@ int64_t uplink_frequency_offset[MAX_NUM_CCs][4];
 uint64_t downlink_frequency[MAX_NUM_CCs][4];
 
 double cpuf;
+uint32_t use_gpu=0;
 
 uint8_t const nr_rv_round_map[4] = {0, 2, 3, 1};
 // needed for some functions
@@ -489,7 +490,7 @@ int main(int argc, char **argv)
         unsigned char output[nb_rb * NR_SYMBOLS_PER_SLOT * NR_NB_SC_PER_RB * NR_MAX_NB_LAYERS] __attribute__((aligned(64)));
         bzero(output, sizeof(output));
 	if (input_fd == NULL) {
-	  nr_dlsch_encoding(gNB, 1, dlsch, frame, slot, output, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
+	  nr_dlsch_encoding(gNB, 1, dlsch, frame, slot, output, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
 	}
 
 	for (SNR = snr0; SNR < snr1 && !stop; SNR += snr_step) {

@@ -47,6 +47,7 @@ openair0_config_t openair0_cfg[MAX_CARDS];
 
 uint8_t const nr_rv_round_map[4] = {0, 2, 3, 1};
 
+uint32_t use_gpu;
 void inc_ref_sched_response(int _)
 {
   LOG_E(PHY, "fatal\n");

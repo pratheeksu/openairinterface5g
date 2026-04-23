@@ -18,6 +18,10 @@
 #include "SCHED_NR_UE/harq_nr.h"
 #include "nr-uesoftmodem.h"
 #include "common/config/config_userapi.h"
+#ifdef ENABLE_CUDA
+#include <cuda_runtime.h>
+#endif
+extern uint32_t use_gpu;
 
 void RCconfig_nrUE_prs(void *cfg)
 {
@@ -261,6 +265,18 @@ int init_nr_ue_signal(PHY_VARS_NR_UE *ue, int nb_connected_gNB)
   if (IS_SA_MODE(get_softmodem_params()))
     ue->received_config_request = false;
 
+  ue->use_gpu = use_gpu;
+#ifdef ENABLE_CUDA
+  for (int j=0;j<10;j++) {
+    for (int i=0;i<2;i++) {
+      cudaError_t err = cudaHostAlloc((void**)&ue->llr[j][i],(66 * 3 * 8448) * sizeof(int16_t),cudaHostAllocMapped);
+      AssertFatal(err == cudaSuccess,"CUDA Error (pusch_llr): %s\n",cudaGetErrorString(err));
+      err=cudaHostGetDevicePointer((void**)&ue->llr_dev[j][i],ue->llr[j][i],0);
+      AssertFatal(err == cudaSuccess,"CUDA Error (pusch_llr_dev): %s\n",cudaGetErrorString(err));
+
+    }
+  }
+#endif
   return 0;
 }
 
@@ -316,6 +332,14 @@ void term_nr_ue_signal(PHY_VARS_NR_UE *ue)
     free_and_zero(ue->prs_vars[idx]);
   }
 
+  
+#ifdef ENABLE_CUDA
+  for (int j=0;j<10;j++) {
+   cudaFreeHost(ue->llr[j][0]);
+   cudaFreeHost(ue->llr[j][1]);
+  }
+#endif
+ 
   sl_ue_free(ue);
 }
 
@@ -330,12 +354,14 @@ void free_nr_ue_dl_harq(NR_DL_UE_HARQ_t harq_list[2][NR_MAX_HARQ_PROCESSES], int
   for (int j=0; j < 2; j++) {
     for (int i=0; i<number_of_processes; i++) {
 
-      for (int r=0; r<a_segments; r++) {
-        free_and_zero(harq_list[j][i].c[r]);
-        free_and_zero(harq_list[j][i].d[r]);
-      }
-      free_and_zero(harq_list[j][i].b);
       free_and_zero(harq_list[j][i].c);
+      free_and_zero(harq_list[j][i].d);
+      free_and_zero(harq_list[j][i].b);
+#ifdef ENABLE_CUDA
+      cudaFreeHost(harq_list[j][i].c);
+#else
+      free_and_zero(harq_list[j][i].c);
+#endif
       free_and_zero(harq_list[j][i].d);
     }
   }
@@ -385,15 +411,18 @@ void nr_init_dl_harq_processes(NR_DL_UE_HARQ_t harq_list[2][NR_MAX_HARQ_PROCESSE
       memset(harq_list[j] + i, 0, sizeof(NR_DL_UE_HARQ_t));
       init_downlink_harq_status(harq_list[j] + i);
 
+      const int sz=3*8448*sizeof(int16_t);
       harq_list[j][i].b = malloc16_clear(a_segments * 1056);
-      harq_list[j][i].c = malloc16(a_segments*sizeof(uint8_t *));
-      harq_list[j][i].d = malloc16(a_segments*sizeof(int16_t *));
-      const int sz=5*8448*sizeof(int16_t);
+#ifdef ENABLE_CUDA
+      cudaError_t err = cudaHostAlloc((void**)&harq_list[j][i].c,a_segments*sizeof(uint8_t *)*1056,cudaHostAllocMapped);
+      AssertFatal(err == cudaSuccess,"CUDA Error (harq.c): %s\n",cudaGetErrorString(err));
+      err = cudaHostGetDevicePointer((void**)&harq_list[j][i].cdev,(void*)harq_list[j][i].c,0);
+      AssertFatal(err == cudaSuccess,"CUDA Error (harq.cdev): %s\n",cudaGetErrorString(err));
+#else
+      harq_list[j][i].c = malloc16(a_segments*sizeof(uint8_t *)*1056);
+#endif
+      harq_list[j][i].d = malloc16(a_segments*sizeof(int16_t *)*sz);
       init_abort(&harq_list[j][i].abort_decode);
-      for (int r=0; r<a_segments; r++) {
-        harq_list[j][i].c[r] = malloc16_clear(1056);
-        harq_list[j][i].d[r] = malloc16_clear(sz);
-      }
       harq_list[j][i].status  = 0;
       harq_list[j][i].DLround = 0;
     }

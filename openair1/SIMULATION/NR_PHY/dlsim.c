@@ -73,7 +73,7 @@
 #define inMicroS(a) (((double)(a))/(get_cpu_freq_GHz()*1000.0))
 #include "SIMULATION/LTE_PHY/common_sim.h"
 
-#ifdef ENABLE_CUDA
+#ifdef CHANNEL_SIM_CUDA
 #include <cuda_runtime.h>
 #include "SIMULATION/TOOLS/oai_cuda.h"
 #endif
@@ -295,8 +295,8 @@ void validate_input_pmi(nfapi_nr_config_request_scf_t *gNB_config,
               num_antenna_ports, pmi_pdu->num_ant_ports, pmi);
 }
 
-
 configmodule_interface_t *uniqCfg = NULL;
+extern uint32_t use_gpu;
 int main(int argc, char **argv)
 {
   stop = false;
@@ -396,14 +396,14 @@ int main(int argc, char **argv)
 
   void *h_tx_sig_pinned = NULL;
 
-#ifdef ENABLE_CUDA
+#ifdef CHANNEL_SIM_CUDA
   void *d_tx_sig = NULL, *d_intermediate_sig = NULL, *d_final_output = NULL;
   void *d_curand_states = NULL;
   void *h_final_output_pinned = NULL;
   void *d_channel_coeffs_gpu = NULL;
 #endif
 
-  while ((c = getopt(argc, argv, "--:O:f:hA:p:f:g:i:n:s:S:t:v:x:y:z:o:H:M:N:F:GR:d:PI:L:a:b:e:m:w:T:U:q:X:Y:Z:")) != -1) {
+  while ((c = getopt(argc, argv, "--:O:f:hA:p:f:g:i:n:s:S:t:v:x:y:z:o:H:M:N:F:GR:d:PQI:L:a:b:e:m:w:T:U:q:X:Y:Z:")) != -1) {
     /* ignore long options starting with '--', option '-O' and their arguments that are handled by configmodule */
     /* with this opstring getopt returns 1 for non-option arguments, refer to 'man 3 getopt' */
     if (c == 1 || c == '-' || c == 'O')
@@ -412,7 +412,7 @@ int main(int argc, char **argv)
     printf("handling optarg %c\n",c);
     switch (c) {
     case 'f':
-#ifdef ENABLE_CUDA
+#ifdef CHANNEL_SIM_CUDA
       if (strcmp(optarg, "cuda") == 0) {
         use_cuda = 1;
       } else
@@ -525,7 +525,11 @@ int main(int argc, char **argv)
       print_perf=1;
       cpu_meas_enabled = 1;
       break;
-      
+
+    case 'Q':
+      use_gpu = 1;
+      break;
+
     case 'I':
       max_ldpc_iterations = atoi(optarg);
       break;
@@ -633,7 +637,7 @@ int main(int argc, char **argv)
       printf("-d number of dlsch threads, 0: no dlsch parallelization\n");
       printf("-e MSC index\n");
       printf("-f <flag> Enable optional feature flag. Available flags:\n");
-#ifdef ENABLE_CUDA
+#ifdef CHANNEL_SIM_CUDA
       printf("          cuda    Enable CUDA channel simulation\n");
 #else
       printf("          (none)  No optional features were compiled into this executable\n");
@@ -669,13 +673,13 @@ int main(int argc, char **argv)
       break;
     }
   }
-
+printf("%d\n", slot);
   logInit();
   set_glog(loglvl);
   /* initialize the sin table */
   InitSinLUT();
 
-#ifdef ENABLE_CUDA
+#ifdef CHANNEL_SIM_CUDA
   init_cuda_chsim_buffers(use_cuda,
                           n_tx,
                           n_rx,
@@ -688,7 +692,7 @@ int main(int argc, char **argv)
                           &d_channel_coeffs_gpu);
 #endif
 
-#if !defined(ENABLE_CUDA) || !use_cuda
+#if !defined(CHANNEL_SIM_CUDA) || !use_cuda
   printf("Pre-allocating padded host memory for the CPU channel pipeline...\n");
   int num_samples_alloc = 153600;
   const int max_padding_alloc = 256 - 1;
@@ -866,7 +870,7 @@ int main(int argc, char **argv)
                                 0,
                                 0);
 
-#ifdef ENABLE_CUDA
+#ifdef CHANNEL_SIM_CUDA
   float *h_channel_coeffs = NULL;
   if (use_cuda) {
     int num_links = n_tx * n_rx;
@@ -1034,9 +1038,11 @@ int main(int argc, char **argv)
     reset_meas(&gNB->dlsch_encoding_stats);
     reset_meas(&gNB->dci_generation_stats);
     reset_meas(&gNB->tinput);
+    reset_meas(&gNB->tinput_memcpy);
     reset_meas(&gNB->tprep);
     reset_meas(&gNB->tparity);
     reset_meas(&gNB->toutput);
+    reset_meas(&gNB->tconcat);
     reset_meas(&gNB->phase_comp_stats);
 
     uint32_t errors_scrambling[16] = {0};
@@ -1059,7 +1065,7 @@ int main(int argc, char **argv)
     nfapi_nr_dl_tti_request_pdu_t  *dl_tti_pdsch_pdu = &dl_req->dl_tti_pdu_list[1];
     nfapi_nr_dl_tti_pdsch_pdu_rel15_t *pdsch_pdu_rel15 = &dl_tti_pdsch_pdu->pdsch_pdu.pdsch_pdu_rel15;
 
-    for (trial = 0; trial < n_trials && !stop; trial++) {
+    for (trial = 0; trial < n_trials /*&& !stop)*/; trial++) {
 
       errors_bit = 0;
       //multipath channel
@@ -1079,7 +1085,7 @@ int main(int argc, char **argv)
       UE_harq_process->DLround = round;
       UE_harq_process->first_rx = 1;
 
-      while (round < num_rounds && !UE_harq_process->decodeResult && !stop) {
+      while (round < num_rounds && !UE_harq_process->decodeResult /*&& !stop*/) {
         reset_sched_response(Sched_INFO, frame, slot, 0, 0);
         clear_nr_nfapi_information(RC.nrmac[0], 0, frame, slot);
         UE_info->UE_sched_ctrl.harq_processes[harq_pid].ndi = !(trial&1);
@@ -1213,7 +1219,7 @@ int main(int argc, char **argv)
         }
 
         // Apply MIMO Channel
-#ifdef ENABLE_CUDA
+#ifdef CHANNEL_SIM_CUDA
         if (use_cuda) {
 #if defined(USE_UNIFIED_MEMORY)
           int deviceId;
@@ -1400,11 +1406,14 @@ int main(int argc, char **argv)
       fprintf(csv_file,"%.2f,%.4f,%.2f,%u\n", roundStats, effRate, effRate / (8 * pdsch_pdu_rel15->TBSize[0]) * 100, 8 * pdsch_pdu_rel15->TBSize[0]);
     }
     if (print_perf==1) {
-      printf("\ngNB TX function statistics (per %d us slot, NPRB %d, mcs %d, C %d, block %d)\n",
+      printf("\ngNB TX function statistics (per %d us slot, NPRB %d, mcs %d, C %d, Z %d, F %d, K %d, block %d)\n",
              1000 >> *scc->ssbSubcarrierSpacing,
              g_rbSize,
              g_mcsIndex,
              UE->dl_harq_processes[0][slot].C,
+             UE->dl_harq_processes[0][slot].Z,
+             UE->dl_harq_processes[0][slot].F,
+             UE->dl_harq_processes[0][slot].K,
              8 * pdsch_pdu_rel15->TBSize[0]);
       printDistribution(&gNB->phy_proc_tx,table_tx,"PHY proc tx");
       printStatIndent2(&gNB->dci_generation_stats, "DCI encoding time");
@@ -1512,7 +1521,7 @@ int main(int argc, char **argv)
     free(r_im[i]);
   }
 
-#ifdef ENABLE_CUDA
+#ifdef CHANNEL_SIM_CUDA
   free_cuda_chsim_buffers(use_cuda,
                           &d_tx_sig,
                           &d_intermediate_sig,

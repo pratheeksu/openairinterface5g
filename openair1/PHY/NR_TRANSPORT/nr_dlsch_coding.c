@@ -20,10 +20,13 @@
 #include <syscall.h>
 #include <openair2/UTIL/OPT/opt.h>
 
+#ifdef ENABLE_CUDA
+#include <cuda_runtime.h>
+#endif
 // #define DEBUG_DLSCH_CODING
 // #define DEBUG_DLSCH_FREE 1
 
-void free_gNB_dlsch(NR_gNB_DLSCH_t *dlsch, uint16_t N_RB, const NR_DL_FRAME_PARMS *frame_parms)
+void free_gNB_dlsch(NR_gNB_DLSCH_t *dlsch, uint16_t N_RB, const NR_DL_FRAME_PARMS *frame_parms, int use_gpumem)
 {
   int max_layers = (frame_parms->nb_antennas_tx < NR_MAX_NB_LAYERS) ? frame_parms->nb_antennas_tx : NR_MAX_NB_LAYERS;
   uint16_t a_segments = MAX_NUM_NR_DLSCH_SEGMENTS_PER_LAYER * max_layers;
@@ -34,7 +37,12 @@ void free_gNB_dlsch(NR_gNB_DLSCH_t *dlsch, uint16_t N_RB, const NR_DL_FRAME_PARM
   }
 
   if (dlsch->b) {
-    free16(dlsch->b, a_segments * 1056);
+#ifdef ENABLE_CUDA	  
+    if (use_gpumem) 
+      cudaFreeHost(dlsch->b);
+    else	  
+#endif  
+      free16(dlsch->b, a_segments * 1056);
     dlsch->b = NULL;
   }
   if (dlsch->f) {
@@ -48,7 +56,7 @@ void free_gNB_dlsch(NR_gNB_DLSCH_t *dlsch, uint16_t N_RB, const NR_DL_FRAME_PARM
   free(dlsch->c);
 }
 
-NR_gNB_DLSCH_t new_gNB_dlsch(NR_DL_FRAME_PARMS *frame_parms, uint16_t N_RB)
+NR_gNB_DLSCH_t new_gNB_dlsch(NR_DL_FRAME_PARMS *frame_parms, uint16_t N_RB, int use_gpumem)
 {
   int max_layers = (frame_parms->nb_antennas_tx < NR_MAX_NB_LAYERS) ? frame_parms->nb_antennas_tx : NR_MAX_NB_LAYERS;
   uint16_t a_segments = MAX_NUM_NR_DLSCH_SEGMENTS_PER_LAYER * max_layers; // number of segments to be allocated
@@ -58,7 +66,7 @@ NR_gNB_DLSCH_t new_gNB_dlsch(NR_DL_FRAME_PARMS *frame_parms, uint16_t N_RB)
     a_segments = a_segments / 273 + 1;
   }
 
-  LOG_D(PHY, "Allocating %d segments (MAX %d, N_PRB %d)\n", a_segments, MAX_NUM_NR_DLSCH_SEGMENTS_PER_LAYER, N_RB);
+  LOG_D(PHY, "Allocating %d segments (MAX %d, N_PRB %d) use_gpumem %d\n", a_segments, MAX_NUM_NR_DLSCH_SEGMENTS_PER_LAYER, N_RB, use_gpumem);
   uint32_t dlsch_bytes = a_segments * 1056; // allocated bytes per segment
   NR_gNB_DLSCH_t dlsch = {0};
 
@@ -67,14 +75,31 @@ NR_gNB_DLSCH_t new_gNB_dlsch(NR_DL_FRAME_PARMS *frame_parms, uint16_t N_RB)
   bzero(dlsch.b, dlsch_bytes);
 
   dlsch.c = (uint8_t **)malloc16(a_segments * sizeof(uint8_t *));
+#ifdef ENABLE_CUDA
+  cudaError_t err=cudaHostAlloc((void**)&dlsch.c_devh,a_segments*sizeof(uint8_t*),cudaHostAllocMapped);
+  AssertFatal(err == cudaSuccess,"CUDA Error (dlsch->c_devh): %s\n", cudaGetErrorString(err));
+  err=cudaHostGetDevicePointer((void**)&dlsch.c_dev,(void*)dlsch.c_devh,0);
+  AssertFatal(err == cudaSuccess,"CUDA Error (dlsch->c_dev): %s\n", cudaGetErrorString(err));
+#endif
   for (int r = 0; r < a_segments; r++) {
     // account for filler in first segment and CRCs for multiple segment case
     // [hna] 8448 is the maximum CB size in NR
     //       68*348 = 68*(maximum size of Zc)
     //       In section 5.3.2 in 38.212, the for loop is up to N + 2*Zc (maximum size of N is 66*Zc, therefore 68*Zc)
-    dlsch.c[r] = malloc16(8448);
-    AssertFatal(dlsch.c[r], "cannot allocate dlsch.c[%d]\n", r);
-    bzero(dlsch.c[r], 8448);
+#ifdef ENABLE_CUDA
+    if (use_gpumem) {
+      err=cudaHostAlloc((void**)&dlsch.c[r],(8448/8)*sizeof(uint8_t),cudaHostAllocMapped);
+      AssertFatal(err == cudaSuccess,"CUDA Error (dlsch->c[%d]): %s\n", r,cudaGetErrorString(err));
+      uint8_t *tmpcr;
+      err=cudaHostGetDevicePointer((void**)&tmpcr, (void*)dlsch.c[r], 0);
+      ((uint8_t**)dlsch.c_devh)[r]=tmpcr;
+      AssertFatal(err == cudaSuccess,"CUDA Error (cudaHostGetDevicePointer) dlsch->c_devh[%d]: %s\n", r,cudaGetErrorString(err));
+    }
+    else 
+#endif
+      dlsch.c[r] = malloc16(8448/8);
+    AssertFatal(dlsch.c[r], "cannot allocate dlsch->c[%d]\n", r);
+    bzero(dlsch.c[r], 8448/8);
   }
 
   dlsch.f = malloc16(N_RB * frame_parms->symbols_per_slot * NR_NB_SC_PER_RB * 8 * NR_MAX_NB_LAYERS);
@@ -91,9 +116,11 @@ int nr_dlsch_encoding(PHY_VARS_gNB *gNB,
                       uint8_t slot,
                       unsigned char *output,
                       time_stats_t *tinput,
+                      time_stats_t *tinput_memcpy,
                       time_stats_t *tprep,
                       time_stats_t *tparity,
                       time_stats_t *toutput,
+		      time_stats_t *tconcat,
                       time_stats_t *dlsch_rate_matching_stats,
                       time_stats_t *dlsch_interleaving_stats,
                       time_stats_t *dlsch_segmentation_stats)
@@ -215,6 +242,9 @@ int nr_dlsch_encoding(PHY_VARS_gNB *gNB,
     TB_parameters->nb_layers = rel15->nrOfLayers;
     TB_parameters->rv_index = rel15->rvIndex[0];
 
+#ifdef ENABLE_CUDA
+    if (gNB->use_gpu) TB_parameters->c_dev = (uint8_t**)dlsch->c_dev;
+#endif  
     int nb_re_dmrs =
         (rel15->dmrsConfigType == NFAPI_NR_DMRS_TYPE1) ? (6 * rel15->numDmrsCdmGrpsNoData) : (4 * rel15->numDmrsCdmGrpsNoData);
     TB_parameters->G = nr_get_G(rel15->rbSize,

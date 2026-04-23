@@ -5,8 +5,8 @@ project (OpenAirInterface LANGUAGES C CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(OAI_VERSION 2.4.0)
 
-option(CUDA_ENABLE "Enable CUDA accelerated channel simulation" OFF)
-if(CUDA_ENABLE)
+option(ENABLE_CHANNEL_SIM_CUDA "Enable CUDA accelerated channel simulation" OFF)
+if(ENABLE_CHANNEL_SIM_CUDA)
     find_package(CUDA REQUIRED)
     find_package(CUDAToolkit REQUIRED)
     message(STATUS "CUDA explicitly enabled, building with GPU acceleration support.")
@@ -34,7 +34,7 @@ if(CUDA_ENABLE)
         message(STATUS "CUDA Explicit Copy path enabled (default ATS was overridden).")
     endif()
 
-    add_compile_definitions(ENABLE_CUDA)
+    add_compile_definitions(CHANNEL_SIM_CUDA)
 endif()
 
 #########################################################
@@ -209,6 +209,10 @@ endif()
 # used during linking)
 if(CMAKE_C_COMPILER_ID STREQUAL "Clang" OR CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
   set(commonOpts "${commonOpts} -Wno-unused-command-line-argument")
+endif()
+
+if (ENABLE_CUDA)
+  set(commonOpts "${commonOpts} -DENABLE_CUDA")
 endif()
 
 set(CMAKE_C_FLAGS
@@ -1073,15 +1077,30 @@ target_link_libraries(PHY_UE PRIVATE asn1_lte_rrc_hdrs asn1_nr_rrc_hdrs UTIL)
 add_library(PHY_NR_COMMON ${PHY_NR_SRC_COMMON})
 target_link_libraries(PHY_NR_COMMON PUBLIC UTIL)
 
-add_library(PHY_NR ${PHY_NR_SRC})
+if (ENABLE_CUDA)
+  find_package(CUDA REQUIRED)
+  if (NOT CUDA_FOUND)
+    message(FATAL_ERROR "no CUDA found")
+  endif()
+  #SET(CUDA_NVCC_FLAGS "${CUDA_NVCC_FLAGS};-arch=sm_80 -g -ggdb") # A100
+  #SET(CUDA_NVCC_FLAGS "${CUDA_NVCC_FLAGS};-arch=sm_90") # GH200
+  #SET(CUDA_NVCC_FLAGS "${CUDA_NVCC_FLAGS};-arch=sm_87") # Jetson
+  #SET(CUDA_NVCC_FLAGS "${CUDA_NVCC_FLAGS};-arch=sm_89") # L40S
+  SET(CUDA_NVCC_FLAGS "${CUDA_NVCC_FLAGS};-arch=sm_121") # GB10
+  set(CUDA_VERBOS_BUILD_ON)
+  cuda_add_library(PHY_NR ${PHY_NR_SRC} ${PHY_NR_SRC_CU})
+  cuda_add_library(PHY_NR_UE ${PHY_NR_UE_SRC} ${PHY_NR_UE_SRC_CU})
+else()
+  add_library(PHY_NR ${PHY_NR_SRC})
+  add_library(PHY_NR_UE ${PHY_NR_UE_SRC})
+endif()
 target_link_libraries(PHY_NR nr_phy_common nr_common nr_fapi_p5 polar smallblock ds)
 
 add_library(PHY_NR_NO_AVX_256 ${PHY_NR_SRC})
 target_link_libraries(PHY_NR_NO_AVX_256 nr_phy_common nr_common)
 target_compile_definitions(PHY_NR_NO_AVX_256 PUBLIC USE_128BIT)
 
-add_library(PHY_NR_UE ${PHY_NR_UE_SRC})
-target_link_libraries(PHY_NR_UE PRIVATE asn1_nr_rrc_hdrs nr_phy_common nr_common UTIL polar smallblock)
+target_link_libraries(PHY_NR_UE asn1_nr_rrc_hdrs nr_phy_common nr_common UTIL polar smallblock)
 
 add_library(PHY_RU ${PHY_SRC_RU})
 target_link_libraries(PHY_RU PRIVATE asn1_lte_rrc_hdrs UTIL)
@@ -1984,12 +2003,19 @@ add_executable(ldpctest
 )
 target_link_libraries(ldpctest PRIVATE
   -Wl,--start-group UTIL SIMU PHY_COMMON PHY_NR_COMMON -Wl,--end-group
-  m pthread dl ${T_LIB}
+  m pthread dl ${T_LIB} ${CUDA_LIBRARIES}
   # link 'check_crc' to make it resolved in the LDPC coding libraries
   # 'check_crc' is not used in ldpctest so it is not linked in the executable by default
   # --whole-archive links 'check_crc' in the executable even though it is note used, see 'man ld'
   -Wl,--whole-archive crc_byte -Wl,--no-whole-archive
 )
+if (ENABLE_CUDA)
+  # ldpctest.c uses cudaHostAlloc(), so include dir/link libr to make available
+  # TODO don't write it directly into ldpctest, but separate compilation unit?
+  find_package(CUDA REQUIRED)
+  target_link_libraries(ldpctest PRIVATE ${CUDA_LIBRARIES})
+  target_include_directories(ldpctest PRIVATE ${CUDA_INCLUDE_DIRS})
+endif()
 
 add_library(physim_common OBJECT ${OPENAIR1_DIR}/SIMULATION/NR_PHY/nr_unitary_common.c)
 target_link_libraries(physim_common PRIVATE UTIL)
@@ -2076,14 +2102,12 @@ target_link_libraries(nr_srssim PRIVATE
   m pthread ITTI dl nr_ue_phy_meas physim_common softmodem_common
   )
 
-if(CUDA_ENABLE)
-  if (TARGET oai_cuda_lib)
-      target_link_libraries(nr_dlsim PRIVATE oai_cuda_lib)
-      target_link_libraries(nr_ulsim PRIVATE oai_cuda_lib)
+if(ENABLE_CHANNEL_SIM_CUDA)
+  target_link_libraries(nr_dlsim PRIVATE oai_cuda_lib)
+  target_link_libraries(nr_ulsim PRIVATE oai_cuda_lib)
 
-      target_compile_definitions(nr_dlsim PRIVATE ENABLE_CUDA)
-      target_compile_definitions(nr_ulsim PRIVATE ENABLE_CUDA)
-  endif()
+  target_compile_definitions(nr_dlsim PRIVATE CHANNEL_SIM_CUDA)
+  target_compile_definitions(nr_ulsim PRIVATE CHANNEL_SIM_CUDA)
 endif()
 
 # these simulators do not compile:

@@ -18,7 +18,7 @@ HWs=""
 BUILD_DIR=ran_build
 CMAKE_BUILD_TYPE="RelWithDebInfo"
 CMAKE_CMD="$CMAKE"
-OPTIONAL_LIBRARIES="telnetsrv enbscope uescope nrscope ldpc_aal ldpc_xdma websrv oai_iqplayer imscope imscope_record"
+OPTIONAL_LIBRARIES="telnetsrv enbscope uescope nrscope ldpc_aal ldpc_cuda ldpc_xdma websrv oai_iqplayer imscope imscope_record"
 TARGET_LIST=""
 BUILD_TOOL_OPT="-j$(nproc)"
 
@@ -114,6 +114,8 @@ Options:
   CC=/usr/bin/clang CXX=/usr/bin/clang++ ./build_oai ... --sanitize-memory
 --sanitize-thread | -fsanitize=thread
   Enable the thread sanitizer on all targets
+--use-cuda
+  Tell build to use NVCC for appropriate .cu files and cuda_runtime functions  
 -h | --help
    Print this help"
 }
@@ -355,6 +357,9 @@ function main() {
         --sanitize-thread | -fsanitize=thread)
             CMAKE_CMD="$CMAKE_CMD -DSANITIZE_THREAD=True"
             shift;;
+	--use-cuda)
+	    CMAKE_CMD="$CMAKE_CMD -DENABLE_CUDA=True"
+	    shift;;
        --trace-asn1c-enc-dec)
             CMAKE_CMD="$CMAKE_CMD -DTRACE_ASN1C_ENC_DEC=ON"
             echo_info "Enabling asn1c internal traces via OAI logging system"

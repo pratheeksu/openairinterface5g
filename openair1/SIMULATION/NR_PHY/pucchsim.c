@@ -38,7 +38,7 @@ PHY_VARS_NR_UE *UE;
 RAN_CONTEXT_t RC;
 int64_t uplink_frequency_offset[MAX_NUM_CCs][4];
 uint64_t downlink_frequency[MAX_NUM_CCs][4];
-
+uint32_t use_gpu=0;
 double cpuf;
 uint8_t const nr_rv_round_map[4] = {0, 2, 3, 1};
 // needed for some functions

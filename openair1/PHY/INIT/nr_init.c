@@ -25,6 +25,10 @@
 #include "PHY/NR_REFSIG/ul_ref_seq_nr.h"
 #include <string.h>
 #include "nfapi/open-nFAPI/fapi/inc/nr_fapi_p5_utils.h"
+#ifdef ENABLE_CUDA
+#include <cuda_runtime.h>
+#endif
+extern uint32_t use_gpu;
 
 static void init_DLSCH_struct(PHY_VARS_gNB *gNB);
 static void destroy_DLSCH_struct(const PHY_VARS_gNB *gNB);
@@ -92,7 +96,8 @@ void phy_init_nr_gNB(PHY_VARS_gNB *gNB)
   nfapi_nr_config_request_scf_t *cfg = &gNB->gNB_config;
   NR_gNB_COMMON *const common_vars = &gNB->common_vars;
   common_vars->analog_bf = cfg->analog_beamforming_ve.analog_bf_vendor_ext.value;
-  LOG_I(PHY, "L1 configured with%s analog beamforming\n", common_vars->analog_bf ? "" : "out");
+  gNB->use_gpu = use_gpu;
+  LOG_I(PHY, "L1 configured with%s analog beamforming, use_gpu = %d\n", common_vars->analog_bf ? "" : "out",use_gpu);
   if (common_vars->analog_bf) {
     // True only if nrmac->beam_info.beam_mode == FAPI_ANALOG_BEAM, thus analog_beamforming=2
     common_vars->num_beams_period = cfg->analog_beamforming_ve.num_beams_period_vendor_ext.value;
@@ -119,8 +124,6 @@ void phy_init_nr_gNB(PHY_VARS_gNB *gNB)
 
   nr_init_fde(); // Init array for frequency equalization of transform precoding of PUSCH
 
-  int ret_loader = load_nrLDPC_coding_interface(NULL, &gNB->nrLDPC_coding_interface);
-  AssertFatal(ret_loader == 0, "error loading LDPC library\n");
 
   gNB->max_nb_pdsch = MAX_MOBILES_PER_GNB;
   init_delay_table(fp->ofdm_symbol_size, MAX_DELAY_COMP, NR_MAX_OFDM_SYMBOL_SIZE, fp->delay_table);
@@ -140,6 +143,9 @@ void phy_init_nr_gNB(PHY_VARS_gNB *gNB)
 
   /// Transport init necessary for NR synchro
   init_nr_transport(gNB);
+
+  int ret_loader = load_nrLDPC_coding_interface(NULL, &gNB->nrLDPC_coding_interface,16*gNB->max_nb_pusch);
+  AssertFatal(ret_loader == 0, "error loading LDPC library\n");
 
   init_DLSCH_struct(gNB);
 
@@ -188,8 +194,14 @@ void phy_init_nr_gNB(PHY_VARS_gNB *gNB)
 
     for (int i = 0; i < max_ul_mimo_layers; i++) {
     }
-    pusch->llr = (int16_t *)malloc16_clear((8 * ((3 * 8 * 6144) + 12))
-                                           * sizeof(int16_t)); // [hna] 6144 is LTE and (8*((3*8*6144)+12)) is not clear
+#ifdef ENABLE_CUDA
+    cudaError_t err = cudaHostAlloc((void**)&pusch->llr,(132 * 3 * 8448 )*sizeof(int16_t),cudaHostAllocMapped); // 132 segments 8448*3 coded bits per segment 
+    AssertFatal(err == cudaSuccess,"CUDA Error (pusch_llr): %s\n",cudaGetErrorString(err));
+    err=cudaHostGetDevicePointer((void**)&pusch->llr_dev,pusch->llr,0);
+    AssertFatal(err == cudaSuccess,"CUDA Error (harq_f_dev): %s\n",cudaGetErrorString(err));
+#else
+    pusch->llr = (int16_t *)malloc16_clear((132 * 3 * 8448) * sizeof(int16_t)); //132 segments 3*8448 coded bits per segment 
+#endif
     pusch->ul_valid_re_per_slot = (int16_t *)malloc16_clear(sizeof(int16_t) * fp->symbols_per_slot);
   } // ulsch_id
 }
@@ -244,7 +256,11 @@ void phy_free_nr_gNB(PHY_VARS_gNB *gNB)
     free_and_zero(pusch_vars->ul_valid_re_per_slot);
     free_and_zero(pusch_vars->rxdataF_comp);
 
+#ifdef ENABLE_CUDA
+    cudaFreeHost(pusch_vars->llr_dev);
+#else
     free_and_zero(pusch_vars->llr);
+#endif
   } // ULSCH_id
   free(gNB->pusch_vars);
 
@@ -376,7 +392,7 @@ static void init_DLSCH_struct(PHY_VARS_gNB *gNB)
   gNB->dlsch = calloc(gNB->max_nb_pdsch, sizeof(*gNB->dlsch));
   for (int i = 0; i < gNB->max_nb_pdsch; i++) {
     LOG_D(PHY, "Allocating Transport Channel Buffers for DLSCH %d/%d\n", i, gNB->max_nb_pdsch);
-    gNB->dlsch[i] = new_gNB_dlsch(fp, grid_size);
+    gNB->dlsch[i] = new_gNB_dlsch(fp, grid_size,gNB->use_gpu);
   }
 }
 
@@ -386,7 +402,7 @@ static void destroy_DLSCH_struct(const PHY_VARS_gNB *gNB)
   const nfapi_nr_config_request_scf_t *cfg = &gNB->gNB_config;
   const uint16_t grid_size = cfg->carrier_config.dl_grid_size[fp->numerology_index].value;
   for (int i = 0; i < gNB->max_nb_pdsch; i++) {
-    free_gNB_dlsch(&gNB->dlsch[i], grid_size, fp);
+    free_gNB_dlsch(&gNB->dlsch[i], grid_size, fp,gNB->use_gpu);
   }
   free(gNB->dlsch);
 }

@@ -47,6 +47,7 @@ extern uint64_t ulsch_slot_bitmap;
 extern char *uecap_file;
 extern uint32_t dlsch_slot_modval;
 extern uint32_t ulsch_slot_modval;
+extern uint32_t use_gpu;
 
 // In nr-gnb.c
 extern void init_gNB();

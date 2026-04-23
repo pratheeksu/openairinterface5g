@@ -15,6 +15,7 @@
 
 // Define signal handler to attempt graceful termination
 bool stop = false;
+extern uint32_t use_gpu;
 
 void sigint_handler(int arg)
 {

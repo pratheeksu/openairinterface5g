@@ -74,9 +74,9 @@ void nr_generate_pbch(PHY_VARS_gNB *gNB,
 void nr_init_pbch_interleaver(uint8_t *interleaver);
 uint32_t nr_pbch_extra_byte_generation(int sfn, int n_hf, int ssb_index, int ssb_sc_offset, int Lmax);
 
-NR_gNB_DLSCH_t new_gNB_dlsch(NR_DL_FRAME_PARMS *frame_parms, uint16_t N_RB);
+NR_gNB_DLSCH_t new_gNB_dlsch(NR_DL_FRAME_PARMS *frame_parms, uint16_t N_RB,int use_gpu);
 
-void free_gNB_dlsch(NR_gNB_DLSCH_t *dlsch, uint16_t N_RB, const NR_DL_FRAME_PARMS *frame_parms);
+void free_gNB_dlsch(NR_gNB_DLSCH_t *dlsch, uint16_t N_RB, const NR_DL_FRAME_PARMS *frame_parms,int use_gpu);
 
 /** \brief This function is the top-level entry point to PUSCH demodulation, after frequency-domain transformation and channel estimation.  It performs
     - RB extraction (signal and channel estimates)

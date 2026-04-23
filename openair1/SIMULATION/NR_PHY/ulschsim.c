@@ -40,6 +40,7 @@ PHY_VARS_NR_UE *UE;
 RAN_CONTEXT_t RC;
 int64_t uplink_frequency_offset[MAX_NUM_CCs][4];
 uint64_t downlink_frequency[MAX_NUM_CCs][4];
+uint32_t use_gpu=0;
 
 static softmodem_params_t softmodem_params;
 softmodem_params_t *get_softmodem_params(void) {

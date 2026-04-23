@@ -741,9 +741,11 @@ void nr_generate_pdsch(PHY_VARS_gNB *gNB, int n_dlsch, NR_gNB_DLSCH_t *dlsch_arr
 {
   time_stats_t *dlsch_encoding_stats = &gNB->dlsch_encoding_stats;
   time_stats_t *tinput = &gNB->tinput;
+  time_stats_t *tinput_memcpy = &gNB->tinput_memcpy;
   time_stats_t *tprep = &gNB->tprep;
   time_stats_t *tparity = &gNB->tparity;
   time_stats_t *toutput = &gNB->toutput;
+  time_stats_t *tconcat = &gNB->tconcat;
   time_stats_t *dlsch_rate_matching_stats = &gNB->dlsch_rate_matching_stats;
   time_stats_t *dlsch_interleaving_stats = &gNB->dlsch_interleaving_stats;
   time_stats_t *dlsch_segmentation_stats = &gNB->dlsch_segmentation_stats;
@@ -799,9 +801,11 @@ void nr_generate_pdsch(PHY_VARS_gNB *gNB, int n_dlsch, NR_gNB_DLSCH_t *dlsch_arr
                         slot,
                         output,
                         tinput,
+			tinput_memcpy,
                         tprep,
                         tparity,
                         toutput,
+			tconcat,
                         dlsch_rate_matching_stats,
                         dlsch_interleaving_stats,
                         dlsch_segmentation_stats)

@@ -60,14 +60,14 @@ typedef struct args_fpga_decode_prepare_s {
   task_ans_t *ans; /*!< pointer to the answer that is used by thread pool to detect job completion */
 } args_fpga_decode_prepare_t;
 
-int32_t nrLDPC_coding_init(void);
+int32_t nrLDPC_coding_init(int);
 int32_t nrLDPC_coding_shutdown(void);
 int32_t nrLDPC_coding_decoder(nrLDPC_slot_decoding_parameters_t *slot_params, int frame_rx, int slot_rx);
 // int32_t nrLDPC_coding_encoder(void);
 int decoder_xdma(nrLDPC_TB_decoding_parameters_t *TB_params, int frame_rx, int slot_rx, tpool_t *ldpc_threadPool);
 void nr_ulsch_FPGA_decoding_prepare_blocks(void *args);
 
-int32_t nrLDPC_coding_init(void)
+int32_t nrLDPC_coding_init(int max_num_pxsch)
 {
   paramdef_t LoaderParams[] = {
       {"num_threads_prepare", NULL, 0, .iptr = &num_threads_prepare_max, .defintval = 0, TYPE_INT, 0, NULL},

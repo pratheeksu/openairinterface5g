@@ -64,6 +64,7 @@ double cpuf;
 uint64_t downlink_frequency[MAX_NUM_CCs][4];
 int64_t uplink_frequency_offset[MAX_NUM_CCs][4];
 uint32_t N_RB_DL = 106;
+uint32_t use_gpu=0;
 
 NR_IF_Module_t *NR_IF_Module_init(int Mod_id) { return (NULL); }
 nfapi_mode_t nfapi_getmode(void) { return NFAPI_MODE_UNKNOWN; }

@@ -39,7 +39,7 @@ function(add_physim_test test_name test_description test_exec)
     # pass test description also through environment variable: for cmake < 3.30,
     # in JSON export, we cannot recover the description otherwise
     # see also https://gitlab.kitware.com/cmake/cmake/-/issues/21490
-    ENVIRONMENT "LD_LIBRARY_PATH=.;TEST_DESCRIPTION=${test_description}"
+    ENVIRONMENT "LD_LIBRARY_PATH=${CMAKE_BINARY_DIR};TEST_DESCRIPTION=${test_description}"
   )
   set_tests_properties(${test_name} PROPERTIES CHECK_COUNT 0)
   add_dependencies(tests ${test_exec})
@@ -439,7 +439,7 @@ endif()
 ######                           cuda-specific tests                       ######
 ####################################################################################
 
-if (CUDA_ENABLE)
+if (ENABLE_CHANNEL_SIM_CUDA)
 
 # --- Test Suite 1: 61440 samples, 2/4/8/32 TX - 2/4/8/32 RX  ---
 add_physim_test(cuda.5g.channelsim.test_channel_scalability.test1  "16 channels 61440 samples 2T2R Batch"  test_channel_scalability -c 16 -t 2 -r 2 -s 61440 -l 32 -m batch  -n 12)

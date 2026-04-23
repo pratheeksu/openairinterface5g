@@ -22,6 +22,8 @@ char *worker_config=NULL;
 int usrp_tx_thread = 0;
 uint8_t nfapi_mode=0;
 
+uint32_t use_gpu=0;
+
 static struct timespec start;
 
 static softmodem_params_t softmodem_params;

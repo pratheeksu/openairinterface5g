@@ -22,9 +22,8 @@ target_link_libraries(vrtsim
     channel_pipeline
     thread-pool
 )
-if (CUDA_ENABLE)
-  target_compile_definitions(vrtsim PRIVATE CUDA_ENABLE)
-  target_compile_definitions(vrtsim PRIVATE CUDA_ENABLE)
+if (ENABLE_CHANNEL_SIM_CUDA)
+  target_compile_definitions(vrtsim PRIVATE CHANNEL_SIM_CUDA)
 endif()
 
 # Optional taps client

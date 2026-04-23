@@ -35,6 +35,9 @@
  * \param output nrLDPC_coding_segment_encoder with concatenated segments and packed bits
  * \param Eoffset offset in number of bits of the first segment of the segment group within output
  */
+
+ int nrLDPC_coding_encoder32(nrLDPC_slot_encoding_parameters_t *nrLDPC_slot_encoding_parameters, nrLDPC_TB_encoding_parameters_t *nrLDPC_TB_encoding_parameters);
+
 static void write_task_output(uint8_t *f,
                               uint32_t E,
                               uint8_t *f2,
@@ -343,9 +346,11 @@ static int nrLDPC_launch_TB_encoding(nrLDPC_slot_encoding_parameters_t *nrLDPC_s
   encoder_implemparams_t common_segment_params = {
     .n_segments = nrLDPC_TB_encoding_parameters->C,
     .tinput = nrLDPC_slot_encoding_parameters->tinput,
+    .tinput_memcpy = nrLDPC_slot_encoding_parameters->tinput_memcpy,
     .tprep = nrLDPC_slot_encoding_parameters->tprep,
     .tparity = nrLDPC_slot_encoding_parameters->tparity,
     .toutput = nrLDPC_slot_encoding_parameters->toutput,
+    .tconcat = nrLDPC_slot_encoding_parameters->tconcat,
     .Kb = nrLDPC_TB_encoding_parameters->Kb,
     .Zc = nrLDPC_TB_encoding_parameters->Z,
     .BG = nrLDPC_TB_encoding_parameters->BG,
@@ -382,16 +387,15 @@ int nrLDPC_coding_encoder(nrLDPC_slot_encoding_parameters_t *nrLDPC_slot_encodin
   for (int dlsch_id = 0; dlsch_id < nrLDPC_slot_encoding_parameters->nb_TBs; dlsch_id++) {
     // Compute number of tasks to encode TB
     nrLDPC_TB_encoding_parameters_t *nrLDPC_TB_encoding_parameters = &nrLDPC_slot_encoding_parameters->TBs[dlsch_id];
-    size_t n_seg = (nrLDPC_TB_encoding_parameters->C / 8 + ((nrLDPC_TB_encoding_parameters->C & 7) == 0 ? 0 : 1));
-    nbTasks += n_seg;
+      size_t n_seg = (nrLDPC_TB_encoding_parameters->C / 8 + ((nrLDPC_TB_encoding_parameters->C & 7) == 0 ? 0 : 1));
+      nbTasks += n_seg;
 
-    // Search for maximum E for sizing encoder output f and f2
-    for (int seg_id = 0; seg_id < nrLDPC_TB_encoding_parameters->C; seg_id++) {
-      uint32_t E = nrLDPC_TB_encoding_parameters->segments[seg_id].E;
-      Emax = E > Emax ? E : Emax;
-    }
+      // Search for maximum E for sizing encoder output f and f2
+      for (int seg_id = 0; seg_id < nrLDPC_TB_encoding_parameters->C; seg_id++) {
+        uint32_t E = nrLDPC_TB_encoding_parameters->segments[seg_id].E;
+        Emax = E > Emax ? E : Emax;
+      }
   }
-
   // Create f and f2 to old encoding tasks outputs
   uint32_t Emax_ceil_mod = ceil_mod(Emax, 64);
   uint8_t f[nbTasks][Emax_ceil_mod] __attribute__((aligned(64)));
@@ -425,16 +429,17 @@ int nrLDPC_coding_encoder(nrLDPC_slot_encoding_parameters_t *nrLDPC_slot_encodin
     completed_many_task_ans(&ans, nbTasks - nbEncode);
   }
   // Execute thread pool tasks
-  join_task_ans(&ans);
+  if (nbTasks > 0)  join_task_ans(&ans);
 
   // Write output
+  time_stats_t *tconcat = nrLDPC_slot_encoding_parameters->tconcat;
+  if(tconcat != NULL) start_meas(tconcat);
   nbTasks = 0;
   for (int dlsch_id = 0; dlsch_id < nrLDPC_slot_encoding_parameters->nb_TBs; dlsch_id++) {
     nrLDPC_TB_encoding_parameters_t *nrLDPC_TB_encoding_parameters = &nrLDPC_slot_encoding_parameters->TBs[dlsch_id];
     uint32_t C = nrLDPC_TB_encoding_parameters->C;
     size_t n_seg = (C / 8 + ((C & 7) == 0 ? 0 : 1));
 
-    time_stats_t *toutput = nrLDPC_slot_encoding_parameters->toutput;
 
     for (int j = 0; j < n_seg; j++) {
       unsigned int macro_segment = j * 8;
@@ -454,7 +459,6 @@ int nrLDPC_coding_encoder(nrLDPC_slot_encoding_parameters_t *nrLDPC_slot_encodin
         }
       }
 
-      if(toutput != NULL) start_meas(toutput);
  
       uint32_t Eoffset=0;
       for (int s=0; s<macro_segment; s++)
@@ -470,10 +474,10 @@ int nrLDPC_coding_encoder(nrLDPC_slot_encoding_parameters_t *nrLDPC_slot_encodin
                         nrLDPC_TB_encoding_parameters->output,
                         Eoffset);
 
-      if(toutput != NULL) stop_meas(toutput);
     }
     nbTasks += n_seg;
   }
+  if(tconcat != NULL) stop_meas(tconcat);
 
   return 0;
 }

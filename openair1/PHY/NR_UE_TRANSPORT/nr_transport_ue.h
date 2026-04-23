@@ -78,11 +78,15 @@ typedef struct {
   NR_SCH_status_t status;
   /// Pointer to the payload (38.212 V15.4.0 section 5.1)
   uint8_t *b;
-  /// Pointers to transport block segments
-  uint8_t **c;
+  /// Pointer to transport block segments
+  uint8_t *c;
+#ifdef ENABLE_CUDA
+  /// Pointer to transport block segments (GPU pointer for c when using shared memory, should be the same on Jetson
+  uint8_t *cdev;
+#endif
   /// soft bits for each received segment ("d"-sequence)(for definition see 36-212 V8.6 2009-03, p.15)
   /// Accumulates the soft bits for each round to increase decoding success (HARQ)
-  int16_t **d;
+  int16_t *d;
   /// Index of current HARQ round for this DLSCH
   uint8_t DLround;
   /// Number of code segments 

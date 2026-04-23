@@ -83,6 +83,8 @@ uint64_t        sidelink_frequency[MAX_NUM_CCs][4];
 // UE and OAI config variables
 double            cpuf;
 
+extern uint32_t use_gpu;
+
 int create_tasks_nrue(uint32_t ue_nb) {
   LOG_D(NR_RRC, "%s(ue_nb:%d)\n", __FUNCTION__, ue_nb);
   itti_wait_ready(1);
@@ -260,7 +262,7 @@ int main(int argc, char **argv)
 
   init_opt();
 
-  int ret_loader = load_nrLDPC_coding_interface(NULL, &nrLDPC_coding_interface);
+  int ret_loader = load_nrLDPC_coding_interface(NULL, &nrLDPC_coding_interface, 32);
   AssertFatal(ret_loader == 0, "error loading LDPC library\n");
 
   // strdup to put the sring in the core file for post mortem identification

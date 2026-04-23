@@ -666,7 +666,7 @@ static int vrtsim_write_with_chanmod(vrtsim_state_t *vrtsim_state,
     }
     size_t saved_samples_input_len = channel_length - 1;
 
-  #ifdef CUDA_ENABLE
+  #ifdef CHANNEL_SIM_CUDA
     cuda_channel_pipeline(vrtsim_state->channel_pipeline_context,
                           (const cf_t **)channel_impulse_response_p,
                           (const c16_t **)saved_samples_ptr,
@@ -873,7 +873,7 @@ static void vrtsim_end(openair0_device_t *device)
 
   tx_timing_t *tx_timing = &vrtsim_state->tx_timing;
   if (vrtsim_state->chanmod || vrtsim_state->taps_socket || vrtsim_state->use_cirdb) {
-#ifdef CUDA_ENABLE
+#ifdef CHANNEL_SIM_CUDA
     cuda_channel_pipeline_shutdown(vrtsim_state->channel_pipeline_context);
 #else
     abortTpool(&vrtsim_state->tpool);
@@ -976,7 +976,7 @@ __attribute__((__visibility__("default"))) int device_init(openair0_device_t *de
     int noise_power_dBFS = get_noise_power_dBFS();
     int16_t noise_power = noise_power_dBFS == INVALID_DBFS_VALUE ? 0 : (int16_t)(32767.0 / powf(10.0, .05 * -noise_power_dBFS));
     LOG_A(HW, "VRTSIM: Noise power %d sample value\n", noise_power);
-#ifdef CUDA_ENABLE
+#ifdef CHANNEL_SIM_CUDA
     size_t samples_in_one_ms = openair0_cfg->sample_rate / 1000 / 1000;
     vrtsim_state->channel_pipeline_context = cuda_channel_pipeline_init(openair0_cfg->tx_num_channels * samples_in_one_ms);
 #else
