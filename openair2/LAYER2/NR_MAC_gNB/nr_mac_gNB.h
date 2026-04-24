@@ -900,6 +900,11 @@ struct nr_dl_candidate {
   uint8_t nssai_sst; ///< slice/service type from first DRB (0 if none)
   uint32_t nssai_sd; ///< slice differentiator from first DRB (0xFFFFFF if none)
 
+  /* ── PF scheduling state (set after RI/PMI select, read-only after) ──── */
+  float pf_weight; ///< proportional-fair weight: achievable_rate / avg_throughput
+  int pf_rank; ///< 0 = highest priority; consecutive after initial sort
+  bool skipped; ///< true if dropped by TDA/beam select (skip in downstream stages)
+
   /* ── UE CSI observations (set by collect, read-only after) ─────────────── */
   uint16_t cqi; ///< UE-reported wideband CQI
   uint8_t csi_ri; ///< UE-reported rank indicator (0 = rank-1); forced to 0 for DCI 1_0

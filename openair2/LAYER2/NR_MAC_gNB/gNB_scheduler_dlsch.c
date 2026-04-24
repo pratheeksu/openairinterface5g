@@ -610,19 +610,32 @@ static float dl_pf_weight(int mcs, int mcs_table, int nrOfLayers, float avg_thro
   return (float)tbs / fmaxf(avg_throughput, 1e-9f);
 }
 
-static int compare_dl_beam_priority(const void *a, const void *b)
+static int compare_dl_pf_weight_desc(const void *a, const void *b)
 {
   const nr_dl_candidate_t *ca = (const nr_dl_candidate_t *)a;
   const nr_dl_candidate_t *cb = (const nr_dl_candidate_t *)b;
-  /* retx first */
-  if (ca->is_retx && !cb->is_retx)
-    return -1;
-  if (!ca->is_retx && cb->is_retx)
-    return 1;
-  /* among new-tx: highest PF weight first (use current_mcs — alloc_mcs not yet set) */
-  float wa = dl_pf_weight(ca->current_mcs, ca->mcs_table, ca->alloc_nrOfLayers, ca->avg_throughput);
-  float wb = dl_pf_weight(cb->current_mcs, cb->mcs_table, cb->alloc_nrOfLayers, cb->avg_throughput);
-  return (wa < wb) - (wa > wb);
+  /* highest pf_weight first (retx have INFINITY, so they come first) */
+  return (ca->pf_weight < cb->pf_weight) - (ca->pf_weight > cb->pf_weight);
+}
+
+static int compare_dl_pf_rank(const void *a, const void *b)
+{
+  return ((const nr_dl_candidate_t *)a)->pf_rank - ((const nr_dl_candidate_t *)b)->pf_rank;
+}
+
+/// Compute PF weight for each candidate, sort by priority (retx first, then
+/// highest PF weight), and assign consecutive pf_rank values 0..n-1.
+static void dl_assign_pf_ranks(nr_dl_candidate_t *candidates, int n)
+{
+  for (int i = 0; i < n; i++) {
+    nr_dl_candidate_t *c = &candidates[i];
+    c->skipped = false;
+    c->pf_weight = c->is_retx ? INFINITY
+                               : dl_pf_weight(c->current_mcs, c->mcs_table, c->alloc_nrOfLayers, c->avg_throughput);
+  }
+  qsort(candidates, n, sizeof(*candidates), compare_dl_pf_weight_desc);
+  for (int i = 0; i < n; i++)
+    candidates[i].pf_rank = i;
 }
 
 int nr_dl_beam_select_default(NR_beam_info_t *beam_info,
@@ -633,36 +646,44 @@ int nr_dl_beam_select_default(NR_beam_info_t *beam_info,
                               slot_t slot,
                               int slots_per_frame)
 {
-  /* Sort candidates so retx claim beam slots first, then new-tx in PF
-   * priority order (lowest avg throughput first). */
-  qsort(candidates, n_candidates, sizeof(*candidates), compare_dl_beam_priority);
-
-  int out = 0;
+  /* Iterate in PF priority order so retx and high-priority UEs claim beams first.
+   * Inline rank check: O(1) per iteration, sorts the tail only if a custom
+   * upstream stage broke PF rank order. */
+  int n_valid = 0;
+  int last_rank = -1;
   for (int i = 0; i < n_candidates; i++) {
-    NR_beam_alloc_t beam = beam_allocation_procedure(beam_info, frame, slot, candidates[i].alloc_beam_dir, slots_per_frame);
-    if (beam.idx < 0)
+    if (candidates[i].skipped)
       continue;
+    if (candidates[i].pf_rank < last_rank)
+      qsort(candidates + i, n_candidates - i, sizeof(*candidates), compare_dl_pf_rank);
+    last_rank = candidates[i].pf_rank;
+
+    NR_beam_alloc_t beam = beam_allocation_procedure(beam_info, frame, slot, candidates[i].alloc_beam_dir, slots_per_frame);
+    if (beam.idx < 0) {
+      candidates[i].skipped = true;
+      continue;
+    }
 
     candidates[i].alloc_beam_idx = beam.idx;
     candidates[i].alloc_new_beam = beam.new_beam;
-    if (out != i)
-      candidates[out] = candidates[i];
-    out++;
+    n_valid++;
   }
-  return out;
+  return n_valid;
 }
 
 // Default TDA selector: picks the slot-wide TDA index from get_dl_tda(),
 // then resolves tda_info per candidate using each UE's own BWP / search
-// space / coreset. Compacts out candidates whose resolved TDA is invalid.
+// space / coreset. Marks invalids with skipped=true.
 int nr_dl_tda_select_default(const gNB_MAC_INST *mac, nr_dl_candidate_t *candidates, int n_candidates, frame_t frame, slot_t slot)
 {
   int tda = get_dl_tda(mac, slot);
   AssertFatal(tda >= 0, "Unable to find PDSCH time domain allocation in list\n");
   const NR_ServingCellConfigCommon_t *scc = mac->common_channels[0].ServingCellConfigCommon;
 
-  int out = 0;
+  int n_valid = 0;
   for (int i = 0; i < n_candidates; i++) {
+    if (candidates[i].skipped)
+      continue;
     NR_UE_info_t *UE = candidates[i].UE;
     NR_UE_sched_ctrl_t *sched_ctrl = &UE->UE_sched_ctrl;
     NR_UE_DL_BWP_t *dl_bwp = &UE->current_DL_BWP;
@@ -675,17 +696,17 @@ int nr_dl_tda_select_default(const gNB_MAC_INST *mac, nr_dl_candidate_t *candida
                                              TYPE_C_RNTI_,
                                              coresetid,
                                              false);
-    if (!tda_info.valid_tda)
+    if (!tda_info.valid_tda) {
+      candidates[i].skipped = true;
       continue;
+    }
 
     candidates[i].alloc_tda = tda;
     candidates[i].alloc_tda_info = tda_info;
     candidates[i].alloc_slbitmap = SL_to_bitmap(tda_info.startSymbolIndex, tda_info.nrOfSymbols);
-    if (out != i)
-      candidates[out] = candidates[i];
-    out++;
+    n_valid++;
   }
-  return out;
+  return n_valid;
 }
 
 void nr_dl_mcs_select_default(const gNB_MAC_INST *mac, nr_dl_candidate_t *candidates, int n_candidates)
@@ -799,51 +820,28 @@ static bool commit_alloc(const nr_dl_sched_params_t *params, nr_dl_candidate_t *
       return (n_sched);                                                               \
   } while (0)
 
-typedef struct {
-  float weight;
-  int idx;
-} pf_entry_t;
-
-static int compare_pf_weight_desc(const void *a, const void *b)
-{
-  float wa = ((const pf_entry_t *)a)->weight;
-  float wb = ((const pf_entry_t *)b)->weight;
-  return (wa < wb) - (wa > wb);
-}
-
-static int compare_dl_beam_idx(const void *a, const void *b)
-{
-  return ((const nr_dl_candidate_t *)a)->alloc_beam_idx - ((const nr_dl_candidate_t *)b)->alloc_beam_idx;
-}
-
 int nr_dl_proportional_fair(const nr_dl_sched_params_t *params, nr_dl_candidate_t *candidates, int *sched_indices, int n_candidates)
 {
   const int min_rbSize = 5;
   int n_scheduled = 0;
 
-  /* Sort candidates by beam so each beam's slice is contiguous */
-  qsort(candidates, n_candidates, sizeof(*candidates), compare_dl_beam_idx);
-
-  /* Compute per-beam boundaries */
-  int beam_start[MAX_NUM_BEAM_PERIODS + 1];
-  beam_start[0] = 0;
+  /* Per-beam scan: iterate all candidates for each beam. Array order = PF
+   * priority order, so within each beam we process retx first, then
+   * highest-priority new-tx first. No grouping sort needed.
+   * Phase 1 includes an inline rank check: O(1) per iteration, sorts the
+   * tail only if a custom upstream stage broke PF rank order. Once healed
+   * in phase 1, phases 2-3 see a sorted array. */
+  int last_rank = -1;
   for (int b = 0; b < params->num_beams; b++) {
-    beam_start[b + 1] = beam_start[b];
-    while (beam_start[b + 1] < n_candidates && candidates[beam_start[b + 1]].alloc_beam_idx == b)
-      beam_start[b + 1]++;
-  }
-
-  for (int b = 0; b < params->num_beams; b++) {
-    int bs = beam_start[b];
-    int be = beam_start[b + 1];
-    if (bs == be)
-      continue;
     uint16_t *vrb_map = params->vrb_map[b];
 
     /* Phase 1: HARQ retransmissions (highest priority, exact RBs) */
-    for (int i = bs; i < be; i++) {
-      if (!candidates[i].is_retx)
+    for (int i = 0; i < n_candidates; i++) {
+      if (candidates[i].skipped || candidates[i].alloc_beam_idx != b || !candidates[i].is_retx)
         continue;
+      if (candidates[i].pf_rank < last_rank)
+        qsort(candidates + i, n_candidates - i, sizeof(*candidates), compare_dl_pf_rank);
+      last_rank = candidates[i].pf_rank;
 
       int needed_rbs = candidates[i].retx_rbSize;
       int rbStart, rbSize;
@@ -861,7 +859,9 @@ int nr_dl_proportional_fair(const nr_dl_sched_params_t *params, nr_dl_candidate_
     }
 
     /* Phase 2: No-data UEs (TA command or beam switch MAC CE, no RLC data) */
-    for (int i = bs; i < be; i++) {
+    for (int i = 0; i < n_candidates; i++) {
+      if (candidates[i].skipped || candidates[i].alloc_beam_idx != b)
+        continue;
       if (candidates[i].is_retx || candidates[i].pending_bytes > 0)
         continue;
 
@@ -879,37 +879,19 @@ int nr_dl_proportional_fair(const nr_dl_sched_params_t *params, nr_dl_candidate_
       COMMIT_ALLOC(params, i, &candidates[i], rbStart, min_rbSize, candidates[i].alloc_mcs, sched_indices, n_scheduled);
     }
 
-    /* Phase 3: New data UEs — PF priority, largest free block */
-    pf_entry_t entries[MAX_MOBILES_PER_GNB];
-    int n_new = 0;
-
-    for (int i = bs; i < be; i++) {
+    /* Phase 3: New data UEs — array order is PF priority, largest free block */
+    for (int i = 0; i < n_candidates; i++) {
+      if (candidates[i].skipped || candidates[i].alloc_beam_idx != b)
+        continue;
       if (candidates[i].is_retx || candidates[i].pending_bytes == 0)
         continue;
 
-      float weight = dl_pf_weight(candidates[i].alloc_mcs,
-                                  candidates[i].mcs_table,
-                                  candidates[i].alloc_nrOfLayers,
-                                  candidates[i].avg_throughput);
-
-      entries[n_new].weight = weight;
-      entries[n_new].idx = i;
-      n_new++;
-    }
-
-    /* Sort by PF weight descending */
-    qsort(entries, n_new, sizeof(pf_entry_t), compare_pf_weight_desc);
-
-    /* Allocate in priority order: find largest free block, cap to UE's needs */
-    for (int e = 0; e < n_new; e++) {
-      int i = entries[e].idx;
       int rbStart;
       int max_rbSize =
           find_largest_free_block(vrb_map, candidates[i].alloc_slbitmap, candidates[i].bwp_start, candidates[i].bwp_size, &rbStart);
       if (max_rbSize < min_rbSize)
-        break;
+        continue;
 
-      /* Size allocation to UE's actual needs (RLC bytes + MAC overhead) */
       int mcs = candidates[i].alloc_mcs;
       uint8_t Qm = nr_get_Qm_dl(mcs, candidates[i].mcs_table);
       uint16_t R = nr_get_code_rate_dl(mcs, candidates[i].mcs_table);
@@ -961,18 +943,24 @@ static void nr_dl_schedule(gNB_MAC_INST *mac,
   /* Step 2: RI/PMI selection — sets alloc_nrOfLayers and alloc_pm_index per candidate */
   mac->dl_ri_pmi_select(mac, candidates, n);
 
+  /* Compute PF weights (needs alloc_nrOfLayers from step 2) and sort once.
+   * This is an optimisation for the default PF-based stages: beam_select and
+   * rb_alloc can iterate in array order without re-sorting.  Custom stage
+   * implementations are free to ignore pf_weight/pf_rank entirely and use
+   * their own priority scheme. Default beam_select and rb_alloc both
+   * verify PF rank order on entry and re-sort only if broken. */
+  dl_assign_pf_ranks(candidates, n);
+
   /* Step 3: Per-UE TDA selection. Resolves tda/tda_info/slbitmap on each
-   * candidate using its own BWP/search-space/coreset, compacts out invalids.
-   * Done before beam allocation so tda-invalid candidates don't claim
-   * beam reservations they'll never use. */
-  n = mac->dl_tda_select(mac, candidates, n, frame, slot);
-  if (n == 0)
+   * candidate, marks invalids with skipped=true. */
+  int n_valid = mac->dl_tda_select(mac, candidates, n, frame, slot);
+  if (n_valid == 0)
     return;
 
   /* Step 4: Beam allocation (skip for single beam — candidates default to beam 0) */
   if (num_beams > 1) {
-    n = mac->dl_beam_select(&mac->beam_info, mac->beam_index_list, candidates, n, frame, slot, slots_per_frame);
-    if (n == 0)
+    n_valid = mac->dl_beam_select(&mac->beam_info, mac->beam_index_list, candidates, n, frame, slot, slots_per_frame);
+    if (n_valid == 0)
       return;
   }
 
@@ -1010,7 +998,7 @@ static void nr_dl_schedule(gNB_MAC_INST *mac,
   for (int j = 0; j < n_allocs; j++)
     scheduled[sched_indices[j]] = true;
   for (int i = 0; i < n; i++) {
-    if (!scheduled[i])
+    if (!scheduled[i] && !candidates[i].skipped)
       reset_beam_status(&mac->beam_info, frame, slot, candidates[i].alloc_beam_dir, slots_per_frame, candidates[i].alloc_new_beam);
   }
 
