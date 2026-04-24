@@ -463,6 +463,24 @@ int nr_dl_beam_select_default(NR_beam_info_t *beam_info,
 
 int nr_dl_tda_select_default(const gNB_MAC_INST *mac, nr_dl_candidate_t *candidates, int n_candidates, frame_t frame, slot_t slot);
 
+int compare_dl_pf_rank(const void *a, const void *b);
+bool nr_dl_validate_cce_pucch(const nr_dl_sched_params_t *params, nr_dl_candidate_t *cand);
+bool commit_alloc(const nr_dl_sched_params_t *params, nr_dl_candidate_t *cand);
+
+// Use inside the policy loops: sets RB/MCS on candidate, validates CCE/PUCCH,
+// records index; continues on failure, returns on max_num_ue.
+#define COMMIT_ALLOC(params, idx, cand, rbStart, rbSize, mcs, sched_indices, n_sched) \
+  do {                                                                                \
+    (cand)->alloc_rbStart = (rbStart);                                                \
+    (cand)->alloc_rbSize = (rbSize);                                                  \
+    (cand)->alloc_mcs = (mcs);                                                        \
+    if (!commit_alloc(params, cand))                                                  \
+      continue;                                                                       \
+    (sched_indices)[(n_sched)++] = (idx);                                             \
+    if ((n_sched) >= (params)->max_num_ue)                                            \
+      return (n_sched);                                                               \
+  } while (0)
+
 int nr_dl_proportional_fair(const nr_dl_sched_params_t *params,
                             nr_dl_candidate_t *candidates,
                             int *sched_indices,
@@ -539,6 +557,32 @@ void nr_mac_set_rssi_threshold(nr_power_control_t *pc, int rssi_threshold);
 void nr_mac_signal_dtx(nr_power_control_t *pc);
 int nr_mac_get_tpc(nr_power_control_t *pc);
 
+/* UL scheduler helpers (shared between default policies and custom plugins) */
+void update_ul_ue_R_Qm(int mcs, int mcs_table, const NR_PUSCH_Config_t *pusch_Config, uint16_t *R, uint8_t *Qm);
+uint16_t check_ul_retx_feasibility(const nr_ul_candidate_t *cand,
+                                   int tda,
+                                   const NR_tda_info_t *tda_info,
+                                   const NR_ServingCellConfigCommon_t *scc,
+                                   uint16_t max_rbSize);
+int compare_ul_pf_rank(const void *a, const void *b);
+bool nr_ul_validate_cce(const nr_ul_sched_params_t *params, nr_ul_candidate_t *cand);
+bool commit_ul_alloc(const nr_ul_sched_params_t *params, nr_ul_candidate_t *cand);
+
+/* Use inside policy loops: writes alloc fields, validates CCE, packs dense index,
+   continues on failure, returns n_sched on max_num_ue. */
+#define COMMIT_UL_ALLOC(params, idx, cand, rbStart, rbSize, mcs, sched_indices, n_sched) \
+  do {                                                                                   \
+    (cand)->alloc_rbStart = (rbStart);                                                   \
+    (cand)->alloc_rbSize = (rbSize);                                                     \
+    (cand)->alloc_mcs = (mcs);                                                           \
+    if (!commit_ul_alloc(params, cand))                                                  \
+      continue;                                                                          \
+    (sched_indices)[(n_sched)++] = (idx);                                                \
+    if ((n_sched) >= (params)->max_num_ue)                                               \
+      return (n_sched);                                                                  \
+  } while (0)
+
+/* Default pluggable UL scheduler policy functions */
 void nr_ul_ri_tpmi_select_default(gNB_MAC_INST *mac, nr_ul_candidate_t *cands, int n_cand);
 
 int nr_ul_tda_select_default(gNB_MAC_INST *mac,
