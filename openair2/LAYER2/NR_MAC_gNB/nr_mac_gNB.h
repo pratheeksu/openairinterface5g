@@ -795,6 +795,8 @@ typedef struct NR_UE_info {
   // dedicated BWP is always 1 from the UE's point of view, even if the gNB has multiple BWPs.
   // The below ID is the "true" (non-consecutive) BWP ID from the gNB's point of view
   NR_BWP_Id_t local_bwp_id;
+  /* if nrdc_mode is true then the DU is an SCG DU */
+  bool nrdc_mode;
 } NR_UE_info_t;
 
 typedef struct {

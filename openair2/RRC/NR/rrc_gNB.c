@@ -3385,6 +3385,7 @@ static void handle_rrcReconfigurationComplete(gNB_RRC_INST *rrc, gNB_RRC_UE_t *U
       break;
     case RRC_F1_NRDC_IN_PROGRESS:
       rrc_gnb_nrdc_rrc_reconfiguration_complete_received(rrc, UE, xid);
+      reset_delayed_action(&UE->delayed_action);
       break;
     default:
       LOG_E(RRC, "UE %d: Received unexpected transaction type %d for xid %d\n", UE->rrc_ue_id, UE->xids[xid], xid);
@@ -4035,6 +4036,9 @@ static void rrc_CU_process_ue_context_modification_response(MessageDef *msg_p, i
   }
   gNB_RRC_UE_t *UE = &ue_context_p->ue_context;
 
+  if (UE->nrdc && rrc_gnb_nrdc_wait_for_f1_context_modification_response(UE))
+    return nrdc_rrc_CU_process_ue_context_modification_response(UE, rrc, resp);
+
   bool is_inter_cu_ho = UE->ho_context && UE->ho_context->source && !UE->ho_context->target;
   if (resp->drbs_len > 0) { // DRB to setup
     store_du_f1u_tunnel(resp->drbs, resp->drbs_len, UE);
@@ -4383,6 +4387,27 @@ static void rrc_send_f1_ue_context_modification_request(const gNB_RRC_INST *rrc,
 
   f1_ue_data_t ue_data = cu_get_f1_ue_data(ue_p->rrc_ue_id);
   RETURN_IF_INVALID_ASSOC_ID(ue_data.du_assoc_id);
+
+  /* check if one of the bearers to remove is the NR-DC one, remove it if yes */
+  if (n_rel_drbs) {
+    int nrdc_bearer_index;
+    for (nrdc_bearer_index = 0; nrdc_bearer_index < n_rel_drbs; nrdc_bearer_index++) {
+      if (is_nrdc_bearer(ue_p, rel_drbs[nrdc_bearer_index].id)) {
+        nrdc_release_bearer(rrc, ue_p, rel_drbs[nrdc_bearer_index].id);
+        break;
+      }
+    }
+
+    if (nrdc_bearer_index != n_rel_drbs) {
+      /* nrdc bearer was removed, do not remove it again */
+      n_rel_drbs--;
+      /* do nothing else if no add/rel to do */
+      if (!n_rel_drbs && !n_drbs)
+        return;
+      memcpy(&rel_drbs[nrdc_bearer_index], &rel_drbs[nrdc_bearer_index + 1],
+             sizeof(int) * n_rel_drbs - nrdc_bearer_index);
+    }
+  }
 
   f1ap_ue_context_mod_req_t req = {
       .gNB_CU_ue_id = ue_p->rrc_ue_id,

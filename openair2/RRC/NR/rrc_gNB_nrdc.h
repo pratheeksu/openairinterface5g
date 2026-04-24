@@ -20,4 +20,10 @@ int get_scg_measurement_id(gNB_RRC_UE_t *ue);
 bool rrc_gnb_nrdc_wait_for_f1_context_setup_response(gNB_RRC_UE_t *ue);
 void nrdc_rrc_CU_process_ue_context_setup_response(gNB_RRC_UE_t *ue, gNB_RRC_INST *rrc, f1ap_ue_context_setup_resp_t *resp);
 
+bool is_nrdc_bearer(gNB_RRC_UE_t *ue, int rb_id);
+void nrdc_release_bearer(const gNB_RRC_INST *rrc, gNB_RRC_UE_t *ue, int bearer_id);
+
+bool rrc_gnb_nrdc_wait_for_f1_context_modification_response(gNB_RRC_UE_t *ue);
+void nrdc_rrc_CU_process_ue_context_modification_response(gNB_RRC_UE_t *ue, gNB_RRC_INST *rrc, f1ap_ue_context_mod_resp_t *resp);
+
 #endif /* __RRC_GNB_NRDC_H__ */

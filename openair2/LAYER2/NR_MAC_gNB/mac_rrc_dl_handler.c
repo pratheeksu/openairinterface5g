@@ -589,7 +589,7 @@ static NR_UE_info_t *create_new_UE(gNB_MAC_INST *mac, uint32_t cu_id, const NR_C
  * decode/re-encode cycles per TS 38.473 transparency requirements.
  * @param cellGroup CellGroupConfig to encode
  * @return Encoded byte array */
-static byte_array_t encode_cellgroup_config(const NR_CellGroupConfig_t *cellGroup)
+byte_array_t encode_cellgroup_config(const NR_CellGroupConfig_t *cellGroup)
 {
   byte_array_t cgc = {0};
   ssize_t encoded = uper_encode_to_new_buffer(&asn_DEF_NR_CellGroupConfig, NULL, cellGroup, (void **)&cgc.buf);
@@ -795,6 +795,15 @@ void ue_context_modification_request(const f1ap_ue_context_mod_req_t *req)
     .gNB_DU_ue_id = req->gNB_DU_ue_id,
   };
 
+  /* special handling for NR-DC UEs */
+  NR_SCHED_LOCK(&mac->sched_lock);
+  NR_UE_info_t *UE = find_nr_UE(&RC.nrmac[0]->UE_info, req->gNB_DU_ue_id);
+  if (UE->nrdc_mode) {
+    NR_SCHED_UNLOCK(&mac->sched_lock);
+    return nrdc_ue_context_modification_request(req);
+  }
+  NR_SCHED_UNLOCK(&mac->sched_lock);
+
   NR_UE_NR_Capability_t *ue_cap = NULL;
   if (req->cu_to_du_rrc_info != NULL) {
     AssertFatal(req->cu_to_du_rrc_info->cg_configinfo == NULL, "CG-ConfigInfo not handled\n");
@@ -805,7 +814,7 @@ void ue_context_modification_request(const f1ap_ue_context_mod_req_t *req)
   }
 
   NR_SCHED_LOCK(&mac->sched_lock);
-  NR_UE_info_t *UE = find_nr_UE(&RC.nrmac[0]->UE_info, req->gNB_DU_ue_id);
+  UE = find_nr_UE(&RC.nrmac[0]->UE_info, req->gNB_DU_ue_id);
   if (!UE) {
     LOG_E(NR_MAC, "could not find UE with RNTI %04x\n", req->gNB_DU_ue_id);
     NR_SCHED_UNLOCK(&mac->sched_lock);
@@ -887,6 +896,29 @@ void ue_context_modification_request(const f1ap_ue_context_mod_req_t *req)
     UE->reconfigCellGroup = new_CellGroup;
     configure_UE_BWP(mac, scc, UE, false, NR_SearchSpace__searchSpaceType_PR_common, -1, -1);
   } else {
+    /* hack: for NR-DC, remove the RLC bearer from the MCG group config
+     * of the UE. This bearer is transfered to the SCG.
+     * We check if the modification request asks to remove a bearer and adds
+     * no bearer. If yes, we are doing the NR-DC scenario (hopefully).
+     * This hack has to be removed in the future. (No other solution
+     * was found.)
+     */
+    if (req->drbs_rel_len == 1 && req->srbs_len == 0 && req->drbs_len == 0
+        && req->cu_to_du_rrc_info == NULL && req->rrc_container == NULL) {
+      /* remove the RLC from UE->CellGroup->rlc_BearerToAddModList */
+      long lcid = get_lcid_from_drbid(req->drbs_rel[0].id);
+      LOG_I(NR_MAC, "NR-DC hack: remove RLC lcid %ld from UE cell group config\n", lcid);
+      NR_CellGroupConfig_t *cellGroupConfig = UE->CellGroup;
+      int idx = 0;
+      while (idx < cellGroupConfig->rlc_BearerToAddModList->list.count) {
+        const NR_RLC_BearerConfig_t *bc = cellGroupConfig->rlc_BearerToAddModList->list.array[idx];
+        if (bc->logicalChannelIdentity == lcid)
+          break;
+        idx++;
+      }
+      DevAssert(idx < cellGroupConfig->rlc_BearerToAddModList->list.count);
+      asn_sequence_del(&cellGroupConfig->rlc_BearerToAddModList->list, idx, 1);
+    }
     ASN_STRUCT_FREE(asn_DEF_NR_CellGroupConfig, new_CellGroup); // we actually don't need it
   }
 
