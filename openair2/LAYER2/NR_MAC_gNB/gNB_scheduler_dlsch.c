@@ -576,6 +576,9 @@ static int collect_dl_candidates(gNB_MAC_INST *mac,
           .alloc_beam_idx = 0,
           .alloc_new_beam = false,
       };
+      nr_dl_candidate_t *c = &candidates[n - 1];
+      for (int lcid = 0; lcid < NR_MAX_NUM_LCID; lcid++)
+        c->pending_bytes_per_lcid[lcid] = sched_ctrl->rlc_status[lcid].bytes_in_buffer;
     }
   }
 
@@ -1084,7 +1087,7 @@ static void nr_dl_schedule(gNB_MAC_INST *mac,
         sched_pdsch.action = ack_reconfig;
     }
 
-    post_process_dlsch(mac, pp_pdsch, UE, &sched_pdsch);
+    post_process_dlsch(mac, pp_pdsch, UE, &sched_pdsch, cand);
   }
 }
 
@@ -1225,10 +1228,23 @@ static NR_UE_harq_t *setup_dl_harq_process(NR_UE_sched_ctrl_t *sched_ctrl, NR_sc
   return harq;
 }
 
+void nr_dl_lcid_alloc_default(const gNB_MAC_INST *mac,
+                                     const nr_dl_candidate_t *candidate,
+                                     int tbs_available,
+                                     int lcid_alloc[NR_MAX_NUM_LCID])
+{
+  (void)mac;
+  (void)tbs_available;
+  memset(lcid_alloc, 0, NR_MAX_NUM_LCID * sizeof(int));
+  for (int lcid = 0; lcid < NR_MAX_NUM_LCID; lcid++)
+    lcid_alloc[lcid] = candidate->pending_bytes_per_lcid[lcid];
+}
+
 static void generate_dl_mac_pdu(gNB_MAC_INST *mac,
                                 NR_UE_info_t *UE,
                                 NR_UE_harq_t *harq,
                                 NR_sched_pdsch_t *sched_pdsch,
+                                const nr_dl_candidate_t *candidate,
                                 frame_t frame,
                                 slot_t slot)
 {
@@ -1290,25 +1306,25 @@ static void generate_dl_mac_pdu(gNB_MAC_INST *mac,
     start_meas(&mac->rlc_data_req);
     int sdus = 0;
 
-    if (sched_ctrl->num_total_bytes > 0) {
+    if (sched_ctrl->num_total_bytes > 0 && candidate) {
+      /* ask the LCID allocation policy how many bytes each LC gets */
+      int lcid_alloc[NR_MAX_NUM_LCID] = {0};
+      mac->dl_lcid_alloc(mac, candidate, bufEnd - buf, lcid_alloc);
+
       /* loop over all activated logical channels */
       for (int i = 0; i < seq_arr_size(&sched_ctrl->lc_config); ++i) {
         const nr_lc_config_t *c = seq_arr_at(&sched_ctrl->lc_config, i);
         const int lcid = c->lcid;
 
-        if (sched_ctrl->rlc_status[lcid].bytes_in_buffer == 0)
-          continue; // no data for this LC        tbs_size_t len = 0;
+        if (lcid_alloc[lcid] == 0)
+          continue;
 
         int lcid_bytes = 0;
-        while (bufEnd - buf > sizeof(NR_MAC_SUBHEADER_LONG) + 1) {
-          // we do not know how much data we will get from RLC, i.e., whether it
-          // will be longer than 256B or not. Therefore, reserve space for long header, then
-          // fetch data, then fill real length
+        int lcid_remaining = lcid_alloc[lcid];
+        while (bufEnd - buf > sizeof(NR_MAC_SUBHEADER_LONG) + 1 && lcid_remaining > 0) {
           NR_MAC_SUBHEADER_LONG *header = (NR_MAC_SUBHEADER_LONG *) buf;
-          /* limit requested number of bytes to what preprocessor specified, or
-           * such that TBS is full */
           const rlc_buffer_occupancy_t ndata =
-              min(sched_ctrl->rlc_status[lcid].bytes_in_buffer, bufEnd - buf - sizeof(NR_MAC_SUBHEADER_LONG));
+              min(lcid_remaining, bufEnd - buf - sizeof(NR_MAC_SUBHEADER_LONG));
           tbs_size_t len = nr_mac_rlc_data_req(module_id, rnti, true, lcid, ndata, (char *)buf + sizeof(NR_MAC_SUBHEADER_LONG));
           LOG_D(NR_MAC,
                 "%4d.%2d RNTI %04x: %d bytes from %s %d (ndata %d, remaining size %ld)\n",
@@ -1338,6 +1354,7 @@ static void generate_dl_mac_pdu(gNB_MAC_INST *mac,
           buf += len + sizeof(NR_MAC_SUBHEADER_LONG);
           dlsch_total_bytes += len;
           lcid_bytes += len;
+          lcid_remaining -= len;
           sdus += 1;
         }
 
@@ -1439,7 +1456,7 @@ static void fill_dl_tx_request(post_process_pdsch_t *pdsch,
   pdsch->TX_req->Slot = slot;
 }
 
-void post_process_dlsch(gNB_MAC_INST *nr_mac, post_process_pdsch_t *pdsch, NR_UE_info_t *UE, NR_sched_pdsch_t *sched_pdsch)
+void post_process_dlsch(gNB_MAC_INST *nr_mac, post_process_pdsch_t *pdsch, NR_UE_info_t *UE, NR_sched_pdsch_t *sched_pdsch, const nr_dl_candidate_t *candidate)
 {
   int CC_id = 0;
   frame_t frame = pdsch->frame;
@@ -1609,7 +1626,7 @@ void post_process_dlsch(gNB_MAC_INST *nr_mac, post_process_pdsch_t *pdsch, NR_UE
         pdcch_pdu->StartSymbolIndex,
         pdcch_pdu->DurationSymbols);
 
-  generate_dl_mac_pdu(nr_mac, UE, harq, sched_pdsch, frame, slot);
+  generate_dl_mac_pdu(nr_mac, UE, harq, sched_pdsch, candidate, frame, slot);
   fill_dl_tx_request(pdsch, harq->transportBlock.buf, pduindex, TBS, frame, slot);
 }
 

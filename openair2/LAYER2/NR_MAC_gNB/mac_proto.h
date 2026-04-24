@@ -468,6 +468,11 @@ int nr_dl_proportional_fair(const nr_dl_sched_params_t *params,
                             int *sched_indices,
                             int n_candidates);
 
+void nr_dl_lcid_alloc_default(const gNB_MAC_INST *mac,
+                              const nr_dl_candidate_t *candidate,
+                              int tbs_available,
+                              int lcid_alloc[NR_MAX_NUM_LCID]);
+
 int ul_buffer_index(int frame, int slot, int slots_per_frame, int size);
 void UL_tti_req_ahead_initialization(gNB_MAC_INST *gNB, int n, int CCid, frame_t frameP, int slotP);
 uint64_t get_ssb_bitmap(const NR_ServingCellConfigCommon_t *scc);
@@ -523,7 +528,7 @@ void prepare_du_configuration_update(gNB_MAC_INST *mac,
 
 void nr_mac_clean_cellgroup(NR_CellGroupConfig_t *cell_group);
 
-void post_process_dlsch(gNB_MAC_INST *nr_mac, post_process_pdsch_t *pdsch, NR_UE_info_t *UE, NR_sched_pdsch_t *sched_pdsch);
+void post_process_dlsch(gNB_MAC_INST *nr_mac, post_process_pdsch_t *pdsch, NR_UE_info_t *UE, NR_sched_pdsch_t *sched_pdsch, const nr_dl_candidate_t *candidate);
 void post_process_ulsch(gNB_MAC_INST *nr_mac, post_process_pusch_t *pusch, NR_UE_info_t *UE, NR_sched_pusch_t *sched_pusch);
 
 float nr_mac_get_snr(const nr_power_control_t *pc);

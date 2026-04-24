@@ -885,6 +885,7 @@ struct nr_dl_candidate {
   int8_t retx_harq_pid; ///< HARQ PID for retx, -1 if none
   int retx_rbSize; ///< RBs needed for retx, 0 for new tx
   uint32_t pending_bytes; ///< total bytes waiting in RLC buffers
+  uint32_t pending_bytes_per_lcid[NR_MAX_NUM_LCID]; ///< per-LCID bytes waiting in RLC buffers
   float avg_throughput; ///< EWMA goodput in bps (dl_thr_ue)
   float bler; ///< current BLER estimate
   int current_mcs; ///< current MCS state (retx: from HARQ, new tx: from BLER tracker)
@@ -972,6 +973,15 @@ typedef int (*nr_dl_rb_alloc_fn)(const nr_dl_sched_params_t *params,
                                  nr_dl_candidate_t *candidates,
                                  int *sched_indices,
                                  int n_candidates);
+
+/// Per-LCID byte allocation: decides how many bytes each LCID gets within
+/// the available TBS for an initial transmission.  Called during MAC PDU
+/// generation.  Writes lcid_alloc[lcid] = max data bytes for that LCID.
+/// The execution loop caps actual RLC requests to these budgets.
+typedef void (*nr_dl_lcid_alloc_fn)(const gNB_MAC_INST *mac,
+                                    const nr_dl_candidate_t *candidate,
+                                    int tbs_available,
+                                    int lcid_alloc[NR_MAX_NUM_LCID]);
 
 /* UL scheduling refactored data structures */
 struct nr_ul_sched_params;
@@ -1214,6 +1224,7 @@ typedef struct gNB_MAC_INST_s {
   nr_dl_beam_select_fn dl_beam_select;
   nr_dl_mcs_select_fn dl_mcs_select;
   nr_dl_rb_alloc_fn dl_rb_alloc;
+  nr_dl_lcid_alloc_fn dl_lcid_alloc;
 
   /// UL RI/TPMI + TDA selection + beam selection + MCS selection + RB allocation
   nr_ul_ri_tpmi_select_fn ul_ri_tpmi_select;

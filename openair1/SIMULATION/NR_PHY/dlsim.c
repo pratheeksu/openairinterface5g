@@ -269,7 +269,7 @@ void nr_dlsim_preprocessor(gNB_MAC_INST *nr_mac, post_process_pdsch_t *pp_pdsch)
   AssertFatal(sched_pdsch.mcs >= 0, "invalid mcs %d\n", sched_pdsch.mcs);
   AssertFatal(current_BWP->mcsTableIdx >= 0 && current_BWP->mcsTableIdx <= 2, "invalid mcsTableIdx %d\n", current_BWP->mcsTableIdx);
 
-  post_process_dlsch(nr_mac, pp_pdsch, UE_info, &sched_pdsch);
+  post_process_dlsch(nr_mac, pp_pdsch, UE_info, &sched_pdsch, NULL);
 }
 
 nrUE_params_t nrUE_params;

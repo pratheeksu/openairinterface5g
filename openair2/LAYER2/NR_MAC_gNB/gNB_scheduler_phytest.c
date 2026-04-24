@@ -176,7 +176,7 @@ void nr_preprocessor_phytest(gNB_MAC_INST *mac, post_process_pdsch_t *pp_pdsch)
                                        target_dl_Nl)
                         >> 3;
 
-  post_process_dlsch(mac, pp_pdsch, UE, &sched_pdsch);
+  post_process_dlsch(mac, pp_pdsch, UE, &sched_pdsch, NULL);
 
   /* mark the corresponding RBs as used */
   for (int rb = 0; rb < sched_pdsch.rbSize; rb++)

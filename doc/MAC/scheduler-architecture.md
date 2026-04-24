@@ -24,7 +24,7 @@ primitives in `gNB_scheduler_primitives.c`. Data structures and typedefs are in
 
 ## Scheduler Pipeline
 
-Both DL and UL follow the same 7-stage pipeline.
+Both DL and UL follow the same 7-stage pipeline, plus a DL-only 8th stage.
 
 ```
                          DL                              UL
@@ -62,7 +62,12 @@ Both DL and UL follow the same 7-stage pipeline.
                     ┌─────┴──────┐                  ┌─────┴──────┐    │
                     │  7.Dispatch│                  │  7.Dispatch│  ◄─┘
                     │  (fixed)   │                  │  (fixed)   │
-                    └────────────┘                  └────────────┘
+                    └─────┬──────┘                  └────────────┘
+                          │
+                    ┌─────┴──────┐
+                    │  8. LCID   │  (DL only)
+                    │ Allocation │
+                    └────────────┘
 ```
 
 ### UL preprocessor split
@@ -192,6 +197,29 @@ from each candidate, applies CCE results to `sched_ctrl`, marks the VRB map, and
 `apply_{dl,ul}_{new_transmission,retransmission}` to build the final
 `NR_sched_{pusch,pdsch}_t` and trigger FAPI message preparation.
 
+### Stage 8. Per-LCID Byte Allocation (DL only)
+
+**Function pointer:** `mac->dl_lcid_alloc` (`nr_dl_lcid_alloc_fn`)
+
+Called inside `generate_dl_mac_pdu` for initial DL transmissions. Decides how many bytes
+each logical channel gets within the available TBS. The candidate flows from the dispatch
+stage into `post_process_dlsch` → `generate_dl_mac_pdu`, giving this stage access to the
+full candidate context (per-LCID pending bytes, QoS, priority).
+
+The function pointer receives the MAC instance, the candidate, the TBS available after
+MAC CEs, and writes an output array `lcid_alloc[NR_MAX_NUM_LCID]` specifying the byte
+budget per LCID. The MAC PDU builder then executes the plan: it iterates over LCs in
+config order, requests up to `lcid_alloc[lcid]` bytes from RLC for each, and builds the
+MAC subheaders. RLC may return fewer bytes than budgeted; the builder handles this
+transparently.
+
+**Inputs:** `candidate->pending_bytes_per_lcid[]`, `candidate->fiveQI`, `candidate->priority`,
+`candidate->nssai_sst/sd`, `tbs_available`.
+**Outputs:** `lcid_alloc[NR_MAX_NUM_LCID]` — byte budget per LCID.
+
+Not invoked for retransmissions (which reuse the stored transport block) or for phy-test
+mode (which fills random data). In these cases the candidate pointer is NULL.
+
 ---
 
 ## Default Implementations
@@ -236,6 +264,15 @@ Proportional-fair scheduler with three phases:
 The UL policy also checks PHR (Power Headroom) and adjusts MCS/RBs accordingly.
 All phases use `COMMIT_{DL,UL}_ALLOC` to validate CCE (and PUCCH on DL).
 
+### `nr_dl_lcid_alloc_default`
+
+Greedy fill: sets each LCID's budget to its full `pending_bytes_per_lcid` value. The
+execution loop in `generate_dl_mac_pdu` then fills LCIDs in LC config order until the
+TBS is exhausted, reproducing the original first-come-first-served behavior. A custom
+implementation could use the candidate's QoS fields (`fiveQI`, `priority`, `nssai_sst/sd`)
+to implement weighted fair queuing, strict priority with rate limiting, or slice-aware
+allocation across LCIDs.
+
 ### `nr_dlsch_preprocessor`, `nr_ulsch_preprocessor`
 
 Top-level orchestrators that run the full pipeline above. In phy-test mode, replaced by
@@ -255,6 +292,7 @@ Top-level orchestrators that run the full pipeline above. In phy-test mode, repl
 | `dl_beam_select`         | `nr_dl_beam_select_fn`    | `nr_dl_beam_select_default`   | 4. Beam |
 | `dl_mcs_select`          | `nr_dl_mcs_select_fn`     | `nr_dl_mcs_select_default`    | 5. MCS |
 | `dl_rb_alloc`            | `nr_dl_rb_alloc_fn`       | `nr_dl_proportional_fair`     | 6. RB alloc |
+| `dl_lcid_alloc`          | `nr_dl_lcid_alloc_fn`     | `nr_dl_lcid_alloc_default`    | 8. LCID alloc |
 
 ### UL
 
@@ -279,8 +317,8 @@ Flows through the pipeline accumulating decisions. Three sections:
 
 **Identity / scheduling state** (set by collect, read-only after):
 `UE` pointer, `rnti`, `is_retx`, `retx_harq_pid`, `retx_rbSize`, `pending_bytes`,
-`avg_throughput`, `bler`, `current_mcs`, `max_mcs`, `bwp_start`, `bwp_size`,
-`fiveQI`, `priority`, `nssai_sst`, `nssai_sd`.
+`pending_bytes_per_lcid[NR_MAX_NUM_LCID]`, `avg_throughput`, `bler`, `current_mcs`,
+`max_mcs`, `bwp_start`, `bwp_size`, `fiveQI`, `priority`, `nssai_sst`, `nssai_sd`.
 
 **CSI observations** (set by collect, read-only after):
 `cqi` (DL CQI), `beam_rsrp[]`, `beam_sinr[]` (per-SSB L1-RSRP/SINR, `INT16_MIN` = no data).
@@ -325,6 +363,30 @@ Register it in `openair2/LAYER2/NR_MAC_gNB/main.c`:
 
 ```c
 RC.nrmac[i]->ul_rb_alloc = my_ul_rb_alloc;
+```
+
+### Replacing the per-LCID allocation policy (DL)
+
+Write a function matching the typedef:
+
+```c
+void my_lcid_alloc(const gNB_MAC_INST *mac,
+                   const nr_dl_candidate_t *candidate,
+                   int tbs_available,
+                   int lcid_alloc[NR_MAX_NUM_LCID])
+{
+    memset(lcid_alloc, 0, NR_MAX_NUM_LCID * sizeof(int));
+    // ... use candidate->pending_bytes_per_lcid[], candidate->fiveQI,
+    //     candidate->priority, tbs_available to decide budgets ...
+    for (int lcid = 0; lcid < NR_MAX_NUM_LCID; lcid++)
+        lcid_alloc[lcid] = my_budget_for(lcid);
+}
+```
+
+Register it:
+
+```c
+RC.nrmac[i]->dl_lcid_alloc = my_lcid_alloc;
 ```
 
 ### Replacing other stages

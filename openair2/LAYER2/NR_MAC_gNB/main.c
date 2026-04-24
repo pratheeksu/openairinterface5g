@@ -324,6 +324,7 @@ void mac_top_init_gNB(ngran_node_t node_type,
         RC.nrmac[i]->dl_beam_select = nr_dl_beam_select_default;
         RC.nrmac[i]->dl_tda_select = nr_dl_tda_select_default;
         RC.nrmac[i]->dl_rb_alloc = nr_dl_proportional_fair;
+        RC.nrmac[i]->dl_lcid_alloc = nr_dl_lcid_alloc_default;
       }
       if (!IS_SOFTMODEM_NOSTATS)
         threadCreate(&RC.nrmac[i]->stats_thread,
