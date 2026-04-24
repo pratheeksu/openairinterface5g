@@ -1001,15 +1001,12 @@ typedef struct nr_ul_sched_params {
   slot_t slot; ///< scheduled PUSCH slot (future UL slot)
   int num_beams;
   int max_num_ue;
-  uint16_t slbitmap;
   uint16_t *vrb_map_UL[MAX_NUM_BEAM_PERIODS]; ///< per-beam VRB maps, mutable
   int n_rb_avail[MAX_NUM_BEAM_PERIODS]; ///< available RBs per beam
   int min_rb;
   int min_mcs;
   float bler_lower;
   float bler_upper;
-  int tda;
-  const NR_tda_info_t *tda_info;
   const NR_ServingCellConfigCommon_t *scc;
   const NR_bler_options_t *bler_opts; ///< UL BLER options (for adapt_ul_mcs)
 } nr_ul_sched_params_t;
@@ -1059,6 +1056,11 @@ struct nr_ul_candidate {
   int alloc_beam_idx; ///< beam idx for the scheduled PUSCH slot; -1 = failed
   bool alloc_dci_beam_new; ///< true if dci_beam was newly allocated
   bool alloc_sched_beam_new; ///< true if sched_beam was newly allocated
+  /* ── PF scheduling state (set after RI/TPMI select, read-only after) ──── */
+  float pf_weight; ///< proportional-fair weight: achievable_rate / avg_throughput
+  int pf_rank; ///< 0 = highest priority; consecutive after initial sort
+  bool skipped; ///< true if dropped by TDA/beam select (skip in downstream stages)
+
   /* ul_mcs_select: MCS from BLER/SINR */
   int alloc_mcs; ///< MCS target; SINR-based (harq_round_max==1) or BLER-based
   /* ul_rb_alloc: frequency-domain assignment */
