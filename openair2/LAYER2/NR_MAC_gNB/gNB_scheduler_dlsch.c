@@ -739,20 +739,22 @@ static void nr_dl_schedule(gNB_MAC_INST *mac,
    * verify PF rank order on entry and re-sort only if broken. */
   dl_assign_pf_ranks(candidates, n);
 
-  /* Step 3: Per-UE TDA selection. Resolves tda/tda_info/slbitmap on each
+  /* Step 3: Beam allocation (skip for single beam — candidates default to beam 0).
+   * Done before TDA so that TDA selection can use the allocated beam to check
+   * the correct VRB map and pick the best TDA per beam. */
+  if (num_beams > 1) {
+    int n_beam_valid = mac->dl_beam_select(&mac->beam_info, mac->beam_index_list, candidates, n, frame, slot, slots_per_frame);
+    if (n_beam_valid == 0)
+      return;
+  }
+
+  /* Step 4: Per-UE TDA selection. Resolves tda/tda_info/slbitmap on each
    * candidate, marks invalids with skipped=true. */
   int n_valid = mac->dl_tda_select(mac, candidates, n, frame, slot);
   if (n_valid == 0)
     return;
 
-  /* Step 4: Beam allocation (skip for single beam — candidates default to beam 0) */
-  if (num_beams > 1) {
-    n_valid = mac->dl_beam_select(&mac->beam_info, mac->beam_index_list, candidates, n, frame, slot, slots_per_frame);
-    if (n_valid == 0)
-      return;
-  }
-
-  /* Step 5: MCS adaptation — sets alloc_mcs from BLER state for all surviving candidates.
+  /* Step 5: MCS adaptation — sets alloc_mcs from BLER state for all candidates.
    * Placed after beam allocation so a custom dl_mcs_select can factor in alloc_beam_dir
    * (e.g. use beam RSRP/SINR to bias the MCS target). Also persists the decision so
    * BLER-based MCS ramps even for candidates the policy rejects this slot. */

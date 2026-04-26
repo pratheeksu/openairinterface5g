@@ -1826,6 +1826,45 @@ static int apply_ul_new_transmission(gNB_MAC_INST *nrmac,
   return sched.rbSize;
 }
 
+static float ul_pf_weight(int mcs, int mcs_table, int nrOfLayers, float avg_throughput)
+{
+  uint8_t Qm = nr_get_Qm_ul(mcs, mcs_table);
+  uint16_t R = nr_get_code_rate_ul(mcs, mcs_table);
+  uint32_t tbs = nr_compute_tbs(Qm, R, 1, 10, 0, 0, 0, nrOfLayers) >> 3;
+  return (float)tbs / fmaxf(avg_throughput, 1e-9f);
+}
+
+/// Compare by pf_weight descending (retx get INFINITY so they sort first).
+static int compare_ul_pf_weight_desc(const void *a, const void *b)
+{
+  float wa = ((const nr_ul_candidate_t *)a)->pf_weight;
+  float wb = ((const nr_ul_candidate_t *)b)->pf_weight;
+  return (wa < wb) - (wa > wb);
+}
+
+/// Compare by pf_rank ascending (for self-healing sort).
+int compare_ul_pf_rank(const void *a, const void *b)
+{
+  return ((const nr_ul_candidate_t *)a)->pf_rank - ((const nr_ul_candidate_t *)b)->pf_rank;
+}
+
+/// Compute PF weights and sort candidates once. Downstream default stages
+/// iterate in this order, giving O(1) PF priority access. Custom stages
+/// that don't use PF can ignore pf_rank — the inline rank check in
+/// beam_select / rb_alloc will re-sort if needed.
+static void ul_assign_pf_ranks(nr_ul_candidate_t *candidates, int n)
+{
+  for (int i = 0; i < n; i++) {
+    nr_ul_candidate_t *c = &candidates[i];
+    c->skipped = false;
+    c->pf_weight = c->is_retx ? INFINITY
+                               : ul_pf_weight(c->current_mcs, c->mcs_table, c->alloc_nrOfLayers, c->avg_throughput);
+  }
+  qsort(candidates, n, sizeof(*candidates), compare_ul_pf_weight_desc);
+  for (int i = 0; i < n; i++)
+    candidates[i].pf_rank = i;
+}
+
 static int nr_ul_schedule(gNB_MAC_INST *nrmac,
                           post_process_pusch_t *pp_pusch,
                           nr_ul_candidate_t *candidates,
@@ -1834,7 +1873,8 @@ static int nr_ul_schedule(gNB_MAC_INST *nrmac,
                           int num_beams,
                           int n_rb_sched[num_beams],
                           frame_t sched_frame,
-                          slot_t sched_slot)
+                          slot_t sched_slot,
+                          int k2)
 {
   const int CC_id = 0;
   int frame = pp_pusch->frame;
@@ -1845,14 +1885,14 @@ static int nr_ul_schedule(gNB_MAC_INST *nrmac,
   if (n_cand == 0)
     return 0;
 
-  const int min_rb = nrmac->min_grant_prb;
-  int remainUEs[num_beams];
-  for (int i = 0; i < num_beams; i++)
-    remainUEs[i] = max_num_ue;
-  int num_ue_sched = 0;
+  /* Step 2: RI/TPMI selection */
+  nrmac->ul_ri_tpmi_select(nrmac, candidates, n_cand);
 
-  /* Step 4: Beam selection — marks failed candidates with skipped=true.
-   * Returns count of non-skipped candidates; array is NOT compacted. */
+  /* Step 2.5: Compute PF weights and sort candidates once */
+  ul_assign_pf_ranks(candidates, n_cand);
+
+  /* Step 3: Beam allocation — done before TDA so that TDA selection can use
+   * the allocated beam to check the correct VRB map per beam. */
   int n_beam_valid = nrmac->ul_beam_select(&nrmac->beam_info,
                                            nrmac->beam_index_list,
                                            candidates,
@@ -1865,11 +1905,22 @@ static int nr_ul_schedule(gNB_MAC_INST *nrmac,
   if (n_beam_valid == 0)
     return 0;
 
+  /* Step 4: TDA selection, picks per-cand TDA, validates retx */
+  int n_valid = nrmac->ul_tda_select(nrmac, candidates, n_cand, sched_frame, sched_slot, k2);
+  if (n_valid == 0)
+    return 0;
+
+  const int min_rb = nrmac->min_grant_prb;
+  int remainUEs[num_beams];
+  for (int i = 0; i < num_beams; i++)
+    remainUEs[i] = max_num_ue;
+  int num_ue_sched = 0;
+
   /* Step 5: MCS selection — updates BLER-based MCS for all candidates
-   * (including skipped ones, so the BLER ramp evolves even for unscheduled UEs) */
+   * (including skipped ones, so the BLER ramp evolves even for unscheduled UEs). */
   nrmac->ul_mcs_select(nrmac, candidates, n_cand);
 
-  /* Step 6: RB allocation policy (beam loop is inside the policy) */
+  /* Step 6: RB allocation policy (beam loop is inside the policy). */
   int sched_indices[MAX_MOBILES_PER_GNB];
 
   nr_ul_sched_params_t params = {
@@ -2385,45 +2436,6 @@ static int collect_ul_candidates(gNB_MAC_INST *mac,
   return numUE;
 }
 
-static float ul_pf_weight(int mcs, int mcs_table, int nrOfLayers, float avg_throughput)
-{
-  uint8_t Qm = nr_get_Qm_ul(mcs, mcs_table);
-  uint16_t R = nr_get_code_rate_ul(mcs, mcs_table);
-  uint32_t tbs = nr_compute_tbs(Qm, R, 1, 10, 0, 0, 0, nrOfLayers) >> 3;
-  return (float)tbs / fmaxf(avg_throughput, 1e-9f);
-}
-
-/// Compare by pf_weight descending (retx get INFINITY so they sort first).
-static int compare_ul_pf_weight_desc(const void *a, const void *b)
-{
-  float wa = ((const nr_ul_candidate_t *)a)->pf_weight;
-  float wb = ((const nr_ul_candidate_t *)b)->pf_weight;
-  return (wa < wb) - (wa > wb);
-}
-
-/// Compare by pf_rank ascending (for self-healing sort).
-int compare_ul_pf_rank(const void *a, const void *b)
-{
-  return ((const nr_ul_candidate_t *)a)->pf_rank - ((const nr_ul_candidate_t *)b)->pf_rank;
-}
-
-/// Compute PF weights and sort candidates once. Downstream default stages
-/// iterate in this order, giving O(1) PF priority access. Custom stages
-/// that don't use PF can ignore pf_rank — the inline rank check in
-/// beam_select / rb_alloc will re-sort if needed.
-static void ul_assign_pf_ranks(nr_ul_candidate_t *candidates, int n)
-{
-  for (int i = 0; i < n; i++) {
-    nr_ul_candidate_t *c = &candidates[i];
-    c->skipped = false;
-    c->pf_weight = c->is_retx ? INFINITY
-                               : ul_pf_weight(c->current_mcs, c->mcs_table, c->alloc_nrOfLayers, c->avg_throughput);
-  }
-  qsort(candidates, n, sizeof(*candidates), compare_ul_pf_weight_desc);
-  for (int i = 0; i < n; i++)
-    candidates[i].pf_rank = i;
-}
-
 void nr_ulsch_preprocessor(gNB_MAC_INST *nr_mac, post_process_pusch_t *pp_pusch)
 {
   int frame = pp_pusch->frame;
@@ -2502,26 +2514,11 @@ void nr_ulsch_preprocessor(gNB_MAC_INST *nr_mac, post_process_pusch_t *pp_pusch)
     if (n_cand == 0 && !last_dl)
       break;
 
-    /* Step 2: RI/TPMI selection, sets alloc_nrOfLayers and alloc_tpmi per candidate from SRS */
-    nr_mac->ul_ri_tpmi_select(nr_mac, candidates, n_cand);
-
-    /* Step 2.5: Compute PF weights and sort candidates once. Saves complexity
-     * for the default PF path but doesn't prevent custom stages from using
-     * their own ordering. The inline rank check in beam_select / rb_alloc
-     * will re-sort if needed. */
-    ul_assign_pf_ranks(candidates, n_cand);
-
-    /* Step 3: TDA selection via function pointer, picks per-cand TDA, validates retx.
-     * Returns count of non-skipped candidates; array is NOT compacted. */
-    int n_valid = nr_mac->ul_tda_select(nr_mac, candidates, n_cand, sched_frame, sched_slot, k2);
-    if (n_valid == 0 && !last_dl)
-      break;
-
     nr_mac->mac_stats.ul.total_prb_aggregate += bw;
     int len[num_beams];
     for (int i = 0; i < num_beams; i++)
-      len[i] = bw; /* full bandwidth, TDA selector already picked the best */
-    int sched = nr_ul_schedule(nr_mac, pp_pusch, candidates, n_cand, max_dci, num_beams, len, sched_frame, sched_slot);
+      len[i] = bw;
+    int sched = nr_ul_schedule(nr_mac, pp_pusch, candidates, n_cand, max_dci, num_beams, len, sched_frame, sched_slot, k2);
     LOG_D(NR_MAC,
           "run nr_ul_schedule() at %4d.%2d k2 %d (ULSCH at %4d.%2d) scheduled %d last_dl %d\n",
           frame,

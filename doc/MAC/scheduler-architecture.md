@@ -29,26 +29,26 @@ Both DL and UL follow the same 7-stage pipeline, plus a DL-only 8th stage.
 ```
                          DL                              UL
                     ┌────────────┐                  ┌────────────┐
-                    │  1.Collect │                  │  1.Collect │  ◄─┐
-                    │ Candidates │                  │ Candidates │    │
-                    └─────┬──────┘                  └─────┬──────┘    │
-                          │                               │           │
-                    ┌─────┴──────┐                  ┌─────┴──────┐    │ nr_ulsch_preprocessor
-                    │  2. RI/PMI │                  │  2. RI/TPMI│    │ (iterates over
-                    │ Selection  │                  │ Selection  │    │  reachable UL slots)
+                    │  1.Collect │                  │  1.Collect │  ◄── nr_ulsch_preprocessor
+                    │ Candidates │                  │ Candidates │      (iterates over
+                    └─────┬──────┘                  └─────┬──────┘       reachable UL slots)
+                          │                               │
+                    ┌─────┴──────┐                  ┌─────┴──────┐
+                    │  2. RI/PMI │                  │  2. RI/TPMI│  ◄─┐
+                    │ Selection  │                  │ Selection  │    │
                     └─────┬──────┘                  └─────┬──────┘    │
                           │                               │           │
                     ┌─────┴──────┐                  ┌─────┴──────┐    │
-                    │  3. TDA    │                  │  3. TDA    │    │
-                    │ Selection  │                  │ Selection  │  ◄─┘
-                    └─────┬──────┘                  └─────┬──────┘
-                          │                               │
-                    ┌─────┴──────┐                  ┌─────┴──────┐
-                    │  4. Beam   │                  │  4. Beam   │  ◄─┐
+                    │  3. Beam   │                  │  3. Beam   │    │
                     │ Selection  │                  │ Selection  │    │
                     └─────┬──────┘                  └─────┬──────┘    │
                           │                               │           │ nr_ul_schedule
                     ┌─────┴──────┐                  ┌─────┴──────┐    │ (per UL slot)
+                    │  4. TDA    │                  │  4. TDA    │    │
+                    │ Selection  │                  │ Selection  │    │
+                    └─────┬──────┘                  └─────┬──────┘    │
+                          │                               │           │
+                    ┌─────┴──────┐                  ┌─────┴──────┐    │
                     │  5. MCS    │                  │  5. MCS    │    │
                     │ Selection  │                  │ Selection  │    │
                     └─────┬──────┘                  └─────┬──────┘    │
@@ -72,21 +72,24 @@ Both DL and UL follow the same 7-stage pipeline, plus a DL-only 8th stage.
 
 ### UL preprocessor split
 
-The UL pipeline is split across two functions for a structural reason. The preprocessor
+The UL pipeline is split across two functions. The preprocessor
 (`nr_ulsch_preprocessor`) runs a loop over **multiple candidate UL slots**: for each DL
 slot there may be several reachable UL slots (depending on K2), and the scheduler must
 pick one. The loop iterates until the DCI budget is exhausted or no TDA can reach
 further UL slots.
 
-**Stages 1–3 live in the preprocessor loop** because they are tied to this slot-search
-logic. In particular, TDA selection (step 3) requires knowing `k2` — the offset from
-the current DL slot to the candidate UL slot — to validate retransmission feasibility
-and check that a given TDA can actually reach the target slot. Steps 1–2 (collect,
-RI/TPMI) don't depend on `k2` but are kept in the loop alongside step 3 for locality.
+**Only step 1 (candidate collection) lives in the preprocessor loop.** Candidates depend
+on `sched_frame`/`sched_slot` (e.g. inactivity checks), so they are rebuilt each
+iteration. The preprocessor also runs a lightweight TDA reachability gate
+(`get_num_ul_tda == 0 → break`) to short-circuit the loop when no TDA can reach the
+target slot.
 
-**Stages 4–7 live in `nr_ul_schedule`**, called once per chosen UL slot with
-already-resolved candidates. This function performs beam selection, MCS selection, PRB
-allocation, and dispatch without any knowledge of k2 or the slot search.
+**Steps 2–7 live in `nr_ul_schedule`**, called once per UL slot with the collected
+candidates. `k2` is passed as a parameter for TDA selection. This mirrors the DL
+structure where all stages run in a single function.
+
+Beam selection (step 3) runs before TDA selection (step 4) so that TDA selection can
+use the allocated beam to check the correct VRB map and pick the best TDA per beam.
 
 The preprocessor itself is a pluggable function pointer (`pre_processor_ul`), so a
 custom implementation can replace the entire outer strategy — including how many UL
@@ -134,7 +137,21 @@ feedback.
 **DL outputs:** `cand->alloc_nrOfLayers`, `cand->alloc_pm_index`.
 **UL outputs:** `cand->alloc_nrOfLayers`, `cand->alloc_tpmi`.
 
-### Stage 3. TDA Selection
+### Stage 3. Beam Selection
+
+**Function pointers:** `mac->dl_beam_select` (`nr_dl_beam_select_fn`),
+`mac->ul_beam_select` (`nr_ul_beam_select_fn`)
+
+Assigns a beam structure index to each candidate. For UL, two beams are needed — one
+for the DCI slot, one for the PUSCH slot — since they may fall in different beam periods.
+Candidates that fail beam allocation (no beam available) are marked with `skipped=true`.
+
+Placed before TDA selection so that TDA selection can use the allocated beam to check
+the correct VRB map and pick the best TDA per beam.
+
+**Outputs:** `cand->alloc_beam_idx` (PUSCH/PDSCH beam), `cand->alloc_dci_beam_idx` (UL DCI beam).
+
+### Stage 4. TDA Selection
 
 **Function pointers:** `mac->dl_tda_select` (`nr_dl_tda_select_fn`),
 `mac->ul_tda_select` (`nr_ul_tda_select_fn`)
@@ -142,22 +159,11 @@ feedback.
 Picks the Time Domain Allocation for each candidate. For UL retransmissions, also
 validates feasibility: if the TDA differs from the original transmission (e.g. because
 targeting a different UL slot), the TBS must be preservable with the new symbol/DMRS
-layout. Infeasible retx candidates are dropped (compacted out).
+layout. Infeasible retx candidates are marked with `skipped=true`.
 
 **Outputs:** `cand->alloc_tda`, `cand->alloc_tda_info`, `cand->alloc_slbitmap`. UL retx
 candidates get `cand->retx_rbSize` set.
 **Returns:** number of surviving candidates.
-
-### Stage 4. Beam Selection
-
-**Function pointers:** `mac->dl_beam_select` (`nr_dl_beam_select_fn`),
-`mac->ul_beam_select` (`nr_ul_beam_select_fn`)
-
-Assigns a beam structure index to each candidate. For UL, two beams are needed — one
-for the DCI slot, one for the PUSCH slot — since they may fall in different beam periods.
-Candidates that fail beam allocation (no beam available) are compacted out.
-
-**Outputs:** `cand->alloc_beam_idx` (PUSCH/PDSCH beam), `cand->alloc_dci_beam_idx` (UL DCI beam).
 
 ### Stage 5. MCS Selection
 
