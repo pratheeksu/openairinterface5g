@@ -30,9 +30,10 @@ void nr_ul_ri_tpmi_select_default(gNB_MAC_INST *mac, nr_ul_candidate_t *cands, i
   }
 }
 
-/* Default UL TDA selector: picks the best TDA for the target slot (same for all cands).
- * Validates retx feasibility and drops infeasible retx cands (compact).
- * Each surviving cand gets alloc_tda/alloc_tda_info/alloc_slbitmap populated; retx cands get retx_rbSize set. */
+/* Default UL TDA selector: picks the best TDA per candidate using each candidate's
+ * allocated beam to check the correct VRB map. For retransmissions, reuses the original
+ * TDA when it is among the valid candidates for this slot; otherwise falls back to the
+ * per-beam best TDA with TBS refit. */
 int nr_ul_tda_select_default(gNB_MAC_INST *mac,
                              nr_ul_candidate_t *cands,
                              int n_cand,
@@ -46,31 +47,52 @@ int nr_ul_tda_select_default(gNB_MAC_INST *mac,
     return 0;
 
   NR_ServingCellConfigCommon_t *scc = mac->common_channels[0].ServingCellConfigCommon;
-  int bw = scc->uplinkConfigCommon->frequencyInfoUL->scs_SpecificCarrierList.list.array[0]->carrierBandwidth;
-  int rb_start = 0, rb_len = bw;
-  const NR_tda_info_t *best = get_best_ul_tda(mac, 0, tda_list, n_tda, sched_frame, sched_slot, &rb_start, &rb_len);
-  DevAssert(best->valid_tda);
-  int tda = seq_arr_dist(&mac->ul_tda, seq_arr_front(&mac->ul_tda), best);
-  AssertFatal(tda >= 0 && tda < 16, "illegal TDA index %d\n", tda);
-  uint16_t slbitmap = SL_to_bitmap(best->startSymbolIndex, best->nrOfSymbols);
 
-  /* Assign TDA to all cands + validate retx */
   int n_valid = 0;
   for (int i = 0; i < n_cand; i++) {
     if (cands[i].skipped)
       continue;
-    cands[i].alloc_tda = tda;
-    cands[i].alloc_tda_info = *best;
-    cands[i].alloc_slbitmap = slbitmap;
+
+    int beam = cands[i].alloc_beam_idx;
+    int rb_start = 0, rb_len = cands[i].bwp_size;
+    const NR_tda_info_t *best = get_best_ul_tda(mac, beam, tda_list, n_tda, sched_frame, sched_slot, &rb_start, &rb_len);
+    DevAssert(best->valid_tda);
 
     if (cands[i].is_retx) {
+      /* Try to reuse the original TDA if it is among the valid candidates for this slot */
+      const NR_sched_pusch_t *retInfo =
+          &cands[i].UE->UE_sched_ctrl.ul_harq_processes[cands[i].retx_harq_pid].sched_pusch;
+      /* Check exact TDA index, not just K2 — same K2 doesn't guarantee valid symbols in mixed slots */
+      const NR_tda_info_t *orig = seq_arr_at(&mac->ul_tda, retInfo->time_domain_allocation);
+      ptrdiff_t offset = orig - tda_list;
+      if (offset >= 0 && offset < n_tda) {
+        /* Original TDA is valid — reuse it directly */
+        cands[i].alloc_tda = retInfo->time_domain_allocation;
+        cands[i].alloc_tda_info = *orig;
+        cands[i].alloc_slbitmap = SL_to_bitmap(orig->startSymbolIndex, orig->nrOfSymbols);
+        cands[i].retx_rbSize = retInfo->rbSize;
+        n_valid++;
+        continue;
+      }
+      /* Original TDA not available — try the per-beam best TDA with TBS refit */
+      int tda = seq_arr_dist(&mac->ul_tda, seq_arr_front(&mac->ul_tda), best);
+      AssertFatal(tda >= 0 && tda < 16, "illegal TDA index %d\n", tda);
       uint16_t needed = check_ul_retx_feasibility(&cands[i], tda, best, scc, cands[i].bwp_size);
       if (needed == 0) {
         LOG_D(NR_MAC, "[UE %04x] retx infeasible with TDA %d, deferring\n", cands[i].UE->rnti, tda);
         cands[i].skipped = true;
         continue;
       }
+      cands[i].alloc_tda = tda;
+      cands[i].alloc_tda_info = *best;
+      cands[i].alloc_slbitmap = SL_to_bitmap(best->startSymbolIndex, best->nrOfSymbols);
       cands[i].retx_rbSize = needed;
+    } else {
+      int tda = seq_arr_dist(&mac->ul_tda, seq_arr_front(&mac->ul_tda), best);
+      AssertFatal(tda >= 0 && tda < 16, "illegal TDA index %d\n", tda);
+      cands[i].alloc_tda = tda;
+      cands[i].alloc_tda_info = *best;
+      cands[i].alloc_slbitmap = SL_to_bitmap(best->startSymbolIndex, best->nrOfSymbols);
     }
     n_valid++;
   }
