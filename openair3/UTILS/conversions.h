@@ -268,12 +268,12 @@ do {                                    \
     BUFFER_TO_UINT32((aSN)->buf, x);               \
   } while (0)
 
-#define BIT_STRING_TO_NR_CELL_IDENTITY(aSN, vALUE)                     \
-do {                                                                   \
-    DevCheck((aSN)->bits_unused == 4, (aSN)->bits_unused, 4, 0);       \
-    vALUE = ((aSN)->buf[0] << 28) | ((aSN)->buf[1] << 20) |            \
-        ((aSN)->buf[2] << 12) | ((aSN)->buf[3]<<4) | ((aSN)->buf[4]>>4);  \
-} while(0)
+#define BIT_STRING_TO_NR_CELL_IDENTITY(aSN, vALUE)                                                                \
+  do {                                                                                                            \
+    DevCheck((aSN)->bits_unused == 4, (aSN)->bits_unused, 4, 0);                                                  \
+    (vALUE) = ((uint64_t)(aSN)->buf[0] << 28) | ((uint64_t)(aSN)->buf[1] << 20) | ((uint64_t)(aSN)->buf[2] << 12) \
+              | ((uint64_t)(aSN)->buf[3] << 4) | ((uint64_t)(aSN)->buf[4] >> 4);                                  \
+  } while (0)
 
 #define MCC_HUNDREDS(vALUE) \
     ((vALUE) / 100)
