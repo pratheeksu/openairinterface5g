@@ -3974,6 +3974,7 @@ static uint8_t unpack_tx_request(uint8_t **ppReadPackedMsg, uint8_t *end, void *
 }
 
 static uint8_t unpack_ue_release_request(uint8_t **ppReadPackedMsg, uint8_t *end, void *msg, nfapi_p7_codec_config_t *config) {
+  UNUSED(config);
   uint8_t proceed = 1;
   nfapi_ue_release_request_t *pNfapiMsg = (nfapi_ue_release_request_t *)msg;
 
@@ -5138,6 +5139,7 @@ static uint8_t unpack_nrach_indication_rel13_value(void *tlv, uint8_t **ppReadPa
 }
 
 static uint8_t unpack_ue_release_resp(uint8_t **ppReadPackedMsg, uint8_t *end, void *msg, nfapi_p7_codec_config_t *config) {
+  UNUSED(config);
   nfapi_ue_release_response_t *pNfapiMsg = (nfapi_ue_release_response_t *)msg;
 
   if(pull32(ppReadPackedMsg, &pNfapiMsg->error_code, end) == 0) {
@@ -5378,6 +5380,7 @@ int nfapi_p7_message_header_unpack(void *pMessageBuf,
                                    uint32_t unpackedBufLen,
                                    nfapi_p7_codec_config_t *config)
 {
+  UNUSED(config);
   nfapi_p7_message_header_t *pMessageHeader = pUnpackedBuf;
   uint8_t *pReadPackedMessage = pMessageBuf;
 

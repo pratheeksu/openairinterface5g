@@ -11,6 +11,7 @@
 #include "nfapi_interface.h"
 #include "debug.h"
 #include "nfapi.h"
+#include "common/platform_types.h"
 
 // Pack routines
 static uint8_t pack_pnf_param_request(void *msg, uint8_t **ppWritePackedMsg, uint8_t *end, nfapi_p4_p5_codec_config_t *config) {
@@ -565,6 +566,7 @@ static uint8_t pack_param_response(void *msg, uint8_t **ppWritePackedMsg, uint8_
 
 static uint8_t pack_config_request(void *msg, uint8_t **ppWritePackedMsg, uint8_t *end, nfapi_p4_p5_codec_config_t *config)
 {
+  UNUSED(config);
   nfapi_config_request_t *pNfapiMsg = (nfapi_config_request_t *)msg;
   return (
       push8(pNfapiMsg->num_tlv, ppWritePackedMsg, end) &&
@@ -1205,6 +1207,7 @@ static uint8_t pack_p5_message_body(nfapi_p4_p5_message_header_t *header, uint8_
 
 // Main pack function - public
 int nfapi_p5_message_pack(void *pMessageBuf, uint32_t messageBufLen, void *pPackedBuf, uint32_t packedBufLen, nfapi_p4_p5_codec_config_t *config) {
+  UNUSED(messageBufLen);
   nfapi_p4_p5_message_header_t *pMessageHeader = pMessageBuf;
   uint8_t *pWritePackedMessage = pPackedBuf;
   uint8_t *pPackedLengthField = &pWritePackedMessage[4];
@@ -1970,6 +1973,7 @@ int nfapi_p5_message_header_unpack(void *pMessageBuf,
                                    uint32_t unpackedBufLen,
                                    nfapi_p4_p5_codec_config_t *config)
 {
+  UNUSED(config);
   nfapi_p4_p5_message_header_t *pMessageHeader = pUnpackedBuf;
   uint8_t *pReadPackedMessage = pMessageBuf;
 
