@@ -1,0 +1,27 @@
+# SPDX-License-Identifier: LicenseRef-CSSL-1.0
+
+FROM ran-base:latest AS optional-base
+
+RUN DEBIAN_FRONTEND=noninteractive
+
+RUN apt update && \
+    apt upgrade --yes && \
+    apt install --yes \
+    libglfw3-dev
+
+WORKDIR /oai-src
+COPY . .
+
+FROM optional-base AS build-imscope
+
+# Consider using sharing=locked in case more stages are added in the future
+RUN \
+    # Mount CCache cache directory
+    --mount=type=cache,target=/root/.cache/ccache/ \
+    # Mount CPM package cache
+    --mount=type=cache,target=/root/.cache/cpm/ \
+    mkdir -p /build-imscope && \
+    cd /build-imscope && \
+    cmake /oai-src/ -DENABLE_IMSCOPE=ON -GNinja && \
+    ninja imscope nr-softmodem nr-uesoftmodem
+
