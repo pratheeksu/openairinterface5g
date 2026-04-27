@@ -23,5 +23,14 @@
 #include "XNAP_BroadcastPLMNinTAISupport-Item.h"
 #include "XNAP_Cause.h"
 
+#include "XNAP_NR-CGI.h"
+#include "XNAP_PDUSessionResourcesToBeSetup-Item.h"
+#include "XNAP_GTPtunnelTransportLayerInformation.h"
+#include "XNAP_QoSFlowsToBeSetup-Item.h"
+#include "XNAP_NonDynamic5QIDescriptor.h"
+#include "XNAP_Dynamic5QIDescriptor.h"
+#include "XNAP_AllocationandRetentionPriority.h"
+#include "XNAP_LastVisitedCell-Item.h"
+
 #endif // XNAP_LIB_INCLUDES_H
 

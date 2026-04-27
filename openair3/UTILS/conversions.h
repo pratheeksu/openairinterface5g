@@ -216,6 +216,14 @@ do {                            \
     memcpy((bitstring)->buf, kenbstar, 32*sizeof(uint8_t));            \
 }while(0)
 
+#define KGNB_STAR_TO_BIT_STRING(kgnbstar, bitstring)          \
+  do {                                                        \
+    (bitstring)->size = 32;                                   \
+    (bitstring)->bits_unused = 0;                             \
+    (bitstring)->buf = calloc(32, sizeof(uint8_t));           \
+    memcpy((bitstring)->buf, kgnbstar, 32 * sizeof(uint8_t)); \
+  } while (0)
+
 #define UEAGMAXBITRTD_TO_ASN_PRIMITIVES(uegmaxbitrtd, asnprimitives)        \
 do {                                         \
     (asnprimitives)->size=5;                        \
