@@ -14,14 +14,24 @@ COPY . .
 
 FROM optional-base AS build-imscope
 
-# Consider using sharing=locked in case more stages are added in the future
 RUN \
     # Mount CCache cache directory
-    --mount=type=cache,target=/root/.cache/ccache/ \
+    --mount=type=cache,target=/root/.cache/ccache/,id=ccache_imscope \
     # Mount CPM package cache
-    --mount=type=cache,target=/root/.cache/cpm/ \
+    --mount=type=cache,target=/root/.cache/cpm/,id=cpmcache_imscope \
     mkdir -p /build-imscope && \
     cd /build-imscope && \
     cmake /oai-src/ -DENABLE_IMSCOPE=ON -GNinja && \
     ninja imscope nr-softmodem nr-uesoftmodem
 
+FROM optional-base AS build-tracy
+
+RUN \
+    # Mount CCache cache directory
+    --mount=type=cache,target=/root/.cache/ccache/,id=ccache_tracy \
+    # Mount CPM package cache
+    --mount=type=cache,target=/root/.cache/cpm/,id=cpmcache_tracy \
+    mkdir -p /build-tracy && \
+    cd /build-tracy && \
+    cmake /oai-src/ -DTRACY_ENABLE=ON -GNinja && \
+    ninja nr-softmodem nr-uesoftmodem
