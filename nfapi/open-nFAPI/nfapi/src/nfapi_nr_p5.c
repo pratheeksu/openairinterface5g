@@ -172,6 +172,7 @@ int nfapi_nr_p5_message_pack(void *pMessageBuf,
                              uint32_t packedBufLen,
                              nfapi_p4_p5_codec_config_t *config)
 {
+  UNUSED(messageBufLen);
   nfapi_nr_p4_p5_message_header_t *pMessageHeader = pMessageBuf;
   uint8_t *pWritePackedMessage = pPackedBuf;
 
@@ -368,6 +369,7 @@ bool nfapi_nr_p5_message_header_unpack(void *pMessageBuf,
                                        uint32_t unpackedBufLen,
                                        nfapi_p4_p5_codec_config_t *config)
 {
+  UNUSED(config);
   nfapi_nr_p4_p5_message_header_t *pMessageHeader = pUnpackedBuf;
   uint8_t *pReadPackedMessage = pMessageBuf;
 

@@ -510,6 +510,7 @@ bool nfapi_nr_p7_message_header_unpack(void *pMessageBuf,
                                       uint32_t unpackedBufLen,
                                       nfapi_p7_codec_config_t *config)
 {
+  UNUSED(config);
   nfapi_nr_p7_message_header_t *pMessageHeader = pUnpackedBuf;
   uint8_t *pReadPackedMessage = pMessageBuf;
 
