@@ -458,7 +458,6 @@ static inline uint32_t nrLDPC_decoder_core_dynamic(int8_t* p_llr,
 {
   cudaError_t err_core = cudaSuccess;
   bool graph_executed = false;
-
   uint16_t Z = p_decParams->Z;
   uint8_t BG = p_decParams->BG;
   uint8_t R = p_decParams->R;

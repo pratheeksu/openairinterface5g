@@ -25,8 +25,11 @@
 #include "PHY/NR_REFSIG/ul_ref_seq_nr.h"
 #include <string.h>
 #include "nfapi/open-nFAPI/fapi/inc/nr_fapi_p5_utils.h"
+
 #ifdef ENABLE_CUDA
-#include <cuda_runtime.h>
+
+  #include <cuda_runtime.h>
+
 #endif
 extern uint32_t use_gpu;
 
@@ -195,12 +198,12 @@ void phy_init_nr_gNB(PHY_VARS_gNB *gNB)
     for (int i = 0; i < max_ul_mimo_layers; i++) {
     }
 #ifdef ENABLE_CUDA
-    cudaError_t err = cudaHostAlloc((void**)&pusch->llr,(132 * 3 * 8448 )*sizeof(int16_t),cudaHostAllocMapped); // 132 segments 8448*3 coded bits per segment 
+    cudaError_t err = cudaHostAlloc((void**)&pusch->llr,(144 * 3 * 8448 )*sizeof(int16_t),cudaHostAllocMapped); // 144 segments 8448*3 coded bits per segment 
     AssertFatal(err == cudaSuccess,"CUDA Error (pusch_llr): %s\n",cudaGetErrorString(err));
     err=cudaHostGetDevicePointer((void**)&pusch->llr_dev,pusch->llr,0);
     AssertFatal(err == cudaSuccess,"CUDA Error (harq_f_dev): %s\n",cudaGetErrorString(err));
 #else
-    pusch->llr = (int16_t *)malloc16_clear((132 * 3 * 8448) * sizeof(int16_t)); //132 segments 3*8448 coded bits per segment 
+    pusch->llr = (int16_t *)malloc16_clear((144 * 3 * 8448) * sizeof(int16_t)); //144 segments 3*8448 coded bits per segment 
 #endif
     pusch->ul_valid_re_per_slot = (int16_t *)malloc16_clear(sizeof(int16_t) * fp->symbols_per_slot);
   } // ulsch_id

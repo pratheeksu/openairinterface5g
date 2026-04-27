@@ -39,8 +39,8 @@ extern "C" {
 #define num_TotalBlocks_cn_BG1_R89_Node 5
 #define num_TotalBlocks_bn_BG1_R89_Node 27
 
-//#define JETSON_ORIN 0 
-#define GH200
+#define JETSON_ORIN 
+//#define GH200
 
 #if defined(GH200)
 #define NodeEdge_Switch_Cn_R13 32
