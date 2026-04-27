@@ -26,4 +26,8 @@ void nrdc_release_bearer(const gNB_RRC_INST *rrc, gNB_RRC_UE_t *ue, int bearer_i
 bool rrc_gnb_nrdc_wait_for_f1_context_modification_response(gNB_RRC_UE_t *ue);
 void nrdc_rrc_CU_process_ue_context_modification_response(gNB_RRC_UE_t *ue, gNB_RRC_INST *rrc, f1ap_ue_context_mod_resp_t *resp);
 
+bool nrdc_handle_f1_context_release_complete(gNB_RRC_INST *rrc, gNB_RRC_UE_t *ue, f1ap_ue_context_rel_cplt_t *complete);
+
+void nrdc_scg_ue_release(gNB_RRC_INST *rrc, gNB_RRC_UE_t *ue);
+
 #endif /* __RRC_GNB_NRDC_H__ */

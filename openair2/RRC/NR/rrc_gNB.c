@@ -3933,6 +3933,11 @@ static void rrc_CU_process_ue_context_release_request(MessageDef *msg_p, sctp_as
   }
 
   gNB_RRC_UE_t *UE = &ue_context_p->ue_context;
+
+  if (UE->nrdc != NULL)
+    /* UE has NR-DC connection, send release to the SCG DU */
+    nrdc_scg_ue_release(rrc, UE);
+
   if (UE->ho_context != NULL) {
     nr_ho_source_cu_t *source_ctx = UE->ho_context->source;
     bool from_source_du = source_ctx && source_ctx->cell->assoc_id == assoc_id;
@@ -3990,6 +3995,10 @@ static void rrc_delete_ue_data(gNB_RRC_UE_t *UE)
   seq_arr_free(&UE->pduSessions, free_pdusession);
   seq_arr_free(&UE->drbs, free_drb);
   seq_arr_free(&UE->serving_cells, NULL);
+  if (UE->nrdc) {
+    free(UE->nrdc);
+    UE->nrdc = NULL;
+  }
 }
 
 void rrc_remove_ue(gNB_RRC_INST *rrc, rrc_gNB_ue_context_t *ue_context_p)
@@ -4016,6 +4025,14 @@ static void rrc_CU_process_ue_context_release_complete(MessageDef *msg_p)
   }
 
   gNB_RRC_UE_t *UE = &ue_context_p->ue_context;
+
+  /* check if this message is for NR-DC */
+  if (UE->nrdc) {
+    /* if the message is handled by the NR-DC module, do nothing more */
+    if (nrdc_handle_f1_context_release_complete(rrc, UE, complete))
+      return;
+  }
+
   if (UE->an_release) {
     /* only trigger release if it has been requested by core
      * otherwise, it might be CU that requested release on a DU during normal
@@ -5073,6 +5090,10 @@ void rrc_gNB_generate_RRCRelease(gNB_RRC_INST *rrc, gNB_RRC_UE_t *UE)
   };
   deliver_ue_ctxt_release_data_t data = {.rrc = rrc, .release_cmd = &ue_context_release_cmd, .assoc_id = ue_data.du_assoc_id};
   nr_pdcp_data_req_srb(UE->rrc_ue_id, DL_SCH_LCID_DCCH, rrc_gNB_mui++, size, buffer, rrc_deliver_ue_ctxt_release_cmd, &data);
+
+  /* if the UE is in NR-DC, release it from SCG DU */
+  if (UE->nrdc)
+    nrdc_scg_ue_release(rrc, UE);
 
 #ifdef E2_AGENT
   E2_AGENT_SIGNAL_DL_DCCH_RRC_MSG(buffer, size, NR_DL_DCCH_MessageType__c1_PR_rrcRelease);
