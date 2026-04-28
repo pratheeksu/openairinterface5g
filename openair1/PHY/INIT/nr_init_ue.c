@@ -450,6 +450,15 @@ void init_nr_ue_transport(PHY_VARS_NR_UE *ue)
   nr_init_ul_harq_processes(ue->ul_harq_processes, NR_MAX_HARQ_PROCESSES, ue->frame_parms.N_RB_UL, ue->frame_parms.nb_antennas_tx);
 }
 
+void init_phy_nr_measurements(PHY_VARS_NR_UE *ue)
+{
+  PHY_NR_MEASUREMENTS *measurements = &ue->measurements;
+  measurements->meas_request_pending = false;
+  measurements->search_new_cells_pending = false;
+  measurements->last_blind_slot = -1;
+  measurements->last_slot = -1;
+}
+
 void clean_UE_harq(PHY_VARS_NR_UE *UE)
 {
   for (int harq_pid = 0; harq_pid < NR_MAX_HARQ_PROCESSES; harq_pid++) {

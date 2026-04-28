@@ -222,6 +222,20 @@ void nr_ue_ssb_rsrp_measurements(PHY_VARS_NR_UE *ue,
                      ue->measurements.ssb_sinr_dB[ssb_index]);
 }
 
+static void reset_neighboring_cell_info(fapi_nr_neighboring_cell_t *neighbor_cell,
+                                        neighboring_cell_info_t *neighboring_cell_info,
+                                        uint32_t samples_per_slot_wCP)
+{
+  neighboring_cell_info->pss_search_start = 0;
+  neighboring_cell_info->pss_search_length = samples_per_slot_wCP;
+  neighboring_cell_info->ssb_slot = -1;
+  neighboring_cell_info->valid_meas = false;
+  neighboring_cell_info->consec_fail = 0;
+  neighbor_cell->is_candidate = false;
+  if (!neighbor_cell->Nid_cell_was_configured)
+    neighbor_cell->Nid_cell = -1;
+}
+
 static bool search_neighboring_cell(UE_nr_rxtx_proc_t *proc,
                                     NR_DL_FRAME_PARMS *frame_parms,
                                     fapi_nr_neighboring_cell_t *nr_neighboring_cell,
@@ -263,6 +277,8 @@ static bool search_neighboring_cell(UE_nr_rxtx_proc_t *proc,
       .sss_phase = &sss_phase,
       .pss_peak = &pss_peak,
       .pss_avg = &pss_avg,
+      .search_start = 0,
+      .search_length = frame_parms->samples_per_slot_wCP
   };
 
   bool cell_detected = false;
@@ -297,9 +313,11 @@ static bool search_neighboring_cell(UE_nr_rxtx_proc_t *proc,
 
   if (cell_detected) {
     nr_neighboring_cell->Nid_cell = detected_nid_cell;
-    LOG_I(NR_PHY,
-          "Found neighbor cell PCI=%d (sss_metric=%d, ssb_offset=%d, pss_peak=%d dB, pss_avg=%d dB)\n",
+    nr_neighboring_cell->is_candidate = true;
+    LOG_D(NR_PHY,
+          "Candidate for neighboring cell found: PCI=%d, slot=%d, sss_metric=%d, ssb_offset=%d, pss_peak=%d dB, pss_avg=%d dB\n",
           detected_nid_cell,
+          proc->nr_slot_rx,
           sss_metric,
           ssb_offset,
           pss_peak,
@@ -308,6 +326,7 @@ static bool search_neighboring_cell(UE_nr_rxtx_proc_t *proc,
     // Update search window
     neighboring_cell_info->pss_search_start = ssb_offset + frame_parms->nb_prefix_samples - 16;
     neighboring_cell_info->pss_search_length = 32;
+    neighboring_cell_info->ssb_slot = proc->nr_slot_rx;
   }
 
   return cell_detected;
@@ -318,7 +337,8 @@ static bool validate_known_pci(NR_DL_FRAME_PARMS *frame_parms,
                                neighboring_cell_info_t *neighboring_cell_info,
                                c16_t **rxdata,
                                c16_t rxdataF[][frame_parms->nb_antennas_rx][frame_parms->ofdm_symbol_size],
-                               c16_t pssTime[][frame_parms->ofdm_symbol_size])
+                               c16_t pssTime[][frame_parms->ofdm_symbol_size],
+                               int slot)
 {
   int known_pci = nr_neighboring_cell->Nid_cell;
   int pss_index = GET_NID2(known_pci);
@@ -344,8 +364,9 @@ static bool validate_known_pci(NR_DL_FRAME_PARMS *frame_parms,
     if (neighboring_cell_info->valid_meas)
       neighboring_cell_info->consec_fail++;
     LOG_D(NR_PHY,
-          "PSS validation failed for PCI=%d (search window: start=%d, length=%d, peak=%d dB, avg=%d dB), consec_fail=%d\n",
+          "PSS validation failed for PCI=%d (slot=%d, search window: start=%d, length=%d, peak=%d dB, avg=%d dB), consec_fail=%d\n",
           known_pci,
+          slot,
           start,
           length,
           pss_peak,
@@ -390,18 +411,21 @@ static bool validate_known_pci(NR_DL_FRAME_PARMS *frame_parms,
     if (neighboring_cell_info->valid_meas)
       neighboring_cell_info->consec_fail++;
     LOG_D(NR_PHY,
-          "Known PCI validation failed for PCI=%d (metric=%d), consec_fail=%d\n",
+          "Known PCI validation failed for PCI=%d (metric=%d, slot=%d), consec_fail=%d\n",
           known_pci,
           sss_metric,
+          slot,
           neighboring_cell_info->consec_fail);
     return false;
   }
 
-  LOG_D(NR_PHY, "Known PCI validation completed for PCI=%d, metric=%d\n", known_pci, sss_metric);
+  LOG_D(NR_PHY, "Known PCI validation completed for PCI=%d, metric=%d, slot=%d\n", known_pci, sss_metric, slot);
+  nr_neighboring_cell->is_candidate = false;
   neighboring_cell_info->consec_fail = 0;
   neighboring_cell_info->valid_meas = true;
   neighboring_cell_info->pss_search_start = peak_position - 16;
   neighboring_cell_info->pss_search_length = 32;
+  neighboring_cell_info->ssb_slot = slot;
 
   return true;
 }
@@ -468,7 +492,8 @@ void search_new_neighboring_cell(UE_nr_rxtx_proc_t *proc, PHY_VARS_NR_UE *ue, c1
     // to take into account the possibility of PSS between the two frames
     neighboring_cell_info_t *neighboring_cell_info = &ue->measurements.neighboring_cell_info[cell_idx];
     if (neighboring_cell_info->pss_search_length == 0) {
-      neighboring_cell_info->pss_search_length = frame_parms->samples_per_frame + (2 * frame_parms->ofdm_symbol_size);
+      neighboring_cell_info->pss_search_length = frame_parms->samples_per_slot_wCP;
+      neighboring_cell_info->ssb_slot = -1;
     }
 
     memset(rxdataF, 0, sizeof(rxdataF));
@@ -515,21 +540,24 @@ void do_neighboring_cell_measurements(UE_nr_rxtx_proc_t *proc, PHY_VARS_NR_UE *u
     // to take into account the possibility of PSS between the two frames
     neighboring_cell_info_t *neighboring_cell_info = &ue->measurements.neighboring_cell_info[cell_idx];
     if (neighboring_cell_info->pss_search_length == 0) {
-      neighboring_cell_info->pss_search_length = frame_parms->samples_per_frame + (2 * frame_parms->ofdm_symbol_size);
+      neighboring_cell_info->pss_search_length = frame_parms->samples_per_slot_wCP;
+      neighboring_cell_info->ssb_slot = -1;
     }
+
+    if (neighboring_cell_info->ssb_slot != -1 && neighboring_cell_info->ssb_slot != proc->nr_slot_rx)
+      continue;
 
     memset(rxdataF, 0, sizeof(rxdataF));
 
-    if (!validate_known_pci(frame_parms, neighbor_cell, neighboring_cell_info, rxdata, rxdataF, pssTime)) {
+    if (!validate_known_pci(frame_parms, neighbor_cell, neighboring_cell_info, rxdata, rxdataF, pssTime, proc->nr_slot_rx)) {
       if (neighboring_cell_info->consec_fail >= NEIGHBOR_CELL_MAX_CONSECUTIVE_FAILURES) {
-        LOG_D(NR_PHY, "Max consecutive failures reached for PCI=%d, resetting to full search\n", neighbor_cell->Nid_cell);
-        neighboring_cell_info->pss_search_start = 0;
-        neighboring_cell_info->pss_search_length = frame_parms->samples_per_frame + (2 * frame_parms->ofdm_symbol_size);
-        neighboring_cell_info->valid_meas = false;
-        neighboring_cell_info->consec_fail = 0;
-        send_ssb_rsrp_meas(ue, proc, neighbor_cell->Nid_cell, INT_MAX, true, -1, 0.0);
-        if (!neighbor_cell->Nid_cell_was_configured)
-          neighbor_cell->Nid_cell = -1;
+        if (neighbor_cell->is_candidate) {
+          LOG_D(NR_PHY, "Neighbor cell confirmation failed for candidate with PCI=%d\n", neighbor_cell->Nid_cell);
+        } else {
+          LOG_D(NR_PHY, "Max consecutive failures reached for PCI=%d, resetting to full search\n", neighbor_cell->Nid_cell);
+          send_ssb_rsrp_meas(ue, proc, neighbor_cell->Nid_cell, INT_MAX, true, -1, 0.0);
+        }
+        reset_neighboring_cell_info(neighbor_cell, neighboring_cell_info, frame_parms->samples_per_slot_wCP);
       }
       continue;
     }

@@ -162,7 +162,9 @@ bool nr_search_ssb_common(nr_ssb_search_params_t *params)
                                           pssTime,
                                           params->search_frame_id,
                                           params->fo_flag,
-                                          params->target_nid_cell);
+                                          params->target_nid_cell,
+                                          params->search_start,
+                                          params->search_length);
 
   // This is the frequency offset that will be applied in the compensation,
   // and it takes into account the values already applied previously during the loop.
@@ -324,6 +326,8 @@ void nr_scan_ssb(void *arg)
         .sss_phase = &sss_phase,
         .pss_peak = &ssbInfo->pssCorrPeakPower,
         .pss_avg = &ssbInfo->pssCorrAvgPower,
+        .search_start = -1,
+        .search_length = -1
     };
 
     ssbInfo->syncRes.frame_id = frame_id;

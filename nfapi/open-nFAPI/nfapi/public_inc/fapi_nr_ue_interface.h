@@ -717,6 +717,7 @@ typedef struct {
   uint8_t active;
   uint32_t ssb_freq;
   bool Nid_cell_was_configured; // False = Nid_cell wasn't configured, and if it exists, it's because it was measured.
+  bool is_candidate;
 } fapi_nr_neighboring_cell_t;
 
 typedef struct {

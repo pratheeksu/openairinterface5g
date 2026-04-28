@@ -304,7 +304,9 @@ nr_pss_info_t pss_synchro_nr(const c16_t **rxdata,
                              const c16_t pssTime[NUMBER_PSS_SEQUENCE][frame_parms->ofdm_symbol_size],
                              int is,
                              bool fo_flag,
-                             int target_Nid_cell)
+                             int target_Nid_cell,
+                             int search_start,
+                             int search_length)
 {
 #ifdef DBG_PSS_NR
   LOG_M("rxdata0_rand.m", "rxd0_rand", &PHY_vars_UE->common_vars.rxdata[0][0], frame_parms->samples_per_frame, 1, 1);
@@ -312,7 +314,7 @@ nr_pss_info_t pss_synchro_nr(const c16_t **rxdata,
 #endif
 
   start_meas(&generic_time[TIME_PSS]);
-  nr_pss_info_t pss_info = pss_search_time_nr(rxdata, frame_parms, pssTime, fo_flag, is, target_Nid_cell, -1, -1);
+  nr_pss_info_t pss_info = pss_search_time_nr(rxdata, frame_parms, pssTime, fo_flag, is, target_Nid_cell, search_start, search_length);
   stop_meas(&generic_time[TIME_PSS]);
 
 #if TEST_SYNCHRO_TIMING_PSS

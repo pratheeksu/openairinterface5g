@@ -73,7 +73,9 @@ nr_pss_info_t pss_synchro_nr(const c16_t **rxdata,
                              const c16_t pssTime[NUMBER_PSS_SEQUENCE][frame_parms->ofdm_symbol_size],
                              int is,
                              bool fo_flag,
-                             int target_Nid_cell);
+                             int target_Nid_cell,
+                             int search_start,
+                             int search_length);
 nr_pss_info_t pss_search_time_nr(const c16_t **rxdata,
                                  const NR_DL_FRAME_PARMS *frame_parms,
                                  const c16_t pssTime[NUMBER_PSS_SEQUENCE][frame_parms->ofdm_symbol_size],
