@@ -831,6 +831,7 @@ typedef struct {
 } NR_beam_info_t;
 
 #define UE_iterator(BaSe, VaR) for (NR_UE_info_t **VaR##pptr=BaSe, *VaR=*VaR##pptr; VaR; VaR=*(++VaR##pptr))
+#define BEAM_iterator(PaRaMs, VaR) for (int VaR = 0; VaR < (PaRaMs)->num_beams; VaR++)
 
 typedef struct {
   /// current frame

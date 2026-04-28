@@ -188,7 +188,7 @@ int nr_ul_proportional_fair(const nr_ul_sched_params_t *params, nr_ul_candidate_
    * tail only if a custom upstream stage broke PF rank order. Once healed
    * in phase 1, phases 2-3 see a sorted array. */
   int last_rank = -1;
-  for (int b = 0; b < params->num_beams; b++) {
+  BEAM_iterator(params, b) {
     uint16_t *vrb_map = params->vrb_map_UL[b];
 
     /* Phase 1: HARQ retransmissions (highest priority, exact RBs) */
