@@ -13,6 +13,7 @@
  */
 
 #include "common/utils/nr/nr_common.h"
+#include "gNB_scheduler_dlsch_default_policies.h"
 /*MAC*/
 #include "NR_MAC_COMMON/nr_mac.h"
 #include "NR_MAC_gNB/nr_mac_gNB.h"

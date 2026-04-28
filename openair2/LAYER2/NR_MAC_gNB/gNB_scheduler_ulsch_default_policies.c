@@ -10,7 +10,7 @@
  * scheduler plugins.
  */
 
-
+#include "gNB_scheduler_ulsch_default_policies.h"
 #include "LAYER2/NR_MAC_gNB/mac_proto.h"
 #include "executables/softmodem-common.h"
 #include "common/utils/nr/nr_common.h"

@@ -10,6 +10,8 @@
 #define __LAYER2_NR_MAC_PROTO_H__
 
 #include "LAYER2/NR_MAC_gNB/nr_mac_gNB.h"
+#include "LAYER2/NR_MAC_gNB/gNB_scheduler_dlsch_default_policies.h"
+#include "LAYER2/NR_MAC_gNB/gNB_scheduler_ulsch_default_policies.h"
 #include "NR_TAG-Id.h"
 #include "common/ngran_types.h"
 #include "openair2/LAYER2/nr_pdcp/nr_pdcp_configuration.h"
@@ -450,19 +452,6 @@ bool update_bler_stats(const NR_bler_options_t *bler_options,
                        NR_bler_stats_t *bler_stats,
                        frame_t frame);
 
-void nr_dl_ri_pmi_select_default(const gNB_MAC_INST *mac, nr_dl_candidate_t *candidates, int n_candidates);
-void nr_dl_mcs_select_default(const gNB_MAC_INST *mac, nr_dl_candidate_t *candidates, int n_candidates);
-
-int nr_dl_beam_select_default(NR_beam_info_t *beam_info,
-                              const int16_t *beam_index_list,
-                              nr_dl_candidate_t *candidates,
-                              int n_candidates,
-                              frame_t frame,
-                              slot_t slot,
-                              int slots_per_frame);
-
-int nr_dl_tda_select_default(const gNB_MAC_INST *mac, nr_dl_candidate_t *candidates, int n_candidates, frame_t frame, slot_t slot);
-
 int compare_dl_pf_rank(const void *a, const void *b);
 bool nr_dl_validate_cce_pucch(const nr_dl_sched_params_t *params, nr_dl_candidate_t *cand);
 bool commit_alloc(const nr_dl_sched_params_t *params, nr_dl_candidate_t *cand);
@@ -480,16 +469,6 @@ bool commit_alloc(const nr_dl_sched_params_t *params, nr_dl_candidate_t *cand);
     if ((n_sched) >= (params)->max_num_ue)                                            \
       return (n_sched);                                                               \
   } while (0)
-
-int nr_dl_proportional_fair(const nr_dl_sched_params_t *params,
-                            nr_dl_candidate_t *candidates,
-                            int *sched_indices,
-                            int n_candidates);
-
-void nr_dl_lcid_alloc_default(const gNB_MAC_INST *mac,
-                              const nr_dl_candidate_t *candidate,
-                              int tbs_available,
-                              int lcid_alloc[NR_MAX_NUM_LCID]);
 
 int ul_buffer_index(int frame, int slot, int slots_per_frame, int size);
 void UL_tti_req_ahead_initialization(gNB_MAC_INST *gNB, int n, int CCid, frame_t frameP, int slotP);
@@ -581,33 +560,6 @@ bool commit_ul_alloc(const nr_ul_sched_params_t *params, nr_ul_candidate_t *cand
     if ((n_sched) >= (params)->max_num_ue)                                               \
       return (n_sched);                                                                  \
   } while (0)
-
-/* Default pluggable UL scheduler policy functions */
-void nr_ul_ri_tpmi_select_default(gNB_MAC_INST *mac, nr_ul_candidate_t *cands, int n_cand);
-
-int nr_ul_tda_select_default(gNB_MAC_INST *mac,
-                             nr_ul_candidate_t *cands,
-                             int n_cand,
-                             frame_t sched_frame,
-                             slot_t sched_slot,
-                             int k2);
-
-int nr_ul_beam_select_default(NR_beam_info_t *beam_info,
-                              const int16_t *beam_index_list,
-                              nr_ul_candidate_t *candidates,
-                              int n_candidates,
-                              frame_t frame,
-                              slot_t slot,
-                              frame_t sched_frame,
-                              slot_t sched_slot,
-                              int slots_per_frame);
-
-void nr_ul_mcs_select_default(const gNB_MAC_INST *mac, nr_ul_candidate_t *candidates, int n_candidates);
-
-int nr_ul_proportional_fair(const nr_ul_sched_params_t *params,
-                            nr_ul_candidate_t *candidates,
-                            int *sched_indices,
-                            int n_candidates);
 
 bool nr_ul_check_phr(const nr_ul_sched_params_t *params,
                      const nr_ul_candidate_t *cand,
