@@ -694,6 +694,9 @@ bool nr_find_nb_rb(uint16_t Qm,
   return *tbs >= bytes && *nb_rb <= nb_rb_max;
 }
 
+// Find the largest contiguous block of free RBs in the VRB map.
+// Returns the block size, or 0 if no free RB is found. out_start is set to the
+// first RB of the largest block when the returned size is nonzero.
 int find_largest_free_block(const uint16_t *vrb_map, uint16_t slbitmap, int bwp_start, int bwp_size, int *out_start)
 {
   int best_start = 0, best_len = 0;

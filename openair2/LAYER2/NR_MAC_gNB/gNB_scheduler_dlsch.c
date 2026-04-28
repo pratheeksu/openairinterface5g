@@ -432,8 +432,6 @@ static bool dlsch_to_schedule(const NR_UE_sched_ctrl_t *sched_ctrl)
   return false;
 }
 
-// Find the largest contiguous block of free RBs in VRB map.
-// Returns true if any free RBs found, with rbStart and rbSize set.
 static int collect_dl_candidates(gNB_MAC_INST *mac,
                                  NR_UE_info_t **UE_list,
                                  nr_dl_candidate_t *candidates,
