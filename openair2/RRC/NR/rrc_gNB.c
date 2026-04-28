@@ -3526,6 +3526,46 @@ void *rrc_gnb_task(void *args_p)
         rrc_gNB_free_Handover_Command(&NGAP_HANDOVER_COMMAND(msg_p)); // Free transfered NG message
         break;
 
+      case RRC_GET_ACTIVE_UE_LIST:
+        int count_ue = 0;
+        struct rrc_gNB_ue_context_s* rrc_ue_context = NULL;
+        if(RC.nrrrc[instance]->rrc_ue_head.rbh_root != NULL){
+          RB_FOREACH(rrc_ue_context, rrc_nr_ue_tree_s, &RC.nrrrc[instance]->rrc_ue_head) {
+              if (count_ue < MAX_MOBILES_PER_GNB) {
+                  msg_p->ittiMsg.rrc_active_ue_list.rnti_list[count_ue] = rrc_ue_context->ue_context.rrc_ue_id;
+                  count_ue++;
+              }
+          }
+        }
+        msg_p->ittiMsg.rrc_active_ue_list.num_ues = count_ue;
+        itti_send_msg_to_task(TASK_TELNET, 0, msg_p);
+        break;
+
+      case RRC_GET_NODE_INFO:
+        msg_p->ittiMsg.rrc_node_info.node_type = RC.nrrrc[instance]->node_type;
+        msg_p->ittiMsg.rrc_node_info.node_id = RC.nrrrc[instance]->node_id;
+        msg_p->ittiMsg.rrc_node_info.node_name = RC.nrrrc[instance]->node_name;
+        itti_send_msg_to_task(TASK_TELNET, 0, msg_p);
+        break;
+
+      case RRC_GET_CUUP_CELLS_LIST:
+        int count_cell = 0;
+        nr_rrc_cell_container_t *cell = NULL;
+        msg_p->ittiMsg.rrc_cuup_cells_list.sst = RC.nrrrc[instance]->cuups.rbh_root->setup_req->plmn->slice->sst;
+        msg_p->ittiMsg.rrc_cuup_cells_list.sd = RC.nrrrc[instance]->cuups.rbh_root->setup_req->plmn->slice->sd;
+        RB_FOREACH (cell, rrc_cell_tree, &RC.nrrrc[instance]->cells) {
+          if(count_cell<10){
+              msg_p->ittiMsg.rrc_cuup_cells_list.cell_ids[count_cell] = cell->info.cell_id;
+              msg_p->ittiMsg.rrc_cuup_cells_list.mccs[count_cell] = cell->info.plmn.mcc;
+              msg_p->ittiMsg.rrc_cuup_cells_list.mncs[count_cell] = cell->info.plmn.mnc;
+              msg_p->ittiMsg.rrc_cuup_cells_list.mnc_digit_lengths[count_cell] = cell->info.plmn.mnc_digit_length;
+              count_cell++;
+          }
+        }
+        msg_p->ittiMsg.rrc_cuup_cells_list.cell_count = count_cell;
+        itti_send_msg_to_task(TASK_TELNET, 0, msg_p);
+        break;
+
       case RRC_GET_SINGLE_UE_RNTI:
         rrc_get_single_ue_rnti(msg_p, instance);
         break;
