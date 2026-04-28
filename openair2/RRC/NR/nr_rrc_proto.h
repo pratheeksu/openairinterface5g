@@ -18,6 +18,7 @@
 #include "NR_RRCReconfiguration.h"
 #include "RRC/NR/MESSAGES/asn1_msg.h"
 #include "f1ap_messages_types.h"
+#include "intertask_interface.h"
 
 #define SRB1 1
 #define SRB2 2

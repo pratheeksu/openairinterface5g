@@ -81,6 +81,8 @@
 #include "alg/find.h"
 #include "NR_HandoverCommand.h"
 #include "openair2/SDAP/nr_sdap/nr_sdap_configuration.h"
+#include "rrc_telnet_tasks.h"
+#include "rrc_gNB_UE_context.h"
 
 #ifdef E2_AGENT
 #include "openair2/E2AP/RAN_FUNCTION/O-RAN/ran_func_rc_extern.h"
@@ -3522,6 +3524,42 @@ void *rrc_gnb_task(void *args_p)
       case NGAP_HANDOVER_COMMAND:
         rrc_gNB_process_HandoverCommand(RC.nrrrc[instance], &NGAP_HANDOVER_COMMAND(msg_p));
         rrc_gNB_free_Handover_Command(&NGAP_HANDOVER_COMMAND(msg_p)); // Free transfered NG message
+        break;
+
+      case RRC_GET_SINGLE_UE_RNTI:
+        rrc_get_single_ue_rnti(msg_p, instance);
+        break;
+
+      case RRC_GET_UE_CONTEXT_BY_UE_ID:
+        rrc_get_ue_context_by_ue_id(msg_p, instance);
+        break;
+
+      case RRC_GET_DU_ID_BY_RNTI:
+        rrc_get_du_id_by_rnti(msg_p, instance);
+        break;
+
+      case RRC_NR_HO_F1_TRIGGER:
+        rrc_trigger_ho_f1(msg_p, instance);
+        break;
+
+      case RRC_NR_HO_N2_TRIGGER:
+        rrc_trigger_ho_n2(msg_p, instance);
+        break;
+
+      case RRC_GET_NGAP_UE_ID:
+        rrc_get_ngap_ue_id(msg_p, instance);
+        break;
+
+      case RRC_CHECK_UE_CONTEXT:
+        rrc_check_ue_context(msg_p, instance);
+        break;
+
+      case RRC_GNB_GENERATE_RRCRELEASE:
+        rrc_gnb_generate_rrcrelease(msg_p,instance);
+        break;
+
+      case RRC_GNB_GENERATE_RRCRELEASE_ALL:
+        rrc_gnb_generate_rrcrelease_all(msg_p,instance);
         break;
 
       default:
