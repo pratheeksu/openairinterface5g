@@ -220,11 +220,6 @@ static void get_du_stats(telnet_printfunc_t prnt, gNB_MAC_INST *mac)
   NR_SCHED_UNLOCK(&mac->sched_lock);
 }
 
-
-typedef struct {
-    int target_pid;
-} thread_params_t;
-
 static int get_stats(char *buf, int debug, telnet_printfunc_t prnt)
 {
   UNUSED(debug);
