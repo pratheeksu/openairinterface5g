@@ -137,7 +137,7 @@ static inline uint32_t nrLDPC_decoder_core_dynamic(int8_t* p_llr,
                                                    decode_abort_t* ab);
 #define MAX_GRAPH_CACHE_SIZE 16
 #define PRE_RECORDED_COUNT 6
-#define STATIC_SEG_SIZE 1 // n_segments in pre-record graphs, should be determined for real cases
+#define STATIC_SEG_SIZE 9 // n_segments in pre-record graphs, should be determined for real cases
 
 typedef struct {
   uint32_t Z;
@@ -254,6 +254,26 @@ void init_decoder_warmup()
       }
       cudaDeviceSynchronize();
       printf("[CUDA] Driver warm-up complete. Executed %d dummy graphs.\n", dynamic_cache_idx);
+
+    for (int i = 0; i < dynamic_cache_idx; i++) {
+        if (gpu_graph_cache[i].occupied) {
+            if (gpu_graph_cache[i].exec) {
+                cudaGraphExecDestroy(gpu_graph_cache[i].exec);
+                gpu_graph_cache[i].exec = NULL;
+            }
+            if (gpu_graph_cache[i].graph) {
+                cudaGraphDestroy(gpu_graph_cache[i].graph);
+                gpu_graph_cache[i].graph = NULL;
+            }
+            
+            if (gpu_graph_cache[i].bridge_ptr) {
+                gpu_graph_cache[i].bridge_ptr->p_llr_ptr = NULL;
+                gpu_graph_cache[i].bridge_ptr->p_out_ptr = NULL;
+            }
+            
+            gpu_graph_cache[i].occupied = false;
+        }
+    }
 
       // Mark slots as free and reset index so real traffic starts from slot 0
       for (int i = 0; i < dynamic_cache_idx; i++) {
@@ -396,8 +416,27 @@ int32_t LDPCinit_cuda()
 
 int32_t LDPCshutdown_cuda()
 {
-  cudaFree(p_llr_dev);
-  cudaFree(p_out_dev);
+  if (cnProcBuf_dev) { cudaFree(cnProcBuf_dev); cnProcBuf_dev = NULL; }
+  if (bnProcBuf_dev) { cudaFree(bnProcBuf_dev); bnProcBuf_dev = NULL; }
+  if (llrRes_dev)   { cudaFree(llrRes_dev);   llrRes_dev = NULL; }
+  if (llrProcBuf_dev) { cudaFree(llrProcBuf_dev); llrProcBuf_dev = NULL; }
+
+  if (p_llr_dev)   { cudaFree(p_llr_dev);   p_llr_dev = NULL; }
+  if (p_out_dev)   { cudaFree(p_out_dev);   p_out_dev = NULL; }
+
+  for (int i = 0; i < MAX_GRAPH_CACHE_SIZE; i++) {
+    if (gpu_graph_cache[i].bridge_ptr) {
+        cudaFreeHost(gpu_graph_cache[i].bridge_ptr);
+        gpu_graph_cache[i].bridge_ptr = NULL;
+    }
+}
+  for (int i = 0; i < 8; i++) {
+    if (stream_bridges[i]) {
+        cudaFreeHost(stream_bridges[i]);
+        stream_bridges[i] = NULL;
+    }
+}
+
   for (int s = 0; s < 8; ++s) {
     if (decoder_streamsCreated) {
       cudaEventDestroy(decoderDoneEvents[s]);
@@ -410,10 +449,13 @@ int32_t LDPCshutdown_cuda()
       cudaStreamDestroy(encoderStreams[s]);
     }
   }
+
   free_graphs();
 
   decoder_streamsCreated = false;
   encoder_streamsCreated = false;
+
+  printf("[CUDA] Intermediate buffers and streams destroyed.\n");
 
   return 0;
 }

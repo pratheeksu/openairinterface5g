@@ -1252,9 +1252,9 @@ do { \
     cudaError_t err = cudaSuccess;
 
     Kdim_R13_Edge[CudaStreamIdx].block = dim3(Z >> 2, 4, 1);
-    Kdim_R13_Edge[CudaStreamIdx].grid = dim3(num_TotalBlocks_BG1_R13_Edge >> 2, n_segments, 1);
+    Kdim_R13_Edge[CudaStreamIdx].grid = dim3((num_TotalBlocks_BG1_R13_Edge + 3) >> 2, n_segments, 1);
     Kdim_R23_Edge[CudaStreamIdx].block = dim3(Z >> 2, 4, 1);
-    Kdim_R23_Edge[CudaStreamIdx].grid = dim3(num_TotalBlocks_BG1_R23_Edge >> 2, n_segments, 1);
+    Kdim_R23_Edge[CudaStreamIdx].grid = dim3((num_TotalBlocks_BG1_R23_Edge + 3) >> 2, n_segments, 1);
     Kdim_R89_Edge[CudaStreamIdx].block = dim3(Z >> 2, 4, 1);
     Kdim_R89_Edge[CudaStreamIdx].grid = dim3((num_TotalBlocks_BG1_R89_Edge + 3) >> 2, n_segments, 1);
     Kdim_llr[CudaStreamIdx].block = dim3(Z >> 2, 4, 1);
@@ -1263,7 +1263,7 @@ do { \
     Kdim_cn_R13_Node[CudaStreamIdx].block = dim3(Z >> 2, 4, 1);
     Kdim_cn_R13_Node[CudaStreamIdx].grid = dim3((num_TotalBlocks_cn_BG1_R13_Node + 3) >> 2, n_segments, 1);
     Kdim_bn_R13_Node[CudaStreamIdx].block = dim3(Z >> 2, 4, 1);
-    Kdim_bn_R13_Node[CudaStreamIdx].grid = dim3(num_TotalBlocks_bn_BG1_R13_Node >> 2, n_segments, 1);
+    Kdim_bn_R13_Node[CudaStreamIdx].grid = dim3((num_TotalBlocks_bn_BG1_R13_Node + 3) >> 2, n_segments, 1);
     Kdim_cn_R23_Node[CudaStreamIdx].block = dim3(Z >> 2, 4, 1);
     Kdim_cn_R23_Node[CudaStreamIdx].grid = dim3((num_TotalBlocks_cn_BG1_R23_Node + 3) >> 2, n_segments, 1);
     Kdim_bn_R23_Node[CudaStreamIdx].block = dim3(Z >> 2, 4, 1);
@@ -1304,7 +1304,7 @@ do { \
                                                uint8_t CudaStreamIdx)
   {
     cudaError_t err = cudaGraphLaunch(graphExec, stream);
-    cudaStreamSynchronize(stream);
+    //cudaStreamSynchronize(stream);
     if (err != cudaSuccess) {
       return err;
     }
@@ -1336,9 +1336,9 @@ do { \
     cudaStream_t stream = streams[CudaStreamIdx];
 
     Kdim_R13_Edge[CudaStreamIdx].block = dim3(Z >> 2, 4, 1);
-    Kdim_R13_Edge[CudaStreamIdx].grid = dim3(num_TotalBlocks_BG1_R13_Edge >> 2, n_segments, 1);
+    Kdim_R13_Edge[CudaStreamIdx].grid = dim3((num_TotalBlocks_BG1_R13_Edge + 3) >> 2, n_segments, 1);
     Kdim_R23_Edge[CudaStreamIdx].block = dim3(Z >> 2, 4, 1);
-    Kdim_R23_Edge[CudaStreamIdx].grid = dim3(num_TotalBlocks_BG1_R23_Edge >> 2, n_segments, 1);
+    Kdim_R23_Edge[CudaStreamIdx].grid = dim3((num_TotalBlocks_BG1_R23_Edge + 3) >> 2, n_segments, 1);
     Kdim_R89_Edge[CudaStreamIdx].block = dim3(Z >> 2, 4, 1);
     Kdim_R89_Edge[CudaStreamIdx].grid = dim3((num_TotalBlocks_BG1_R89_Edge + 3) >> 2, n_segments, 1);
     Kdim_llr[CudaStreamIdx].block = dim3(Z >> 2, 4, 1);
@@ -1347,7 +1347,7 @@ do { \
     Kdim_cn_R13_Node[CudaStreamIdx].block = dim3(Z >> 2, 4, 1);
     Kdim_cn_R13_Node[CudaStreamIdx].grid = dim3((num_TotalBlocks_cn_BG1_R13_Node + 3) >> 2, n_segments, 1);
     Kdim_bn_R13_Node[CudaStreamIdx].block = dim3(Z >> 2, 4, 1);
-    Kdim_bn_R13_Node[CudaStreamIdx].grid = dim3(num_TotalBlocks_bn_BG1_R13_Node >> 2, n_segments, 1);
+    Kdim_bn_R13_Node[CudaStreamIdx].grid = dim3((num_TotalBlocks_bn_BG1_R13_Node + 3) >> 2, n_segments, 1);
     Kdim_cn_R23_Node[CudaStreamIdx].block = dim3(Z >> 2, 4, 1);
     Kdim_cn_R23_Node[CudaStreamIdx].grid = dim3((num_TotalBlocks_cn_BG1_R23_Node + 3) >> 2, n_segments, 1);
     Kdim_bn_R23_Node[CudaStreamIdx].block = dim3(Z >> 2, 4, 1);
@@ -1359,36 +1359,7 @@ do { \
     Kdim_bn_R89_Node[CudaStreamIdx].grid =
         dim3((num_TotalBlocks_bn_BG1_R89_Node + 3) >> 2, n_segments, 1); // 27 is not devidable with 2^n
 
-    //ENQUEUE_LDPC_DECODER_SEQUENCE(streams, CudaStreamIdx);
-
-    uint8_t ZcIdx = get_lut_col_index_host(Z); 
-    nrLDPC_llrPreProc_BG1_cuda_stream_core(buffer, numLLR, llrProcBuf, cnProcBuf, Z, ZcIdx, R, streams, CudaStreamIdx); 
-    if (R == 13) { 
-        for (int i = 0; i <= numMaxIter; i++) { 
-            nrLDPC_cnProc_BG1_R13_cuda_stream_core(cnProcBuf, bnProcBuf, n_segments, Z, ZcIdx, streams, CudaStreamIdx); 
-            if (i == numMaxIter) 
-                nrLDPC_bnProc_BG1_R13_cuda_stream_core_last(bnProcBuf, cnProcBuf, llrProcBuf, llrRes, n_segments, Z, ZcIdx, streams, CudaStreamIdx); 
-            else 
-                nrLDPC_bnProc_BG1_R13_cuda_stream_core(bnProcBuf, cnProcBuf, llrProcBuf, llrRes, n_segments, Z, ZcIdx, streams, CudaStreamIdx); 
-        } 
-    } else if (R == 23) { 
-        for (int i = 0; i <= numMaxIter; i++) { 
-            nrLDPC_cnProc_BG1_R23_cuda_stream_core(cnProcBuf, bnProcBuf, n_segments, Z, ZcIdx, streams, CudaStreamIdx); 
-            if (i == numMaxIter) 
-                nrLDPC_bnProc_BG1_R23_cuda_stream_core_last(bnProcBuf, cnProcBuf, llrProcBuf, llrRes, n_segments, Z, ZcIdx, streams, CudaStreamIdx); 
-            else 
-                nrLDPC_bnProc_BG1_R23_cuda_stream_core(bnProcBuf, cnProcBuf, llrProcBuf, llrRes, n_segments, Z, ZcIdx, streams, CudaStreamIdx); 
-        } 
-    } else if (R == 89) { 
-        for (int i = 0; i <= numMaxIter; i++) { 
-            nrLDPC_cnProc_BG1_R89_cuda_stream_core(cnProcBuf, bnProcBuf, n_segments, Z, ZcIdx, streams, CudaStreamIdx); 
-            if (i == numMaxIter) 
-                nrLDPC_bnProc_BG1_R89_cuda_stream_core_last(bnProcBuf, cnProcBuf, llrProcBuf, llrRes, n_segments, Z, ZcIdx, streams, CudaStreamIdx); 
-            else 
-                nrLDPC_bnProc_BG1_R89_cuda_stream_core(bnProcBuf, cnProcBuf, llrProcBuf, llrRes, n_segments, Z, ZcIdx, streams, CudaStreamIdx); 
-        } 
-    } 
-    nrLDPC_OutPut_BG1_cuda_stream_core(llrRes, Z, R, outMode, buffer, numLLR, K, streams, CudaStreamIdx); 
+    ENQUEUE_LDPC_DECODER_SEQUENCE(streams, CudaStreamIdx);
 
     if (doneEvent) {
       cudaEventRecord(doneEvent[CudaStreamIdx], stream);
