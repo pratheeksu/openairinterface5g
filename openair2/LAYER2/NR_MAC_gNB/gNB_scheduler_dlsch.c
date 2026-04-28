@@ -1072,7 +1072,7 @@ static void generate_dl_mac_pdu(gNB_MAC_INST *mac,
     start_meas(&mac->rlc_data_req);
     int sdus = 0;
 
-    if (sched_ctrl->num_total_bytes > 0 && candidate) {
+    if (sched_ctrl->num_total_bytes > 0) {
       /* ask the LCID allocation policy how many bytes each LC gets */
       int lcid_alloc[NR_MAX_NUM_LCID] = {0};
       mac->dl_lcid_alloc(mac, candidate, bufEnd - buf, lcid_alloc);
@@ -1227,6 +1227,7 @@ void post_process_dlsch(gNB_MAC_INST *nr_mac, post_process_pdsch_t *pdsch, NR_UE
   int CC_id = 0;
   frame_t frame = pdsch->frame;
   slot_t slot = pdsch->slot;
+  DevAssert(candidate != NULL);
 
   const NR_ServingCellConfigCommon_t *scc = nr_mac->common_channels[CC_id].ServingCellConfigCommon;
   NR_UE_sched_ctrl_t *sched_ctrl = &UE->UE_sched_ctrl;
