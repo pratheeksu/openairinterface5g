@@ -3,6 +3,9 @@
  */
 
 #include <stdint.h>
+#include <dlfcn.h>
+
+#include "log.h"
 #include "openair1/PHY/CODING/nrLDPC_defs.h"
 #include "openair1/PHY/CODING/nrLDPC_decoder/nrLDPC_types.h"
 #include "openair1/PHY/CODING/nrLDPC_coding/nrLDPC_coding_interface.h"
@@ -63,44 +66,124 @@ uint32_t LDPCencoder(uint8_t **input, uint8_t *output, encoder_implemparams_t *i
 
 
 /* slot interface */
+
+// fallback for LDPC sizes not implemented by CUDA LDPC
+nrLDPC_coding_interface_t ldpc_cpu;
+void *ldpc_lib_handle; // corresponding dlsym() handle, see also below
+
 extern int nrLDPC_coding_encoder32(nrLDPC_slot_encoding_parameters_t *nrLDPC_slot_encoding_parameters, nrLDPC_TB_encoding_parameters_t *nrLDPC_TB_encoding_parameters);
-int nrLDPC_coding_encoder(nrLDPC_slot_encoding_parameters_t *nrLDPC_slot_encoding_parameters)
+int nrLDPC_coding_encoder(nrLDPC_slot_encoding_parameters_t *slot_params)
 {
   // this should be the same as previous nrLDPC_coding_encoder() in nrLDPC_coding_segment_encoder.c
-  for (int dlsch_id = 0; dlsch_id < nrLDPC_slot_encoding_parameters->nb_TBs; dlsch_id++) {
-    nrLDPC_TB_encoding_parameters_t *tbp = &nrLDPC_slot_encoding_parameters->TBs[dlsch_id];
+  nrLDPC_TB_encoding_parameters_t tbCPU[32] = {0};
+  nrLDPC_slot_encoding_parameters_t cpu = {
+    .frame = slot_params->frame,
+    .slot = slot_params->slot,
+    .threadPool = slot_params->threadPool,
+    // timing?
+    .TBs = tbCPU,
+  };
+
+  for (int dlsch_id = 0; dlsch_id < slot_params->nb_TBs; dlsch_id++) {
+    nrLDPC_TB_encoding_parameters_t *tbp = &slot_params->TBs[dlsch_id];
     if (tbp->BG == 1 && tbp->C > 8 && tbp->Z == 384) {
-      nrLDPC_coding_encoder32(nrLDPC_slot_encoding_parameters, tbp);
+      nrLDPC_coding_encoder32(slot_params, tbp);
     } else {
-      AssertFatal(false, "unhandled job, use CPU\n");
+      // this is not handled by CUDA, handle with CPU
+      cpu.TBs[cpu.nb_TBs++] = *tbp;
     }
+  }
+  if (cpu.nb_TBs > 0) {
+    ldpc_cpu.nrLDPC_coding_encoder(&cpu);
   }
   return 0;
 }
 
 void nr_process_decode_segment_cuda(nrLDPC_TB_decoding_parameters_t *);
-int32_t nrLDPC_coding_decoder(nrLDPC_slot_decoding_parameters_t *nrLDPC_slot_decoding_parameters)
+int32_t nrLDPC_coding_decoder(nrLDPC_slot_decoding_parameters_t *slot_params)
 {
   // this should be the same as previous nrLDPC_coding_decoder() in nrLDPC_coding_segment_decoder.c
-  for (int pusch_id = 0; pusch_id < nrLDPC_slot_decoding_parameters->nb_TBs; pusch_id++) {
-    nrLDPC_TB_decoding_parameters_t *tbp = &nrLDPC_slot_decoding_parameters->TBs[pusch_id];
+  nrLDPC_TB_decoding_parameters_t tbCPU[32] = {0};
+  nrLDPC_slot_decoding_parameters_t cpu = {
+    .frame = slot_params->frame,
+    .slot = slot_params->slot,
+    .threadPool = slot_params->threadPool,
+    .TBs = tbCPU,
+  };
+  for (int pusch_id = 0; pusch_id < slot_params->nb_TBs; pusch_id++) {
+    nrLDPC_TB_decoding_parameters_t *tbp = &slot_params->TBs[pusch_id];
     if (tbp->Z >= 128 && tbp->BG == 1) {
       nr_process_decode_segment_cuda(tbp);
     } else {
-      AssertFatal(false, "unhandled job, use CPU\n");
+      // this is not handled by CUDA, handle with CPU
+      cpu.TBs[cpu.nb_TBs++] = *tbp;
     }
   }
+  if (cpu.nb_TBs > 0) {
+    ldpc_cpu.nrLDPC_coding_decoder(&cpu);
+  }
   return 0;
+}
+
+#define CHECK_DLFCN_ERROR(COND, SYMB) \
+  if (!(COND)) { \
+    LOG_E(NR_PHY, "could not open %s: %s\n", SYMB, dlerror()); \
+    return false; \
+  }
+static bool open_default_ldpc(nrLDPC_coding_interface_t *ldpc, int max_num_pxsch)
+{
+  const char *default_ldpc = "libldpc.so";
+  if (ldpc_lib_handle) {
+    LOG_W(NR_PHY, "%s already initialized\n", default_ldpc);
+    return true;
+  }
+  ldpc_lib_handle = dlopen(default_ldpc, RTLD_LAZY|RTLD_NODELETE|RTLD_GLOBAL);
+  CHECK_DLFCN_ERROR(ldpc_lib_handle, default_ldpc);
+
+  ldpc->nrLDPC_coding_init = dlsym(ldpc_lib_handle, "nrLDPC_coding_init");
+  CHECK_DLFCN_ERROR(ldpc->nrLDPC_coding_init, "nrLDPC_coding_init");
+  ldpc->nrLDPC_coding_shutdown = dlsym(ldpc_lib_handle, "nrLDPC_coding_shutdown");
+  CHECK_DLFCN_ERROR(ldpc->nrLDPC_coding_shutdown, "nrLDPC_coding_shutdown");
+  ldpc->nrLDPC_coding_decoder = dlsym(ldpc_lib_handle, "nrLDPC_coding_decoder");
+  CHECK_DLFCN_ERROR(ldpc->nrLDPC_coding_decoder, "nrLDPC_coding_decoder");
+  ldpc->nrLDPC_coding_encoder = dlsym(ldpc_lib_handle, "nrLDPC_coding_encoder");
+  CHECK_DLFCN_ERROR(ldpc->nrLDPC_coding_encoder, "nrLDPC_coding_encoder");
+
+  bool success = ldpc->nrLDPC_coding_init(max_num_pxsch) == 0;
+  if (!success)
+    LOG_E(NR_PHY, "could not initialize %s\n", default_ldpc);
+  return success;
+}
+
+static void close_default_ldpc(nrLDPC_coding_interface_t *ldpc)
+{
+  if (!ldpc_lib_handle) {
+    LOG_W(NR_PHY, "cannot stop LDPC, not loaded\n");
+    return;
+  }
+
+  ldpc->nrLDPC_coding_shutdown();
+  dlclose(ldpc_lib_handle);
+  ldpc_lib_handle = NULL;
 }
 
 extern int32_t nrLDPC_coding_init_cuda(int max_num_pxsch);
 int32_t nrLDPC_coding_init(int max_num_pxsch)
 {
+  // we can't use load_nrLDPC_coding_interface() because:
+  // 1. it caches the lib under the "ldpc" name, but links to "ldpc_cuda", so
+  //    we recursively load this function again => stack overflow
+  // 2. the global --loader.ldpc.shlibversion _cuda would be reapplied => we
+  //    cannot actually load ourselves
+  // hence use dlsym() directly.
+  bool success = open_default_ldpc(&ldpc_cpu, max_num_pxsch);
+  AssertFatal(success, "error loading LDPC library\n");
   return nrLDPC_coding_init_cuda(max_num_pxsch);
 }
 
 extern int32_t nrLDPC_coding_shutdown_cuda(void);
 int32_t nrLDPC_coding_shutdown(void)
 {
+  close_default_ldpc(&ldpc_cpu);
   return nrLDPC_coding_shutdown_cuda();
 }
