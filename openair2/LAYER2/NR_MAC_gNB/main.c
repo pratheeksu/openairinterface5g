@@ -313,6 +313,8 @@ void mac_top_init_gNB(ngran_node_t node_type,
       RC.nrmac[i]->ul_mcs_select = nr_ul_mcs_select_default;
       RC.nrmac[i]->ul_rb_alloc = nr_ul_proportional_fair;
 
+      RC.nrmac[i]->dl_lcid_alloc = nr_dl_lcid_alloc_default;
+
       if (get_softmodem_params()->phy_test) {
         RC.nrmac[i]->pre_processor_dl = nr_preprocessor_phytest;
         RC.nrmac[i]->pre_processor_ul = nr_ul_preprocessor_phytest;
@@ -324,7 +326,6 @@ void mac_top_init_gNB(ngran_node_t node_type,
         RC.nrmac[i]->dl_beam_select = nr_dl_beam_select_default;
         RC.nrmac[i]->dl_tda_select = nr_dl_tda_select_default;
         RC.nrmac[i]->dl_rb_alloc = nr_dl_proportional_fair;
-        RC.nrmac[i]->dl_lcid_alloc = nr_dl_lcid_alloc_default;
       }
       if (!IS_SOFTMODEM_NOSTATS)
         threadCreate(&RC.nrmac[i]->stats_thread,
