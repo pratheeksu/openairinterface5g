@@ -41,7 +41,7 @@
 // Simulator role
 typedef enum { ROLE_SERVER = 1, ROLE_CLIENT } role;
 
-#define MAX_NUM_ANTENNAS_TX 4
+#define MAX_NUM_ANTENNAS_TX 8
 #define SAVED_SAMPLES_LEN 256
 #define MAX_NUM_UES MAX_MOBILES_PER_GNB
 
@@ -66,7 +66,6 @@ typedef enum { ROLE_SERVER = 1, ROLE_CLIENT } role;
      {"timescale",              TIME_SCALE_HLP,              0, .dblptr = &vrtsim_state->timescale,              .defdblval = 1.0,                TYPE_DOUBLE, 0}, \
      {"chanmod",                "Enable channel modelling",  0, .iptr = &vrtsim_state->chanmod,                  .defintval = 0,                  TYPE_INT,    0}, \
      {"taps-socket",            TAPS_SOCKET_HLP,             0, .strptr = &vrtsim_state->taps_socket,            .defstrval = NULL,               TYPE_STRING, 0}, \
-     {"client-num-rx-antennas", CLIENT_NUM_RX_HLP,           0, .iptr = &vrtsim_state->client_num_rx_antennas,   .defintval = 1,                  TYPE_INT,    0}, \
      /* CIR DB enable and paths */ \
      {"cirdb",                  "Use CIR database for channel taps (1 yes, 0 no)", 0, .iptr = &vrtsim_state->use_cirdb,  .defintval = 0, TYPE_INT, 0}, \
      {"cirdb-path",             "Directory that holds vrtsim.yaml and cir_db.bin", 0, .strptr = &vrtsim_state->cirdb_path, .defstrval = NULL, TYPE_STRING, 0}, \
@@ -79,7 +78,9 @@ typedef enum { ROLE_SERVER = 1, ROLE_CLIENT } role;
      {"cirdb_aoa_deg",          "Desired AoA in degrees (TDL-D/E only)", 0, .dblptr = &vrtsim_state->cirdb_aoa_deg, .defdblval = 0.0, TYPE_DOUBLE, 0}, \
      {"num_ues",                "Number of UE slots (server only)\n", 0, .iptr = &vrtsim_state->num_ues,        .defintval = 1,                  TYPE_INT,    0}, \
      {"ue_id",                  "UE slot index 0..num_ues-1 (client only)\n", 0, .iptr = &vrtsim_state->ue_id, .defintval = 0,                  TYPE_INT,    0}, \
-     {"thread-pool",            TPOOL_HLP, .strptr = &vrtsim_state->thread_pool_cores, .defstrval = "-1,-1,-1,-1", TYPE_STRING, 0} \
+     {"thread-pool",            TPOOL_HLP, .strptr = &vrtsim_state->thread_pool_cores, .defstrval = "-1,-1,-1,-1", TYPE_STRING, 0}, \
+     {"shm_channel_name",       "Shared memory channel name\n", 0, .strptr = &vrtsim_state->shm_channel_name, .defstrval = DEFAULT_CHANNEL_NAME, TYPE_STRING, 0}, \
+     {"disable-timing-thread",  "Disable timing thread for testing", 0, .iptr = &vrtsim_state->disable_timing_thread, .defintval = 0, TYPE_INT, 0} \
   };
 // clang-format on
 
@@ -89,11 +90,6 @@ typedef struct histogram_s {
   int min_samples;
   double range;
 } histogram_t;
-
-// Information about the peer
-typedef struct peer_info_s {
-  int num_rx_antennas;
-} peer_info_t;
 
 typedef struct tx_timing_s {
   uint64_t tx_samples_late;
@@ -132,7 +128,6 @@ typedef struct {
   uint64_t rx_samples_total;
   tx_timing_t tx_timing;
   histogram_t chanmod_histogram;
-  peer_info_t peer_info;
   int chanmod;
   double rx_freq;
   double tx_bw;
@@ -140,7 +135,9 @@ typedef struct {
   int rx_num_channels;
   channel_desc_t *channel_desc[MAX_NUM_UES];
   char *taps_socket;
-  int client_num_rx_antennas;
+  void *taps_client;
+  int peer_tx_ant;
+  int peer_rx_ant;
   struct timespec start_ts;
   /* CIR DB state */
   int use_cirdb;
@@ -161,6 +158,8 @@ typedef struct {
   tpool_t tpool;
   void *channel_pipeline_context;
   char *thread_pool_cores;
+  char *shm_channel_name;
+  int disable_timing_thread;
 } vrtsim_state_t;
 
 static void histogram_add(histogram_t *histogram, double diff)
@@ -183,13 +182,9 @@ static void histogram_print(histogram_t *histogram, char *title)
   }
 }
 
-static void load_channel_model(vrtsim_state_t *vrtsim_state)
+static void load_channel_model(vrtsim_state_t *vrtsim_state, int nb_rx)
 {
-  load_channellist(vrtsim_state->tx_num_channels,
-                   vrtsim_state->peer_info.num_rx_antennas,
-                   vrtsim_state->sample_rate,
-                   vrtsim_state->rx_freq,
-                   vrtsim_state->tx_bw);
+  load_channellist(vrtsim_state->tx_num_channels, nb_rx, vrtsim_state->sample_rate, vrtsim_state->rx_freq, vrtsim_state->tx_bw);
   char *model_name = vrtsim_state->role == ROLE_CLIENT ? "client_tx_channel_model" : "server_tx_channel_model";
   vrtsim_state->channel_desc[0] = find_channel_desc_fromname(model_name);
   channel_desc_t *channel_desc = vrtsim_state->channel_desc[0];
@@ -412,8 +407,12 @@ static int vrtsim_connect(openair0_device_t *device)
     for (int i = 0; i < vrtsim_state->num_ues; i++) {
       num_tx_streams += vrtsim_state->ue_conf[i].rx_ant;
     }
-    vrtsim_state->channel = shm_td_iq_channel_create(DEFAULT_CHANNEL_NAME, num_tx_streams, num_rx_streams);
-    LOG_A(HW, "vrtsim created a shm_td_iq_channel with config tx: %d rx: %d\n", num_tx_streams, num_rx_streams);
+    vrtsim_state->channel = shm_td_iq_channel_create(vrtsim_state->shm_channel_name, num_tx_streams, num_rx_streams);
+    LOG_A(HW,
+          "vrtsim created a shm_td_iq_channel %s with config tx: %d rx: %d\n",
+          vrtsim_state->shm_channel_name,
+          num_tx_streams,
+          num_rx_streams);
     // Exchange peer info
 
     client_info_t client_info = {
@@ -426,10 +425,15 @@ static int vrtsim_connect(openair0_device_t *device)
       client_info.ues[i] = vrtsim_state->ue_conf[i];
 
     server_publish_client_info(client_info, vrtsim_state->connection_descriptor);
-    vrtsim_state->peer_info.num_rx_antennas = vrtsim_state->client_num_rx_antennas;
+    if (vrtsim_state->num_ues > 0) {
+      vrtsim_state->peer_tx_ant = vrtsim_state->ue_conf[0].tx_ant;
+      vrtsim_state->peer_rx_ant = vrtsim_state->ue_conf[0].rx_ant;
+    }
     vrtsim_state->last_received_sample = shm_td_iq_channel_get_current_sample(vrtsim_state->channel);
-    vrtsim_state->run_timing_thread = true;
-    threadCreate(&vrtsim_state->timing_thread, vrtsim_timing_job, vrtsim_state, "vrtsim_timing", -1, OAI_PRIORITY_RT_MAX);
+    if (!vrtsim_state->disable_timing_thread) {
+      vrtsim_state->run_timing_thread = true;
+      threadCreate(&vrtsim_state->timing_thread, vrtsim_timing_job, vrtsim_state, "vrtsim_timing", -1, OAI_PRIORITY_RT_MAX);
+    }
   } else {
     client_info_t client_info = client_read_info(vrtsim_state->connection_descriptor);
     AssertFatal(client_info.num_ues > 0, "Server did not publish valid num_ues\n");
@@ -471,20 +475,25 @@ static int vrtsim_connect(openair0_device_t *device)
             vrtsim_state->cirdb_speed_mps,
             vrtsim_state->cirdb_aoa_deg);
     }
-    vrtsim_state->channel = shm_td_iq_channel_connect(DEFAULT_CHANNEL_NAME, 10);
-    vrtsim_state->peer_info.num_rx_antennas = client_info.gnb_num_rx_ant;
+    vrtsim_state->peer_tx_ant = client_info.gnb_num_tx_ant;
+    vrtsim_state->peer_rx_ant = client_info.gnb_num_rx_ant;
+    vrtsim_state->channel = shm_td_iq_channel_connect(vrtsim_state->shm_channel_name, 10);
     vrtsim_state->last_received_sample = shm_td_iq_channel_get_current_sample(vrtsim_state->channel);
   }
 
   // Handle channel modelling after number of RX antennas are known
   if (vrtsim_state->chanmod || vrtsim_state->taps_socket || vrtsim_state->use_cirdb) {
+#ifdef OAI_VRTSIM_TAPS_CLIENT
     if (vrtsim_state->taps_socket) {
-      taps_client_connect(0,
-                          vrtsim_state->taps_socket,
-                          device->openair0_cfg[0].tx_num_channels,
-                          vrtsim_state->peer_info.num_rx_antennas,
-                          &vrtsim_state->channel_desc[0]);
+      vrtsim_state->taps_client =
+          taps_client_connect(vrtsim_state->taps_socket, vrtsim_state->tx_num_channels, vrtsim_state->peer_rx_ant);
     } else if (vrtsim_state->use_cirdb) {
+#else
+    if (vrtsim_state->taps_socket) {
+      AssertFatal(false, "Build with OAI_VRTSIM_TAPS_CLIENT to use taps socket\n");
+    }
+    if (vrtsim_state->use_cirdb) {
+#endif
       const char *yaml_path = NULL;
       const char *bin_path = NULL;
 
@@ -572,15 +581,11 @@ static int vrtsim_connect(openair0_device_t *device)
         }
         LOG_A(HW, "VRTSIM: Multi-UE channel taps via CIR DB\n");
       } else {
-        cirdb_connect(0,
-                      device->openair0_cfg[0].tx_num_channels,
-                      vrtsim_state->peer_info.num_rx_antennas,
-                      &sel,
-                      &vrtsim_state->channel_desc[0]);
+        cirdb_connect(0, device->openair0_cfg[0].tx_num_channels, vrtsim_state->peer_rx_ant, &sel, &vrtsim_state->channel_desc[0]);
         LOG_A(HW, "VRTSIM: channel taps via CIR DB\n");
       }
     } else {
-      load_channel_model(vrtsim_state);
+      load_channel_model(vrtsim_state, vrtsim_state->peer_rx_ant);
     }
   }
   vrtsim_state->tx_timing.tx_histogram.min_samples = 100;
@@ -627,11 +632,6 @@ static int vrtsim_write_with_chanmod(vrtsim_state_t *vrtsim_state,
     cirdb_update(elapsed_ns);
   }
 
-  if (!vrtsim_state->channel_desc[0]) {
-    LOG_E(HW, "No channel_desc found\n");
-    return nsamps;
-  }
-
   int noise_power_dBFS = get_noise_power_dBFS();
   int16_t noise_power = noise_power_dBFS == INVALID_DBFS_VALUE ? 0 : (int16_t)(32767.0 / powf(10.0, .05 * -noise_power_dBFS));
 
@@ -642,8 +642,19 @@ static int vrtsim_write_with_chanmod(vrtsim_state_t *vrtsim_state,
   int rx_antenna_offset = 0;
   int nb_tx = nbAnt;
   for (int i = 0; i < num_chan_desc; i++) {
-    channel_desc_t *chan_desc = vrtsim_state->channel_desc[i];
-    AssertFatal(chan_desc, "Channel not provided\n");
+    channel_desc_t *chan_desc = NULL;
+#ifdef OAI_VRTSIM_TAPS_CLIENT
+    if (vrtsim_state->taps_client) {
+      chan_desc = taps_client_get_model(vrtsim_state->taps_client, i);
+    } else {
+      chan_desc = vrtsim_state->channel_desc[i];
+    }
+#else
+    chan_desc = vrtsim_state->channel_desc[i];
+#endif
+    if (!chan_desc) {
+      continue;
+    }
     int nb_rx = chan_desc->nb_rx;
     size_t channel_length = chan_desc->channel_length;
     AssertFatal((channel_length - 1) < SAVED_SAMPLES_LEN,
@@ -769,20 +780,22 @@ static int vrtsim_write(openair0_device_t *device,
     histogram_add(&vrtsim_state->chanmod_histogram, microseconds);
     return num_samples_processed;
   }
+
+  // No channel model means there is no user-defined mapping between TX and RX antennas.
+  // We map the antennas in order: first TX stream is mapped to first RX stream and so on.
   if (vrtsim_state->role == ROLE_CLIENT) {
-    for (int aatx = 0; aatx < nbAnt; aatx++) {
+    for (int aatx = 0; aatx < nbAnt && aatx < vrtsim_state->peer_rx_ant; aatx++) {
       int global_ul_ant = vrtsim_state->ue.tx_offset + aatx;
       vrtsim_write_internal(vrtsim_state, timestamp, (c16_t *)samplesVoid[aatx], nsamps, global_ul_ant);
     }
     return nsamps;
   } else {
-    AssertFatal(nbAnt == 1, "Multi-TX gNB not yet supported in multi-UE no-chanmod mode\n");
     for (int u = 0; u < vrtsim_state->num_ues; u++) {
       int rx_offset = vrtsim_state->ue_conf[u].rx_offset;
       int num_rx_ant = vrtsim_state->ue_conf[u].rx_ant;
-      for (int aarx = 0; aarx < num_rx_ant; aarx++) {
+      for (int aarx = 0; aarx < num_rx_ant && aarx < nbAnt; aarx++) {
         int global_dl_ant = rx_offset + aarx;
-        vrtsim_write_internal(vrtsim_state, timestamp, (c16_t *)samplesVoid[0], nsamps, global_dl_ant);
+        vrtsim_write_internal(vrtsim_state, timestamp, (c16_t *)samplesVoid[aarx], nsamps, global_dl_ant);
       }
     }
     return nsamps;
@@ -852,15 +865,15 @@ static int vrtsim_read(openair0_device_t *device, openair0_timestamp_t *ptimesta
       }
     } else {
       /* Single-UE server UL read */
-      int ret = shm_td_iq_channel_rx(vrtsim_state->channel, vrtsim_state->last_received_sample, nsamps, 0, samplesVoid[0]);
-      if (ret == CHANNEL_ERROR_TOO_LATE) {
-        vrtsim_state->rx_samples_late += nsamps;
-      } else if (ret == CHANNEL_ERROR_TOO_EARLY) {
-        vrtsim_state->rx_early += 1;
-      }
-      for (int aarx = 1; aarx < nbAnt; aarx++) {
-        if (samplesVoid[aarx] != NULL)
-          memcpy(samplesVoid[aarx], samplesVoid[0], nsamps * sizeof(sample_t));
+      for (int aarx = 0; aarx < nbAnt; aarx++) {
+        int ret = shm_td_iq_channel_rx(vrtsim_state->channel, vrtsim_state->last_received_sample, nsamps, aarx, samplesVoid[aarx]);
+        if (aarx == 0) {
+          if (ret == CHANNEL_ERROR_TOO_LATE) {
+            vrtsim_state->rx_samples_late += nsamps;
+          } else if (ret == CHANNEL_ERROR_TOO_EARLY) {
+            vrtsim_state->rx_early += 1;
+          }
+        }
       }
     }
   } else {
@@ -899,12 +912,14 @@ static void vrtsim_end(openair0_device_t *device)
 #endif
     if (vrtsim_state->use_cirdb) {
       cirdb_stop();
-    } else if (vrtsim_state->taps_socket) {
-      taps_client_stop();
+#ifdef OAI_VRTSIM_TAPS_CLIENT
+    } else if (vrtsim_state->taps_client) {
+      taps_client_stop(vrtsim_state->taps_client);
+#endif
     }
   }
   shm_td_iq_channel_abort(vrtsim_state->channel);
-  sleep(1);
+  usleep(1000);
   shm_td_iq_channel_destroy(vrtsim_state->channel);
 
   LOG_I(HW,
@@ -929,6 +944,8 @@ static void vrtsim_end(openair0_device_t *device)
       LOG_A(HW, "Removed connection descriptor file %s\n", vrtsim_state->connection_descriptor);
     }
   }
+  free(device->priv);
+  device->priv = NULL;
 }
 
 static int vrtsim_stub(openair0_device_t *device)
@@ -956,6 +973,12 @@ static int vrtsim_set_beams(openair0_device_t *device, uint64_t beam_map, openai
 static int vrtsim_set_beams2(openair0_device_t *device, int *beam_ids, int num_beams, openair0_timestamp_t timestamp)
 {
   return 0;
+}
+
+__attribute__((__visibility__("default"))) void vrtsim_produce_samples(openair0_device_t *device, size_t num_samples)
+{
+  vrtsim_state_t *vrtsim_state = (vrtsim_state_t *)device->priv;
+  shm_td_iq_channel_produce_samples(vrtsim_state->channel, num_samples);
 }
 
 __attribute__((__visibility__("default"))) int device_init(openair0_device_t *device, openair0_config_t *openair0_cfg)
