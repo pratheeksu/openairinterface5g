@@ -4623,11 +4623,11 @@ static void compute_cqi_bitlen(const NR_CSI_ReportConfig_t *csi_reportconfig, ui
   struct NR_CodebookConfig__codebookType__type1 *type1 = NULL;
   if (codebookConfig && codebookConfig->codebookType.present == NR_CodebookConfig__codebookType_PR_type1)
     type1 = codebookConfig->codebookType.choice.type1;
-  else
+  else if (codebookConfig)
     LOG_E(NR_MAC, "Only type1 codebook configuration is supported\n");
   if (type1 && type1->subType.present == NR_CodebookConfig__codebookType__type1__subType_PR_typeI_SinglePanel)
     type1single = type1->subType.choice.typeI_SinglePanel;
-  else
+  else if (codebookConfig)
     LOG_E(NR_MAC, "Only type1 single panel codebook configuration is supported\n");
 
   struct NR_CSI_ReportConfig__reportFreqConfiguration *freq_config = csi_reportconfig->reportFreqConfiguration;

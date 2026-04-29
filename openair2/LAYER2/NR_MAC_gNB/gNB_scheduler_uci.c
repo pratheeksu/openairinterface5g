@@ -606,7 +606,7 @@ static int evaluate_ri_report(uint8_t *payload,
 static void evaluate_cqi_report(uint8_t *payload,
                                 nr_csi_report_t *csi_report,
                                 int cumul_bits,
-                                uint8_t ri,
+                                int ri,
                                 NR_UE_info_t *UE,
                                 uint8_t cqi_Table)
 {
@@ -614,6 +614,8 @@ static void evaluate_cqi_report(uint8_t *payload,
   NR_UE_sched_ctrl_t *sched_ctrl = &UE->UE_sched_ctrl;
 
   //TODO sub-band CQI report not yet implemented
+  if (ri == -1)
+    ri = 0; // 1 port scenario
   int cqi_bitlen = csi_report->csi_meas_bitlen.cqi_bitlen[ri];
 
   uint8_t temp_cqi = pickandreverse_bits(payload, 4, cumul_bits);
@@ -778,9 +780,10 @@ static void extract_pucch_csi_report(NR_CSI_MeasConfig_t *csi_MeasConfig,
             if (ri_bitlen)
               r_index = evaluate_ri_report(payload, ri_bitlen, csi_report->csi_meas_bitlen.ri_restriction, cumul_bits, sched_ctrl);
             cumul_bits += ri_bitlen;
-            if (r_index != -1)
+            if (r_index != -1) {
               skip_zero_padding(&cumul_bits, csi_report, r_index, bitlen);
-            pmi_bitlen = evaluate_pmi_report(payload, csi_report, cumul_bits, r_index, sched_ctrl);
+              pmi_bitlen = evaluate_pmi_report(payload, csi_report, cumul_bits, r_index, sched_ctrl);
+            }
             sched_ctrl->CSI_report.cri_ri_li_pmi_cqi_report.csi_report_id = csi_report_id;
             cumul_bits += pmi_bitlen;
             evaluate_cqi_report(payload, csi_report, cumul_bits, r_index, UE, cqi_table);
@@ -797,9 +800,10 @@ static void extract_pucch_csi_report(NR_CSI_MeasConfig_t *csi_MeasConfig,
             cumul_bits += ri_bitlen;
             li_bitlen = evaluate_li_report(payload, csi_report, cumul_bits, r_index, sched_ctrl);
             cumul_bits += li_bitlen;
-            if (r_index != -1)
+            if (r_index != -1) {
               skip_zero_padding(&cumul_bits, csi_report, r_index, bitlen);
-            pmi_bitlen = evaluate_pmi_report(payload, csi_report, cumul_bits, r_index, sched_ctrl);
+              pmi_bitlen = evaluate_pmi_report(payload, csi_report, cumul_bits, r_index, sched_ctrl);
+            }
             sched_ctrl->CSI_report.cri_ri_li_pmi_cqi_report.csi_report_id = csi_report_id;
             cumul_bits += pmi_bitlen;
             evaluate_cqi_report(payload, csi_report, cumul_bits, r_index, UE, cqi_table);

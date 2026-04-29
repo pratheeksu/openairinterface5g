@@ -1973,11 +1973,12 @@ static void set_csi_meas_periodicity(const NR_ServingCellConfigCommon_t *scc,
   }
 }
 
-static void config_csi_codebook(const nr_pdsch_AntennaPorts_t *antennaports,
-                                const int max_layers,
-                                struct NR_CodebookConfig *codebookConfig)
+static NR_CodebookConfig_t *config_csi_codebook(const nr_pdsch_AntennaPorts_t *antennaports, const int max_layers)
 {
   const int num_ant_ports = antennaports->N1 * antennaports->N2 * antennaports->XP;
+  if (num_ant_ports < 2)
+    return NULL;
+  NR_CodebookConfig_t *codebookConfig = calloc(1, sizeof(*codebookConfig));
   codebookConfig->codebookType.present = NR_CodebookConfig__codebookType_PR_type1;
   if(!codebookConfig->codebookType.choice.type1)
     codebookConfig->codebookType.choice.type1 = calloc(1, sizeof(*codebookConfig->codebookType.choice.type1));
@@ -2077,6 +2078,7 @@ static void config_csi_codebook(const nr_pdsch_AntennaPorts_t *antennaports,
     }
   }
   codebookConfig->codebookType.choice.type1->codebookMode = 1;
+  return codebookConfig;
 }
 
 static void config_csi_meas_report(NR_CSI_MeasConfig_t *csi_MeasConfig,
@@ -2129,8 +2131,7 @@ static void config_csi_meas_report(NR_CSI_MeasConfig_t *csi_MeasConfig,
   csirep->reportFreqConfiguration->csi_ReportingBand = NULL;
   csirep->timeRestrictionForChannelMeasurements = NR_CSI_ReportConfig__timeRestrictionForChannelMeasurements_notConfigured;
   csirep->timeRestrictionForInterferenceMeasurements = NR_CSI_ReportConfig__timeRestrictionForInterferenceMeasurements_notConfigured;
-  csirep->codebookConfig = calloc(1, sizeof(*csirep->codebookConfig));
-  config_csi_codebook(antennaports, max_layers, csirep->codebookConfig);
+  csirep->codebookConfig = config_csi_codebook(antennaports, max_layers);
   csirep->dummy = NULL;
   csirep->groupBasedBeamReporting.present = NR_CSI_ReportConfig__groupBasedBeamReporting_PR_disabled;
   csirep->groupBasedBeamReporting.choice.disabled = calloc(1, sizeof(*csirep->groupBasedBeamReporting.choice.disabled));
@@ -3479,7 +3480,7 @@ static NR_CSI_MeasConfig_t *get_csiMeasConfig(const NR_ServingCellConfig_t *conf
     asn1cSeqAdd(&csi_MeasConfig->csi_ResourceConfigToAddModList->list, csires0);
   }
 
-  if (configuration->do_CSIRS && pdsch_AntennaPorts > 1) {
+  if (configuration->do_CSIRS) {
     NR_CSI_ResourceConfig_t *csires2 = calloc(1, sizeof(*csires2));
     csires2->csi_ResourceConfigId = bwp_id + 10;
     csires2->csi_RS_ResourceSetList.present = NR_CSI_ResourceConfig__csi_RS_ResourceSetList_PR_csi_IM_ResourceSetList;
@@ -3916,8 +3917,10 @@ void update_cellGroupConfig(NR_CellGroupConfig_t *cellGroupConfig,
   NR_CSI_MeasConfig_t *csi_MeasConfig = spCellConfigDedicated->csi_MeasConfig->choice.setup;
   for (int report = 0; report < csi_MeasConfig->csi_ReportConfigToAddModList->list.count; report++) {
     NR_CSI_ReportConfig_t *csirep = csi_MeasConfig->csi_ReportConfigToAddModList->list.array[report];
-    if (csirep->codebookConfig)
-      config_csi_codebook(&configuration->pdsch_AntennaPorts, *pdsch_servingcellconfig->ext1->maxMIMO_Layers, csirep->codebookConfig);
+    if (csirep->codebookConfig) {
+      ASN_STRUCT_FREE(asn_DEF_NR_CodebookConfig, csirep->codebookConfig);
+      csirep->codebookConfig = config_csi_codebook(&configuration->pdsch_AntennaPorts, *pdsch_servingcellconfig->ext1->maxMIMO_Layers);
+    }
     if (csirep->groupBasedBeamReporting.present == NR_CSI_ReportConfig__groupBasedBeamReporting_PR_disabled
         && csirep->groupBasedBeamReporting.choice.disabled
         && csirep->groupBasedBeamReporting.choice.disabled->nrofReportedRS)
