@@ -13,6 +13,7 @@
 #include "common/utils/LOG/log.h" // for LOG_I, LOG_A, etc.
 #include "common/utils/ds/seq_arr.h" // for seq_arr_free
 #include "openair2/F1AP/f1ap_ids.h" // for cu_init_f1_ue_data, cu_add_f1_ue_data
+#include "softmodem-common.h"
 
 // Test constants
 static const sctp_assoc_t ASSOC_ID_DU1 = 8;

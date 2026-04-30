@@ -59,6 +59,7 @@ typedef struct IttiMsgText_s {
 #include <openair2/COMMON/as_message.h>
 #include <openair2/RRC/LTE/rrc_types.h>
 #include <openair2/COMMON/rrc_messages_types.h>
+#include <openair2/RRC/NR/nr_rrc_messages_types.h>
 #include <openair2/COMMON/e1ap_messages_types.h>
 
 #include <openair3/NAS/COMMON/UTIL/OctetString.h>
@@ -293,6 +294,7 @@ typedef struct {
   TASK_DEF(TASK_CUCP_E1, 200)         \
   TASK_DEF(TASK_CUUP_E1, 200)         \
   TASK_DEF(TASK_NAS_NRUE, 200)        \
+  TASK_DEF(TASK_TELNET, 200)        \
   TASK_DEF(TASK_MAX, 200)
 
 #define TASK_DEF(TaskID, qUEUEsIZE) {qUEUEsIZE, #TaskID},

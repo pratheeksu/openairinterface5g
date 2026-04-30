@@ -658,6 +658,4 @@ const ue_serving_cell_t *ue_get_pcell_entry(const gNB_RRC_UE_t *ue);
 #define LOG_UE_EVENT(ue_context, fmt, ...)    LOG_A(NR_RRC, "[--] " UE_LOG_FMT " " fmt, UE_LOG_ARGS(ue_context) __VA_OPT__(,) __VA_ARGS__)
 #define LOG_UE_UL_EVENT(ue_context, fmt, ...) LOG_A(NR_RRC, "[UL] " UE_LOG_FMT " " fmt, UE_LOG_ARGS(ue_context) __VA_OPT__(,) __VA_ARGS__)
 
-#include "nr_rrc_proto.h" //should be put here otherwise compilation error
-
 #endif
