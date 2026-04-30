@@ -152,6 +152,7 @@ int main(int argc, char *argv[]) {
     setblocking(serviceSock, blocking);
 
     if ( raw ) {
+      header.magic = SAMPLES_BLOCK_HEADER_MAGIC;
       header.size=blockSize;
       header.nbAnt=1;
       header.timestamp=timestamp;

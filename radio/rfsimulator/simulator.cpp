@@ -966,7 +966,7 @@ static int rfsimulator_write_internal(rfsimulator_state_t *t,
     buffer_t *b = &t->buf[i];
 
     if (b->conn_sock >= 0) {
-      samplesBlockHeader_t header = {(uint32_t)nsamps, (uint32_t)nbAnt, (uint64_t)timestamp, 0, 0, beams_to_beam_map(tx_beams)};
+      samplesBlockHeader_t header = {SAMPLES_BLOCK_HEADER_MAGIC, (uint32_t)nsamps, (uint32_t)nbAnt, (uint64_t)timestamp, 0, 0, beams_to_beam_map(tx_beams)};
       fullwrite(b->conn_sock, &header, sizeof(header), t);
       int num_beams = tx_beams.size();
       // Send beams in order of beam index. This is required for beam_map to work correctly on the receiver side.
@@ -1018,6 +1018,8 @@ static int rfsimulator_write_beams(openair0_device_t *device,
                                    int num_beams,
                                    int flags)
 {
+  AssertFatal(nbAnt > 0, "Number of antennas not set\n");
+  AssertFatal(num_beams > 0, "Number of beams not set\n");
   timestamp -= device->openair0_cfg->command_line_sample_advance;
   int nsamps_initial = nsamps;
   rfsimulator_state_t *t = static_cast<rfsimulator_state_t *>(device->priv);
@@ -1079,7 +1081,7 @@ static bool add_client(rfsimulator_state_t *t)
   void *samplesVoid[t->tx_num_channels];
   for (int i = 0; i < t->tx_num_channels; i++)
     samplesVoid[i] = (void *)&v;
-  samplesBlockHeader_t header = {1, (uint32_t)t->tx_num_channels, (uint64_t)t->lastWroteTS, 0, 0, 1};
+  samplesBlockHeader_t header = {SAMPLES_BLOCK_HEADER_MAGIC, 1, (uint32_t)t->tx_num_channels, (uint64_t)t->lastWroteTS, 0, 0, 1};
   fullwrite(conn_sock, &header, sizeof(header), t);
   fullwrite(conn_sock, samplesVoid, sampleToByte(1, t->tx_num_channels), t);
 
@@ -1092,6 +1094,7 @@ static bool add_client(rfsimulator_state_t *t)
 static void process_recv_header(rfsimulator_state_t *t, buffer_t *b, bool first_time)
 {
   b->headerMode = false; // We got the header
+  AssertFatal(b->th.magic == SAMPLES_BLOCK_HEADER_MAGIC, "Incorrect magic number in header\n");
   AssertFatal(b->th.nbAnt != 0, "Number of antennas not set\n");
   if (b->nbAnt != b->th.nbAnt) {
     LOG_A(HW, "RFsim: Number of antennas changed from %d to %d\n", b->nbAnt, b->th.nbAnt);

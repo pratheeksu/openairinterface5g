@@ -33,6 +33,8 @@
 #define MAX_WRITE_THREAD_BUFFER_SIZE 8
 #define MAX_CARDS 10
 
+#define SAMPLES_BLOCK_HEADER_MAGIC 0xffefU
+
 typedef int64_t openair0_timestamp_t;
 typedef volatile int64_t openair0_vtimestamp_t;
 
@@ -622,6 +624,7 @@ struct openair0_device {
 };
 
 typedef struct {
+  uint32_t magic;
   uint32_t size;           // Number of samples per antenna to follow this header
   uint32_t nbAnt;          // Total number of antennas following this header
   // Samples per antenna follow this header,
