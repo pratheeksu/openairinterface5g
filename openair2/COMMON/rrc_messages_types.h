@@ -30,6 +30,7 @@
 #include "NR_BCCH-BCH-Message.h"
 #include "NR_ReestablishmentCause.h"
 #include "NR_UE-NR-Capability.h"
+#include "common/ngran_types.h"
 
 //-------------------------------------------------------------------------------------------//
 // Messages for RRC logging
@@ -483,5 +484,31 @@ typedef struct {
     nr_mac_rrc_resume_rb_t resume_rb;
   } payload;
 } nr_mac_rrc_message_t;
+
+typedef struct Rrc_get_active_ue_list_s{
+    uint32_t num_ues;
+    uint32_t rnti_list[MAX_MOBILES_PER_GNB]; // Define a safe upper bound
+} Rrc_get_active_ue_list;
+#define RRC_GET_ACTIVE_UE_LIST(mSGpTR)   (mSGpTR)->ittiMsg.rrc_active_ue_list;
+
+
+typedef struct Rrc_get_cuup_cells_list_s{
+  uint64_t cell_ids[10];
+  uint16_t mccs[10];
+  uint16_t mncs[10];
+  uint8_t mnc_digit_lengths[10];
+  int cell_count;
+  uint8_t sst;
+  uint32_t sd;
+} Rrc_get_cuup_cells_list;
+#define RRC_GET_CUUP_CELLS_LIST(mSGpTR)   (mSGpTR)->ittiMsg.rrc_cuup_cells_list;
+
+
+typedef struct Rrc_get_node_info_s{
+  ngran_node_t node_type;
+  uint32_t node_id;
+  char *node_name;
+} Rrc_get_node_info;
+#define RRC_GET_NODE_INFO(mSGpTR)   (mSGpTR)->ittiMsg.rrc_node_info;
 
 #endif /* RRC_MESSAGES_TYPES_H_ */

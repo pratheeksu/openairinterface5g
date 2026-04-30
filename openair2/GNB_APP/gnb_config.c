@@ -705,7 +705,7 @@ void RCconfig_nr_prs(void)
         for (int l = 0; l < PRS_ParamList.paramarray[j][PRS_MUTING_PATTERN1_LIST].numelt; l++)
         {
           prs_config->MutingPattern1[l]      = PRS_ParamList.paramarray[j][PRS_MUTING_PATTERN1_LIST].uptr[l];
-          if (k == 0) // print only for 0th resource 
+          if (k == 0) // print only for 0th resource
             snprintf(str[5]+strlen(str[5]),sizeof(str[5])-strlen(str[5]),"%d, ",prs_config->MutingPattern1[l]);
         }
         for (int l = 0; l < PRS_ParamList.paramarray[j][PRS_MUTING_PATTERN2_LIST].numelt; l++)
@@ -1814,7 +1814,7 @@ void RCconfig_nr_macrlc(configmodule_interface_t *cfg)
 
     if (IS_SA_MODE(get_softmodem_params()))
       nr_mac_configure_sib1(RC.nrmac[0], &info.plmn, info.nr_cellid, *info.tac);
-    
+
     // read F1 Setup information from config and generated MIB/SIB1
     // and store it at MAC for sending later
     NR_BCCH_BCH_Message_t *mib = RC.nrmac[0]->common_channels[0].mib;
@@ -2281,6 +2281,8 @@ static void fill_measurement_configuration(uint8_t gnb_idx, gNB_RRC_INST *rrc)
   }
 }
 
+extern void openair_rrc_gNB_configuration(gNB_RRC_INST *rrc, nr_rrc_config_t *configuration);
+
 /** @brief Parse and populate SIB2 configuration from config file
  * @param[in] gnb_idx gNB index
  * @return populated SIB2 configuration */
@@ -2395,7 +2397,7 @@ gNB_RRC_INST *RCconfig_NRRRC()
     }
 
     if (strcmp(*(GNBParamList.paramarray[i][GNB_TRANSPORT_S_PREFERENCE_IDX].strptr), "local_mac") == 0) {
-      
+
     } else if (strcmp(*(GNBParamList.paramarray[i][GNB_TRANSPORT_S_PREFERENCE_IDX].strptr), "cudu") == 0) {
       rrc->eth_params_s.my_addr                  = strdup(*(GNBParamList.paramarray[i][GNB_LOCAL_S_ADDRESS_IDX].strptr));
       rrc->eth_params_s.remote_addr              = strdup(*(GNBParamList.paramarray[i][GNB_REMOTE_S_ADDRESS_IDX].strptr));
@@ -2405,10 +2407,10 @@ gNB_RRC_INST *RCconfig_NRRRC()
       rrc->eth_params_s.remote_portd             = *(GNBParamList.paramarray[i][GNB_REMOTE_S_PORTD_IDX].uptr);
       rrc->eth_params_s.transp_preference        = ETH_UDP_MODE;
     } else { // other midhaul
-    }       
-    
+    }
+
     // search if in active list
-    
+
     nr_rrc_config_t nrrrc_config = {0};
     for (k=0; k <num_gnbs ; k++) {
       if (strcmp(GNBSParams[GNB_ACTIVE_GNBS_IDX].strlistptr[k], *(GNBParamList.paramarray[i][GNB_GNB_NAME_IDX].strptr) )== 0) {
@@ -2755,7 +2757,7 @@ int gNB_app_handle_f1ap_gnb_cu_configuration_update(f1ap_gnb_cu_configuration_up
     // generate gNB_CU_CONFIGURATION_UPDATE_ACKNOWLEDGE
     msg_ack_p = itti_alloc_new_message (TASK_GNB_APP, 0, F1AP_GNB_CU_CONFIGURATION_UPDATE_ACKNOWLEDGE);
     F1AP_GNB_CU_CONFIGURATION_UPDATE_ACKNOWLEDGE(msg_ack_p).num_cells_failed_to_be_activated = 0;
-    F1AP_GNB_CU_CONFIGURATION_UPDATE_ACKNOWLEDGE(msg_ack_p).have_criticality = 0; 
+    F1AP_GNB_CU_CONFIGURATION_UPDATE_ACKNOWLEDGE(msg_ack_p).have_criticality = 0;
     F1AP_GNB_CU_CONFIGURATION_UPDATE_ACKNOWLEDGE(msg_ack_p).noofTNLAssociations_to_setup =0;
     F1AP_GNB_CU_CONFIGURATION_UPDATE_ACKNOWLEDGE(msg_ack_p).noofTNLAssociations_failed = 0;
     F1AP_GNB_CU_CONFIGURATION_UPDATE_ACKNOWLEDGE(msg_ack_p).noofDedicatedSIDeliveryNeededUEs = 0;
@@ -2778,7 +2780,7 @@ int gNB_app_handle_f1ap_gnb_cu_configuration_update(f1ap_gnb_cu_configuration_up
 ngran_node_t get_node_type(void)
 {
   GET_PARAMS_LIST(GNBParamList, GNBParams, GNBPARAMS_DESC, GNB_CONFIG_STRING_GNB_LIST, NULL);
-  if (GNBParamList.numelt == 0) // We have no valid configuration, let's return a default 
+  if (GNBParamList.numelt == 0) // We have no valid configuration, let's return a default
     return ngran_gNB;
 
   // MAC/RLC params

@@ -9,6 +9,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdarg.h>
+#include "intertask_interface.h"
 
 #include "openair2/RRC/NR/rrc_gNB_UE_context.h"
 
@@ -21,27 +22,26 @@
  * Module brief:
  * This module is used to add RRCRelease commands to the telnet server in the
  * absence of full support for E2SM RAN Control (RC).
- * This provides similar functionality to the ORAN.WG3.E2SM-RC-R003-v05.00 
- * 8.4.5.4 RRC Connection Release Control which is initiated by the RIC. 
- * 
+ * This provides similar functionality to the ORAN.WG3.E2SM-RC-R003-v05.00
+ * 8.4.5.4 RRC Connection Release Control which is initiated by the RIC.
+ *
  * Implementation notes:
- * We refer to the method call rrc_gNB_generate_RRCRelease at rrc_gNB_NGAP.c 
- * during rrc_gNB_process_NGAP_UE_CONTEXT_RELEASE_COMMAND message generation. 
- * 
+ * We refer to the method call rrc_gNB_generate_RRCRelease at rrc_gNB_NGAP.c
+ * during rrc_gNB_process_NGAP_UE_CONTEXT_RELEASE_COMMAND message generation.
+ *
  * Building the telnetsrv and module:
  * ./build_oai --build-lib telnetsrv
- * 
+ *
  * Loading the module:
  * sudo ./nr-softmodem -E --rfsim --log_config.global_log_options level,nocolor,time -O ~/gnb.sa.band78.106prb.rfsim.conf --telnetsrv --telnetsrv.shrmod rrc
 */
 
 static int get_single_ue_id(void)
 {
-  rrc_gNB_ue_context_t *ue_context_p = NULL;
-  RB_FOREACH(ue_context_p, rrc_nr_ue_tree_s, &(RC.nrrrc[0]->rrc_ue_head)) {
-    return ue_context_p->ue_context.rrc_ue_id;
-  }
-  return -1;
+  MessageDef *msg_p = itti_alloc_new_message (TASK_RRC_GNB, 0, RRC_GET_SINGLE_UE_RNTI);
+  itti_send_msg_to_task(TASK_RRC_GNB, 0, msg_p);
+  itti_receive_msg(TASK_TELNET, &msg_p);
+  return msg_p->ittiMsg.rrc_get_single_ue_rnti.rnti ? msg_p->ittiMsg.rrc_get_single_ue_rnti.rnti : -1;
 }
 
 /**
@@ -71,19 +71,24 @@ int rrc_gNB_trigger_release(char *buf, int debug, telnet_printfunc_t prnt)
   }
 
   /* get RRC and UE */
-  gNB_RRC_INST *rrc = RC.nrrrc[0];
-  rrc_gNB_ue_context_t *ue_context_p = rrc_gNB_get_ue_context(rrc, ue_id);
-  if (!ue_context_p) {
+
+  MessageDef *msg_p = itti_alloc_new_message (TASK_RRC_GNB, 0, RRC_GET_UE_CONTEXT_BY_UE_ID);
+  itti_send_msg_to_task(TASK_RRC_GNB, 0, msg_p);
+  itti_receive_msg(TASK_TELNET, &msg_p);
+  Rrc_get_single_ue_rnti ue = msg_p->ittiMsg.rrc_get_single_ue_rnti;
+  if (!ue.rnti) {
     prnt("Could not find UE context associated with UE ID %lu\n", ue_id);
     LOG_E(RRC, "Could not find UE context associated with UE ID %lu\n", ue_id);
     return -1;
   }
-  
-  gNB_RRC_UE_t *UE = &ue_context_p->ue_context;
 
-  rrc_gNB_generate_RRCRelease(rrc, UE);
+  msg_p = itti_alloc_new_message (TASK_RRC_GNB, 0, RRC_GNB_GENERATE_RRCRELEASE);
+  msg_p->ittiMsg.rrc_gnb_generate_rrcrelease.ue_id = ue.id;
+  itti_send_msg_to_task(TASK_RRC_GNB, 0, msg_p);
+
+
   prnt("RRC Release triggered for UE %u\n", ue_id);
-  
+
   return 0;
 }
 
@@ -94,15 +99,12 @@ int rrc_gNB_trigger_release_all(char *buf, int debug, telnet_printfunc_t prnt)
 {
   UNUSED(debug);
   UNUSED(buf);
-  rrc_gNB_ue_context_t *ue_context_p = NULL;
-
-  gNB_RRC_INST *rrc = RC.nrrrc[0];
-  RB_FOREACH(ue_context_p, rrc_nr_ue_tree_s, &rrc->rrc_ue_head) {
-    gNB_RRC_UE_t *UE = &ue_context_p->ue_context;
-    rrc_gNB_generate_RRCRelease(rrc, UE);
-    prnt("RRC Release triggered for UE %u\n", UE->rrc_ue_id);
+  MessageDef *msg_p = itti_alloc_new_message (TASK_RRC_GNB, 0, RRC_GNB_GENERATE_RRCRELEASE_ALL);
+  itti_send_msg_to_task(TASK_RRC_GNB, 0, msg_p);
+  itti_receive_msg(TASK_TELNET, &msg_p);
+  for(int i=0; i<sizeof(msg_p->ittiMsg.rrc_gnb_generate_rrcrelease_all.rrc_gnb_generate_rrcreleases);i++){
+    prnt("RRC Release triggered for UE %u\n", msg_p->ittiMsg.rrc_gnb_generate_rrcrelease_all.rrc_gnb_generate_rrcreleases[i].ue_id);
   }
-
   return 0;
 }
 

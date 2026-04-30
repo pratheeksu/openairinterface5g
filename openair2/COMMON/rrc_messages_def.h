@@ -69,3 +69,7 @@ MESSAGE_DEF(NAS_PDU_SESSION_REQ, MESSAGE_PRIORITY_MED, nas_pdu_session_req_t, na
 
 // UE: RLC -> RRC messages
 MESSAGE_DEF(NR_RRC_RLC_MAXRTX,          MESSAGE_PRIORITY_MED,       RlcMaxRtxIndication,        nr_rlc_maxrtx_indication)
+
+MESSAGE_DEF(RRC_GET_ACTIVE_UE_LIST, MESSAGE_PRIORITY_MED, Rrc_get_active_ue_list, rrc_active_ue_list)
+MESSAGE_DEF(RRC_GET_CUUP_CELLS_LIST, MESSAGE_PRIORITY_MED, Rrc_get_cuup_cells_list, rrc_cuup_cells_list)
+MESSAGE_DEF(RRC_GET_NODE_INFO, MESSAGE_PRIORITY_MED, Rrc_get_node_info, rrc_node_info)
