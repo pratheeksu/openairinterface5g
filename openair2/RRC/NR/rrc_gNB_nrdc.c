@@ -28,7 +28,9 @@ typedef enum {
   DEACTIVATE_NRDC_WAIT_FOR_F1_CONTEXT_MODIFICATION_RESPONSE,
   DEACTIVATE_NRDC_WAIT_FOR_PDU_SESSION_RELEASE_RECONFIGURATION_COMPLETE,
   NRDC_DU_CONTEXT_TO_RELEASE,
-  NRDC_DEACTIVATED
+  NRDC_DEACTIVATED,
+  SCG_FAILURE_WAIT_FOR_F1_CONTEXT_MODIFICATION_RESPONSE,
+  SCG_FAILURE_WAIT_FOR_RECONFIGURATION_COMPLETE
 } nrdc_state_t;
 
 typedef struct {
@@ -482,7 +484,8 @@ void rrc_gnb_nrdc_rrc_reconfiguration_complete_received(gNB_RRC_INST *rrc, gNB_R
 
   if (nrdc->state != ACTIVATE_NRDC_WAIT_FOR_A4_RECONFIGURATION_COMPLETE
       && nrdc->state != ACTIVATE_NRDC_WAIT_FOR_ACTIVATION_RECONFIGURATION_COMPLETE
-      && nrdc->state != DEACTIVATE_NRDC_WAIT_FOR_PDU_SESSION_RELEASE_RECONFIGURATION_COMPLETE) {
+      && nrdc->state != DEACTIVATE_NRDC_WAIT_FOR_PDU_SESSION_RELEASE_RECONFIGURATION_COMPLETE
+      && nrdc->state != SCG_FAILURE_WAIT_FOR_RECONFIGURATION_COMPLETE) {
     LOG_W(NR_RRC, "ignore unexpected NR-DC RRC Reconfiguration received for ue %d\n", ue->rrc_ue_id);
     return;
   }
@@ -520,6 +523,13 @@ void rrc_gnb_nrdc_rrc_reconfiguration_complete_received(gNB_RRC_INST *rrc, gNB_R
     rrc_gNB_send_NGAP_PDUSESSION_RELEASE_RESPONSE(rrc, ue, xid);
     LOG_I(NR_RRC, "ue %d: NR-DC PDU session is removed\n", ue->rrc_ue_id);
     nrdc->state = NRDC_DU_CONTEXT_TO_RELEASE;
+    return;
+  }
+
+  if (nrdc->state == SCG_FAILURE_WAIT_FOR_RECONFIGURATION_COMPLETE) {
+    LOG_I(NR_RRC, "NR-DC: SCG released for UE %d (UE is not in NR-DC anymore)\n", ue->rrc_ue_id);
+    free(ue->nrdc);
+    ue->nrdc = NULL;
     return;
   }
 
@@ -1025,9 +1035,23 @@ bool rrc_gnb_nrdc_wait_for_f1_context_modification_response(gNB_RRC_UE_t *ue)
   return nrdc->state == DEACTIVATE_NRDC_WAIT_FOR_F1_CONTEXT_MODIFICATION_RESPONSE;
 }
 
+void nrdc_scg_failure_context_modification_response(gNB_RRC_UE_t *ue, gNB_RRC_INST *rrc, f1ap_ue_context_mod_resp_t *resp);
+
 void nrdc_rrc_CU_process_ue_context_modification_response(gNB_RRC_UE_t *ue, gNB_RRC_INST *rrc, f1ap_ue_context_mod_resp_t *resp)
 {
   LOG_D(NR_RRC, "nrdc_rrc_CU_process_ue_context_modification_response called\n");
+
+  nrdc_ue_state_t *nrdc = ue->nrdc;
+  if (!nrdc) {
+    LOG_E(NR_RRC, "no NR-DC found for ue %d, ignore ContextModificationResponse\n", ue->rrc_ue_id);
+    return;
+  }
+
+  if (nrdc->state == SCG_FAILURE_WAIT_FOR_F1_CONTEXT_MODIFICATION_RESPONSE)
+    return nrdc_scg_failure_context_modification_response(ue, rrc, resp);
+
+  DevAssert(nrdc->state == DEACTIVATE_NRDC_WAIT_FOR_F1_CONTEXT_MODIFICATION_RESPONSE);
+  DevAssert(ue->nas_pdu.buf && ue->nas_pdu.len);
 
   /* only works for deactivation, where we need du_to_cu_rrc_info, but no drbs and no srbs to setup */
   if (resp->drbs_len || resp->srbs_len || resp->du_to_cu_rrc_info == NULL
@@ -1036,16 +1060,6 @@ void nrdc_rrc_CU_process_ue_context_modification_response(gNB_RRC_UE_t *ue, gNB_
     LOG_E(NR_RRC, "NR-DC ignore bad UE Context Modification Response\n");
     return;
   }
-
-  DevAssert(ue->nas_pdu.buf && ue->nas_pdu.len);
-
-  nrdc_ue_state_t *nrdc = ue->nrdc;
-  if (!nrdc) {
-    LOG_E(NR_RRC, "no NR-DC found for ue %d, ignore ContextModificationResponse\n", ue->rrc_ue_id);
-    return;
-  }
-
-  DevAssert(nrdc->state == DEACTIVATE_NRDC_WAIT_FOR_F1_CONTEXT_MODIFICATION_RESPONSE);
 
   int xid = rrc_gNB_get_next_transaction_identifier(rrc->module_id);
   nrdc->xid = xid;
@@ -1145,4 +1159,171 @@ void nrdc_scg_ue_release(gNB_RRC_INST *rrc, gNB_RRC_UE_t *ue)
 
   /* NR-DC is put to deactivated mode, release will happen when the UE is removed from the CU */
   nrdc->state = NRDC_DEACTIVATED;
+}
+
+void nrdc_handle_scg_failure_information(gNB_RRC_INST *rrc, gNB_RRC_UE_t *ue, NR_SCGFailureInformation_t *msg)
+{
+  if (ue->nrdc == NULL)
+    return;
+  nrdc_ue_state_t *nrdc = ue->nrdc;
+
+  /* SCG Failure: put back the NR-DC DRB from SCG to MCG */
+
+  uint64_t *ue_agg_mbr = malloc_or_fail(sizeof(*ue_agg_mbr));
+  *ue_agg_mbr = 1000000000 /*bps*/;       /* todo: hardcoded, use correct value */
+
+  /* tranfser back the first DRB (should be the 'default' one) */
+  /* note: this code is copy/paste from fill_drb_to_be_setup(), think about how to factorize */
+  f1ap_drb_to_setup_t *drbs = calloc_or_fail(1, sizeof(*drbs));
+  f1ap_drb_to_setup_t *drb = &drbs[0];
+  /* bad, don't use seq_arr_front(), take the real one (nrdc->ndr_id) */
+  drb_t *rrc_drb = seq_arr_front(&ue->drbs);
+  DevAssert(rrc_drb);
+  /* fetch an existing PDU session for this DRB */
+  rrc_pdu_session_param_t *pdu = find_pduSession_from_drbId(ue, rrc_drb->drb_id);
+  AssertFatal(pdu != NULL, "no PDU session for DRB ID %d\n", rrc_drb->drb_id);
+
+  drb->id = nrdc->drb_id;
+
+  drb->qos_choice = F1AP_QOS_CHOICE_NR;
+  drb->nr.nssai = pdu->param.nssai;
+  drb->nr.flows_len = 1;
+  drb->nr.flows = calloc_or_fail(1, sizeof(*drb->nr.flows));
+
+  // Find the QoS flow associated with this DRB
+  // Since we don't have QFI mapping in the new structure, we'll use the first QoS flow
+  AssertFatal(seq_arr_size(&pdu->param.qos) == 1, "only 1 Qos flow supported\n");
+  nr_rrc_qos_t *qos_param = (nr_rrc_qos_t *)seq_arr_at(&pdu->param.qos, 0);
+  DevAssert(qos_param->qos.qfi > 0);
+  drb->nr.flows[0].qfi = qos_param->qos.qfi;
+  drb->nr.flows[0].param = nr_rrc_get_f1_qos_flow_param(&qos_param->qos);
+  /* the DRB QoS parameters: we just reuse the ones from the first flow */
+  drb->nr.drb_qos = drb->nr.flows[0].param;
+
+  memcpy(&drb->up_ul_tnl[0].tl_address, &rrc_drb->cuup_tunnel_config.addr.buffer, sizeof(uint8_t) * 4);
+  drb->up_ul_tnl[0].teid = rrc_drb->cuup_tunnel_config.teid;
+  drb->up_ul_tnl_len = 1;
+
+  drb->rlc_mode = rrc->configuration.um_on_default_drb ? F1AP_RLC_MODE_UM_BIDIR : F1AP_RLC_MODE_AM;
+  nr_pdcp_configuration_t *pdcp = &rrc_drb->pdcp_config;
+  DevAssert(pdcp->drb.sn_size == 18 || pdcp->drb.sn_size == 12);
+  drb->dl_pdcp_sn_len = malloc_or_fail(sizeof(*drb->dl_pdcp_sn_len));
+  *drb->dl_pdcp_sn_len = pdcp->drb.sn_size == 18 ? F1AP_PDCP_SN_18B : F1AP_PDCP_SN_12B;
+  drb->ul_pdcp_sn_len = malloc_or_fail(sizeof(*drb->ul_pdcp_sn_len));
+  *drb->ul_pdcp_sn_len = pdcp->drb.sn_size == 18 ? F1AP_PDCP_SN_18B : F1AP_PDCP_SN_12B;
+
+  /* create the F1 Context Modification Request message */
+  f1_ue_data_t ue_data = cu_get_f1_ue_data(ue->rrc_ue_id);
+  uint32_t ue_du_id = ue_data.secondary_ue;
+
+  bool *gNB_DU_Configuration_Query = calloc_or_fail(1, sizeof(*gNB_DU_Configuration_Query));
+  *gNB_DU_Configuration_Query = true;
+
+  f1ap_ue_context_mod_req_t ue_context_mod_req = {
+    .gNB_CU_ue_id = ue->rrc_ue_id,
+    .gNB_DU_ue_id = ue_du_id,
+    .drbs_len = 1,
+    .drbs = drbs,
+    .gNB_DU_Configuration_Query = gNB_DU_Configuration_Query
+  };
+  rrc->mac_rrc.ue_context_modification_request(ue_data.du_assoc_id, &ue_context_mod_req);
+  free_ue_context_mod_req(&ue_context_mod_req);
+
+  /* remove the UE from SCG DU (we ignore the replied UEContextReleaseComplete) */
+  nrdc_scg_ue_release(rrc, ue);
+
+  nrdc->state = SCG_FAILURE_WAIT_FOR_F1_CONTEXT_MODIFICATION_RESPONSE;
+}
+
+bool rrc_gnb_nrdc_wait_for_scg_failure_context_modification_response(gNB_RRC_UE_t *ue)
+{
+  if (!ue->nrdc)
+    return false;
+  nrdc_ue_state_t *nrdc = ue->nrdc;
+  return nrdc->state == SCG_FAILURE_WAIT_FOR_F1_CONTEXT_MODIFICATION_RESPONSE;
+}
+
+void nrdc_scg_failure_context_modification_response(gNB_RRC_UE_t *ue, gNB_RRC_INST *rrc, f1ap_ue_context_mod_resp_t *resp)
+{
+  LOG_E(NR_RRC, "nrdc_scg_failure_context_modification_response called\n");
+
+  if (ue->nrdc == NULL)
+    return;
+  nrdc_ue_state_t *nrdc = ue->nrdc;
+
+  /* modify GTP bearer endpoint */
+  AssertFatal(resp->drbs_len == 1, "bad scg failure context modification response\n");
+  store_du_f1u_tunnel(resp->drbs, resp->drbs_len, ue);
+  e1_send_bearer_updates(rrc, ue, resp->drbs_len, resp->drbs);
+
+  /* reconfigure the UE to release the SCG and put back the bearer to MCG */
+  OCTET_STRING_t cgbuf = { .buf = resp->du_to_cu_rrc_info->cell_group_config.buf,
+                           .size = resp->du_to_cu_rrc_info->cell_group_config.len };
+
+  int xid = rrc_gNB_get_next_transaction_identifier(rrc->module_id);
+  nrdc->xid = xid;
+  ue->xids[xid] = RRC_F1_NRDC_IN_PROGRESS;
+
+  NR_DL_DCCH_Message_t dl_dcch_msg = {
+    .message = {
+      .present = NR_DL_DCCH_MessageType_PR_c1,
+      .choice = { .c1 = &(struct NR_DL_DCCH_MessageType__c1) {
+          .present = NR_DL_DCCH_MessageType__c1_PR_rrcReconfiguration,
+          .choice = {
+            .rrcReconfiguration = &(struct NR_RRCReconfiguration) {
+              .rrc_TransactionIdentifier = xid,
+              .criticalExtensions = {
+                .present = NR_RRCReconfiguration__criticalExtensions_PR_rrcReconfiguration,
+                .choice = {
+                  .rrcReconfiguration = &(struct NR_RRCReconfiguration_IEs) {
+                    .radioBearerConfig = &(struct NR_RadioBearerConfig) {
+                      .drb_ToAddModList = &(struct NR_DRB_ToAddModList) {
+                        .list = {
+                          .array = (struct NR_DRB_ToAddMod *[]) {
+                            &(struct NR_DRB_ToAddMod) {
+                              .drb_Identity = (NR_DRB_Identity_t) nrdc->drb_id,
+                              .recoverPDCP = &(long) {
+                                NR_DRB_ToAddMod__recoverPDCP_true
+                              }
+                            }
+                          },
+                          .count = 1
+                        }
+                      },
+                    },
+                    .nonCriticalExtension = &(struct NR_RRCReconfiguration_v1530_IEs) {
+                      .masterCellGroup = &cgbuf,
+                      .nonCriticalExtension = &(struct NR_RRCReconfiguration_v1540_IEs) {
+                        .nonCriticalExtension = &(struct NR_RRCReconfiguration_v1560_IEs) {
+                          .mrdc_SecondaryCellGroupConfig = &(struct NR_SetupRelease_MRDC_SecondaryCellGroupConfig) {
+                            .present = NR_SetupRelease_MRDC_SecondaryCellGroupConfig_PR_release,
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  };
+
+  /* encode and send */
+  unsigned char *buf = 0;
+
+  int len = uper_encode_to_new_buffer(&asn_DEF_NR_DL_DCCH_Message, NULL, &dl_dcch_msg, (void **)&buf);
+  if (len <= 0) {
+    AssertFatal(len > 0, "Failed to encode DL-DCCH message\n");
+    LOG_E(NR_RRC, "NR-DC Failed to encode DL-DCCH message\n");
+    return;
+  }
+
+  const uint32_t msg_id = NR_DL_DCCH_MessageType__c1_PR_rrcReconfiguration;
+  nr_rrc_transfer_protected_rrc_message(rrc, ue, DL_SCH_LCID_DCCH, msg_id, buf, len);
+  free(buf);
+
+  nrdc->state = SCG_FAILURE_WAIT_FOR_RECONFIGURATION_COMPLETE;
 }

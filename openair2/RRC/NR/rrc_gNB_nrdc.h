@@ -30,4 +30,8 @@ bool nrdc_handle_f1_context_release_complete(gNB_RRC_INST *rrc, gNB_RRC_UE_t *ue
 
 void nrdc_scg_ue_release(gNB_RRC_INST *rrc, gNB_RRC_UE_t *ue);
 
+void nrdc_handle_scg_failure_information(gNB_RRC_INST *rrc, gNB_RRC_UE_t *ue, NR_SCGFailureInformation_t *msg);
+bool rrc_gnb_nrdc_wait_for_scg_failure_context_modification_response(gNB_RRC_UE_t *ue);
+void nrdc_scg_failure_context_modification_response(gNB_RRC_UE_t *ue, gNB_RRC_INST *rrc, f1ap_ue_context_mod_resp_t *resp);
+
 #endif /* __RRC_GNB_NRDC_H__ */

@@ -3552,6 +3552,24 @@ static int rrc_gNB_decode_dcch(gNB_RRC_INST *rrc, const f1ap_ul_rrc_message_t *m
         handle_rrcReestablishmentComplete(rrc, UE, rc);
         break;
 
+      case NR_UL_DCCH_MessageType__c1_PR_scgFailureInformation: {
+        long type = ul_dcch_msg->message.choice.c1->choice.scgFailureInformation->criticalExtensions.choice.scgFailureInformation->failureReportSCG->failureType;
+        char *cause[] = {
+          "NR_FailureReportSCG__failureType_t310_Expiry",
+          "NR_FailureReportSCG__failureType_randomAccessProblem",
+          "NR_FailureReportSCG__failureType_rlc_MaxNumRetx",
+          "NR_FailureReportSCG__failureType_synchReconfigFailureSCG",
+          "NR_FailureReportSCG__failureType_scg_ReconfigFailure",
+          "NR_FailureReportSCG__failureType_srb3_IntegrityFailure",
+          "NR_FailureReportSCG__failureType_other_r16",
+          "NR_FailureReportSCG__failureType_spare1"
+        };
+        LOG_E(NR_RRC, "scg failure cause %s\n", type >= 0 && type <= 7 ? cause[type] : "unknown");
+        LOG_UE_UL_EVENT(UE, "received scg failure cause %s\n", type >= 0 && type <= 7 ? cause[type] : "unknown");
+        nrdc_handle_scg_failure_information(rrc, UE, ul_dcch_msg->message.choice.c1->choice.scgFailureInformation);
+        break;
+      }
+
       default:
         break;
     }
@@ -4055,6 +4073,9 @@ static void rrc_CU_process_ue_context_modification_response(MessageDef *msg_p, i
 
   if (UE->nrdc && rrc_gnb_nrdc_wait_for_f1_context_modification_response(UE))
     return nrdc_rrc_CU_process_ue_context_modification_response(UE, rrc, resp);
+
+  if (UE->nrdc && rrc_gnb_nrdc_wait_for_scg_failure_context_modification_response(UE))
+    return nrdc_scg_failure_context_modification_response(UE, rrc, resp);
 
   bool is_inter_cu_ho = UE->ho_context && UE->ho_context->source && !UE->ho_context->target;
   if (resp->drbs_len > 0) { // DRB to setup
