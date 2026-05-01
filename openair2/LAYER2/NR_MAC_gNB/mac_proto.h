@@ -381,15 +381,14 @@ bool add_UE_to_list(int list_size, NR_UE_info_t *list[list_size], NR_UE_info_t *
 NR_UE_info_t *remove_UE_from_list(int list_size, NR_UE_info_t *list[list_size], rnti_t rnti);
 int get_dl_tda(const gNB_MAC_INST *nrmac, int slot);
 int get_num_ul_tda(gNB_MAC_INST *nrmac, int slot, int k2, const NR_tda_info_t **first_idx);
-const NR_tda_info_t *get_best_ul_tda(const gNB_MAC_INST *nrmac,
-                                     int beam,
-                                     const NR_tda_info_t *tdas,
-                                     int n_tda,
-                                     int frame,
-                                     int slot,
-                                     int *rb_start,
-                                     int *rb_len);
-
+void get_rb_for_tda_candidates(const gNB_MAC_INST *nrmac,
+                               int beam,
+                               const NR_tda_info_t *tdas,
+                               int n_tda,
+                               int frame,
+                               int slot,
+                               int *rb_start,
+                               int *rb_len);
 int get_cce_index(const gNB_MAC_INST *nrmac,
                   const int CC_id,
                   const int slot,
