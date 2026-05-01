@@ -20,7 +20,7 @@ CMAKE_BUILD_TYPE="RelWithDebInfo"
 CMAKE_CMD="$CMAKE"
 OPTIONAL_LIBRARIES="telnetsrv enbscope uescope nrscope ldpc_aal websrv oai_iqplayer imscope imscope_record"
 TARGET_LIST=""
-BUILD_TOOL_OPT="-j$(nproc)"
+BUILD_TOOL_OPT="-j8"
 
 function print_help() {
   echo_info "
