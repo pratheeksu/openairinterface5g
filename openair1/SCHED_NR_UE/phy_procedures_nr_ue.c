@@ -491,7 +491,6 @@ static int nr_ue_pdsch_procedures(PHY_VARS_NR_UE *ue,
                                   NR_UE_DLSCH_t dlsch[2],
                                   int16_t *llr[2],
                                   c16_t rxdataF[][ue->frame_parms.samples_per_slot_wCP],
-                                  int G,
                                   freq_alloc_bitmap_t *freq_alloc)
 {
   int frame_rx = proc->frame_rx;
@@ -680,7 +679,6 @@ static int nr_ue_pdsch_procedures(PHY_VARS_NR_UE *ue,
                     dl_ch_magr,
                     ptrs_phase_per_slot,
                     ptrs_re_per_slot,
-                    G,
                     nvar,
                     &scope_req)
         < 0) {
@@ -1233,7 +1231,7 @@ void pdsch_processing(PHY_VARS_NR_UE *ue, const UE_nr_rxtx_proc_t *proc, nr_phy_
       llr[i] = (int16_t *)malloc16_clear(rx_llr_buf_sz * sizeof(int16_t));
 
     // it returns -1 in case of internal failure, or 0 in case of normal result
-    int ret_pdsch = nr_ue_pdsch_procedures(ue, proc, dlsch, llr, rxdataF, G[0], &freq_alloc);
+    int ret_pdsch = nr_ue_pdsch_procedures(ue, proc, dlsch, llr, rxdataF, &freq_alloc);
     TracyCPlot("pdsch mcs", dlsch->dlsch_config.mcs);
 
     UEscopeCopy(ue, pdschLlr, llr[0], sizeof(int16_t), 1, G[0], 0);

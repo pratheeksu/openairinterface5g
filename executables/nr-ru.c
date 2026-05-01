@@ -859,7 +859,7 @@ void *ru_thread(void *param)
     }
 
     LOG_I(PHY, "Starting IF interface for RU %d, nb_rx %d\n", ru->idx, ru->nb_rx);
-    AssertFatal(ru->nr_start_if(ru, NULL) == 0, "Could not start the IF device\n");
+    AssertFatal(ru->nr_start_if(ru) == 0, "Could not start the IF device\n");
 
   } else if (ru->if_south == LOCAL_RF) { // configure RF parameters only
     ret = openair0_device_load(&ru->rfdevice,&ru->openair0_cfg);
@@ -1011,7 +1011,8 @@ int start_streaming(RU_t *ru) {
   return ru->ifdevice.thirdparty_startstreaming(&ru->ifdevice);
 }
 
-int nr_start_if(struct RU_t_s *ru, struct PHY_VARS_gNB_s *gNB) {
+int nr_start_if(struct RU_t_s *ru)
+{
   if (ru->if_south <= REMOTE_IF5)
     for (int i = 0; i < ru->nb_rx; i++)
       ru->openair0_cfg.rxbase[i] = ru->common.rxdata[i];
@@ -1019,11 +1020,13 @@ int nr_start_if(struct RU_t_s *ru, struct PHY_VARS_gNB_s *gNB) {
   return ru->ifdevice.trx_start_func(&ru->ifdevice);
 }
 
-int start_rf(RU_t *ru) {
+int start_rf(RU_t *ru)
+{
   return(ru->rfdevice.trx_start_func(&ru->rfdevice));
 }
 
-int stop_rf(RU_t *ru) {
+int stop_rf(RU_t *ru)
+{
   if (ru->rfdevice.trx_get_stats_func) {
     ru->rfdevice.trx_get_stats_func(&ru->rfdevice);
   }

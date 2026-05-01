@@ -297,7 +297,6 @@ int nr_rx_pdsch(PHY_VARS_NR_UE *ue,
                 c16_t dl_ch_magr[][dlsch->Nl][nbRx][rx_size_symbol],
                 c16_t ptrs_phase_per_slot[][NR_SYMBOLS_PER_SLOT],
                 int32_t ptrs_re_per_slot[][NR_SYMBOLS_PER_SLOT],
-                int G,
                 uint32_t nvar,
                 pdsch_scope_req_t *scope_req);
 

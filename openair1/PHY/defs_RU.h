@@ -504,7 +504,7 @@ typedef struct RU_t_s {
   int (*stop_rf)(struct RU_t_s *ru);
   /// function pointer to initialization function for radio interface
   int (*start_if)(struct RU_t_s *ru, struct PHY_VARS_eNB_s *eNB);
-  int (*nr_start_if)(struct RU_t_s *ru, struct PHY_VARS_gNB_s *gNB);
+  int (*nr_start_if)(struct RU_t_s *ru);
   /// function pointer to RX front-end processing routine (DFTs/prefix removal or NULL)
   void (*feprx)(struct RU_t_s *ru, int subframe);
   /// function pointer to TX front-end processing routine (IDFTs and prefix removal or NULL)

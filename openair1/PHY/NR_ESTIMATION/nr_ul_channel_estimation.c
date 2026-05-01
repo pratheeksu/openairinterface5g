@@ -900,8 +900,7 @@ void nr_srs_noise_power_estimation(uint16_t ofdm_symbol_size,
 #endif
 }
 
-int nr_srs_channel_interpolation(int ant,
-                                 int p_index,
+int nr_srs_channel_interpolation(int p_index,
                                  uint16_t ofdm_symbol_size,
                                  uint16_t first_carrier_offset,
                                  uint8_t N_symb_SRS,
@@ -933,7 +932,7 @@ int nr_srs_channel_interpolation(int ant,
     uint16_t srs_symbol_offset = srs_symb * ofdm_symbol_size;
 
 #ifdef SRS_DEBUG
-    LOG_I(NR_PHY, "====================== UE port %d --> gNB Rx antenna %i ======================\n", p_index, ant);
+    LOG_I(NR_PHY, "============================== UE port %d ====================================\n", p_index);
     LOG_I(NR_PHY, "============================== SRS symbol index %d ===========================\n", srs_symb);
 #endif
 

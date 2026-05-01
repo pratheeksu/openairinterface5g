@@ -70,8 +70,7 @@ int nr_srs_ls_channel_estimation(int ant,
                                  c16_t srs_ls_estimated_channel[ofdm_symbol_size * N_symb_SRS],
                                  delay_t *delay);
 
-int nr_srs_channel_interpolation(int ant,
-                                 int p_index,
+int nr_srs_channel_interpolation(int p_index,
                                  uint16_t ofdm_symbol_size,
                                  uint16_t first_carrier_offset,
                                  uint8_t N_symb_SRS,

@@ -29,7 +29,6 @@
  * \param f2 input interleaved segment, 8 bits from 8 segments per byte
  * interleaved with E2 if there was a E shift in the segment group
  * \param E2 number of bits per segment in f2
- * \param Eshift flag indicating if there was a E shift within the segment group
  * \param E2_first_segment index of the first segment of size E2 if there is a E shift in the segment group
  * \param nb_segments number of segments in the group
  * \param output nrLDPC_coding_segment_encoder with concatenated segments and packed bits
@@ -39,7 +38,6 @@ static void write_task_output(uint8_t *f,
                               uint32_t E,
                               uint8_t *f2,
                               uint32_t E2,
-                              bool Eshift,
                               uint32_t E2_first_segment,
                               uint32_t nb_segments,
                               uint8_t *output,
@@ -173,9 +171,7 @@ static void write_task_output(uint8_t *f,
       Eoffset2 += E2;
     }
     output_p++;
-  }
-
-  
+  } 
 #endif
 }
 
@@ -441,12 +437,10 @@ int nrLDPC_coding_encoder(nrLDPC_slot_encoding_parameters_t *nrLDPC_slot_encodin
       unsigned int macro_segment_end = (C > macro_segment + 8) ? macro_segment + 8 : C;
       const uint32_t E = nrLDPC_TB_encoding_parameters->segments[macro_segment].E;
       uint32_t E2 = E, E2_first_segment = macro_segment_end - macro_segment;
-      bool Eshift = false;
       uint32_t Emax = E;
       for (int s = macro_segment; s < macro_segment_end; s++) {
         if (nrLDPC_TB_encoding_parameters->segments[s].E != E) {
            E2 = nrLDPC_TB_encoding_parameters->segments[s].E;
-           Eshift = true;
            E2_first_segment = s-macro_segment;
            if(E2 > Emax)
              Emax = E2;
@@ -464,7 +458,6 @@ int nrLDPC_coding_encoder(nrLDPC_slot_encoding_parameters_t *nrLDPC_slot_encodin
                         E,
                         &f2[nbTasks + j][0],
                         E2,
-                        Eshift,
                         E2_first_segment,
                         macro_segment_end - macro_segment,
                         nrLDPC_TB_encoding_parameters->output,
