@@ -52,6 +52,15 @@ class StaticCodeAnalysis():
 		cmd.run('docker image rm oai-formatting-check:latest')
 		cmd.run(f'docker build --target oai-formatting-check --tag oai-formatting-check:latest {check_options} --file {d}/ci-scripts/docker/Dockerfile.formatting.ubuntu {d} > {logDir}/oai-formatting-check.txt 2>&1')
 
+		finalStatus = 0
+		res = cmd.run(f'docker compose -f {lSourcePath}/ci-scripts/docker/clang-format.yaml up > {logDir}/oai-clang-format-check.txt')
+		if res.returncode == 0:
+			HTML.CreateHtmlTestRowQueue('clang-format', 'OK', ['Files satisfy clang-format requirements.'])
+		else:
+			finalStatus = -1
+			HTML.CreateHtmlTestRowQueue('clang-format', 'KO', ['Too many clang-format violations. If you have added files, make sure they are formatted with clang-format.'])
+		archiveArtifact(cmd, ctx, f'{logDir}/oai-clang-format-check.txt')
+	
 		cmd.run('docker image rm oai-formatting-check:latest')
 		cmd.run('docker image prune --force')
 		cmd.run('docker volume prune --force')

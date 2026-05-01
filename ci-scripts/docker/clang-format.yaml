@@ -1,0 +1,12 @@
+services:
+  clang-format:
+    image: clang-format
+    build:
+      context: ../../
+      dockerfile_inline: |
+        FROM ubuntu:24.04
+        ENV DEBIAN_FRONTEND=noninteractive
+        RUN apt-get update && apt-get install -y clang-format
+    volumes:
+      - ../../:/oai-src/
+    command: bash -c "cd /oai-src/ && ./ci-scripts/checkClangFormatErrors.sh"
