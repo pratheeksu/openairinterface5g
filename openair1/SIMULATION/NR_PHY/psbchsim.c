@@ -238,36 +238,39 @@ static int freq_domain_loopback(PHY_VARS_NR_UE *UE_tx, PHY_VARS_NR_UE *UE_rx, in
 
   nr_tx_psbch(UE_tx, frame, slot, &phy_data->psbch_vars, txdataF);
 
-  int estimateSz = sl_ue2->sl_frame_params.samples_per_slot_wCP;
-  __attribute__((aligned(32))) c16_t rxdataF[1][estimateSz];
-  memcpy(rxdataF[0], txdataF[0], sl_ue1->sl_frame_params.samples_per_slot_wCP * sizeof(**rxdataF));
-
-  uint8_t err_status = 0;
-
   UE_nr_rxtx_proc_t proc;
   proc.frame_rx = frame;
   proc.nr_slot_rx = slot;
 
-  struct complex16 dl_ch_estimates[1][estimateSz];
   uint8_t decoded_output[4] = {0};
 
+  int psbch_e_rx_offset = 0;
+  int16_t psbch_e_rx[SL_NR_POLAR_PSBCH_E_NORMAL_CP + 2];
+  int16_t psbch_unClipped[SL_NR_POLAR_PSBCH_E_NORMAL_CP + 2];
   LOG_I(PHY, "DEBUG: HIJACKING DL CHANNEL ESTIMATES.\n");
-  for (int s = 0; s < 14; s++) {
+  for (int s = 0; s < 14;) {
+    __attribute__((aligned(32))) c16_t rxdataF[fp->nb_antennas_rx][fp->ofdm_symbol_size];
+    __attribute__((aligned(32))) c16_t dl_ch_estimates[fp->nb_antennas_rx][fp->ofdm_symbol_size];
+    /* Copy freq domain buffer from Tx to Rx */
+    memcpy(rxdataF[0], &txdataF[0][s * fp->ofdm_symbol_size], sizeof(c16_t) * fp->ofdm_symbol_size);
+    /* Fill perfect channel estimates */
     for (int j = 0; j < sl_ue2->sl_frame_params.ofdm_symbol_size; j++) {
-      struct complex16 *dlch = (struct complex16 *)(&dl_ch_estimates[0][s * sl_ue2->sl_frame_params.ofdm_symbol_size]);
+      struct complex16 *dlch = dl_ch_estimates[0];
       dlch[j].r = 128;
       dlch[j].i = 0;
     }
+    /* Extract and produce LLRs */
+    nr_generate_psbch_llr(fp, rxdataF, dl_ch_estimates, s, &psbch_e_rx_offset, psbch_e_rx, psbch_unClipped);
+    s = (s == 0) ? 5 : s + 1;
   }
 
-  err_status = nr_rx_psbch(UE_rx,
-                           &proc,
-                           estimateSz,
-                           dl_ch_estimates,
-                           &sl_ue2->sl_frame_params,
-                           decoded_output,
-                           rxdataF,
-                           sl_ue2->sl_config.sl_sync_source.rx_slss_id);
+  const int err_status = nr_psbch_decode(UE_rx,
+                                         psbch_e_rx,
+                                         &proc,
+                                         psbch_e_rx_offset,
+                                         sl_ue2->sl_config.sl_sync_source.rx_slss_id,
+                                         NULL,
+                                         decoded_output);
 
   int error_payload = 0;
   error_payload = test_rx_mib(decoded_output, frame, slot);

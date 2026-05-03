@@ -45,7 +45,7 @@ static bool nr_pbch_detection(const UE_nr_rxtx_proc_t *proc,
                               int *ssb_index,
                               int *symbol_offset,
                               fapiPbch_t *result,
-                              const c16_t rxdataF[][frame_parms->samples_per_slot_wCP])
+                              const c16_t rxdataF[NR_N_SYMBOLS_SSB][frame_parms->nb_antennas_rx][frame_parms->ofdm_symbol_size])
 {
   const int N_L = (frame_parms->Lmax == 4) ? 4 : 8;
   const int N_hf = (frame_parms->Lmax == 4) ? 2 : 1;
@@ -63,7 +63,7 @@ static bool nr_pbch_detection(const UE_nr_rxtx_proc_t *proc,
                                               Nid_cell,
                                               ssb_start_subcarrier,
                                               nr_gold_pbch(frame_parms->Lmax, Nid_cell, hf, l),
-                                              rxdataF);
+                                              rxdataF[i]);
         csum(cumul, cumul, meas);
       }
       *current_ssb = (NR_UE_SSB){.i_ssb = l, .n_hf = hf, .metric = squaredMod(cumul)};
@@ -73,53 +73,54 @@ static bool nr_pbch_detection(const UE_nr_rxtx_proc_t *proc,
   qsort(best_ssb, N_L * N_hf, sizeof(NR_UE_SSB), ssb_sort);
 
   const int nb_ant = frame_parms->nb_antennas_rx;
+  const int estimateSz = frame_parms->ofdm_symbol_size;
   for (NR_UE_SSB *ssb = best_ssb; ssb < best_ssb + N_L * N_hf; ssb++) {
     // computing channel estimation for selected best ssb
-    const int estimateSz = frame_parms->symbols_per_slot * frame_parms->ofdm_symbol_size;
-    __attribute__((aligned(32))) c16_t dl_ch_estimates[nb_ant][estimateSz];
-    __attribute__((aligned(32))) c16_t dl_ch_estimates_time[nb_ant][frame_parms->ofdm_symbol_size];
+    int16_t pbch_e_rx[NR_POLAR_PBCH_E];
 
-    for(int i=pbch_initial_symbol; i<pbch_initial_symbol+3;i++)
-      nr_pbch_channel_estimation(frame_parms,
-                                 NULL,
-                                 estimateSz,
-                                 dl_ch_estimates,
-                                 dl_ch_estimates_time,
-                                 proc,
-                                 i,
-                                 i - pbch_initial_symbol,
-                                 ssb->i_ssb,
-                                 ssb->n_hf,
-                                 ssb_start_subcarrier,
-                                 rxdataF,
-                                 false,
-                                 Nid_cell);
+    for (int i = pbch_initial_symbol; i < pbch_initial_symbol + 3; i++) {
+      __attribute__((aligned(32))) c16_t dl_ch_estimates[nb_ant][estimateSz];
+      for (int aarx = 0; aarx < nb_ant; aarx++) {
+        nr_pbch_channel_estimation(frame_parms,
+                                   NULL,
+                                   dl_ch_estimates[aarx],
+                                   proc,
+                                   i - pbch_initial_symbol,
+                                   ssb->i_ssb,
+                                   ssb->n_hf,
+                                   ssb_start_subcarrier,
+                                   rxdataF[i][aarx],
+                                   false,
+                                   Nid_cell);
+      }
+      if (DUMP_PBCH_CH_ESTIMATES) {
+        char varName[30] = "";
+        snprintf(varName, sizeof(varName), "pbch_ch_estimates_symbol_%d", i);
+        LOG_MM("pbch_ch_estimates", varName, dl_ch_estimates, nb_ant * estimateSz, 1, 1);
+      }
+      nr_generate_pbch_llr(NULL,
+                           proc,
+                           frame_parms,
+                           i,
+                           ssb->i_ssb,
+                           Nid_cell,
+                           ssb_start_subcarrier,
+                           rxdataF[i],
+                           dl_ch_estimates,
+                           pbch_e_rx);
+    }
 
     if (0
-        == nr_rx_pbch(NULL,
-                      proc,
-                      false,
-                      estimateSz,
-                      dl_ch_estimates,
-                      frame_parms,
-                      ssb->i_ssb,
-                      ssb_start_subcarrier,
-                      Nid_cell,
-                      result,
-                      half_frame_bit,
-                      ssb_index,
-                      symbol_offset,
-                      frame_parms->samples_per_frame_wCP,
-                      rxdataF)) {
-      if (DUMP_PBCH_CH_ESTIMATES) {
-        write_output("pbch_ch_estimates.m", "pbch_ch_estimates", dl_ch_estimates, nb_ant * estimateSz, 1, 1);
-        write_output("pbch_ch_estimates_time.m",
-                     "pbch_ch_estimates_time",
-                     dl_ch_estimates_time,
-                     nb_ant * frame_parms->ofdm_symbol_size,
-                     1,
-                     1);
-      }
+        == nr_pbch_decode(NULL,
+                          frame_parms,
+                          proc,
+                          ssb->i_ssb,
+                          Nid_cell,
+                          pbch_e_rx,
+                          half_frame_bit,
+                          ssb_index,
+                          symbol_offset,
+                          result)) {
       LOG_A(PHY, "Initial sync: pbch decoded sucessfully, ssb index %d\n", *ssb_index);
       return true;
     }
@@ -206,11 +207,17 @@ bool nr_search_ssb_common(nr_ssb_search_params_t *params)
 
   // Extract SSB symbols to frequency domain
   // Symbol ordering: 0=PSS, 1=PBCH, 2=SSS, 3=PBCH
-  const uint32_t rxdataF_sz = fp->samples_per_slot_wCP;
-  c16_t(*rxdataF)[rxdataF_sz] = (c16_t(*)[rxdataF_sz])params->rxdataF;
-  const int sample_offset = params->search_frame_id * fp->samples_per_frame + ssb_offset;
+  c16_t(*rxdataF)[NR_N_SYMBOLS_SSB][fp->nb_antennas_rx][fp->ofdm_symbol_size] =
+      (c16_t(*)[NR_N_SYMBOLS_SSB][fp->nb_antennas_rx][fp->ofdm_symbol_size])params->rxdataF;
+
+  __attribute__((aligned(32))) c16_t rxdataF_tmp[fp->nb_antennas_rx][fp->samples_per_slot_wCP];
+
   for (int i = 0; i < NR_N_SYMBOLS_SSB; i++) {
-    nr_slot_fep(NULL, fp, 0, i, rxdataF, link_type_dl, sample_offset, (c16_t **)params->rxdata);
+    const int sample_offset = params->search_frame_id * fp->samples_per_frame + ssb_offset;
+    nr_slot_fep(NULL, fp, 0, i, rxdataF_tmp, link_type_dl, sample_offset, (c16_t **)params->rxdata);
+    // TODO: In later commit, call the modified symbol demod function and remove the following memcpy.
+    for (int aarx = 0; aarx < fp->nb_antennas_rx; aarx++)
+      memcpy((*rxdataF)[i][aarx], &rxdataF_tmp[aarx][i * fp->ofdm_symbol_size], sizeof(c16_t) * fp->ofdm_symbol_size);
   }
 
   // Perform SSS detection
@@ -228,7 +235,7 @@ bool nr_search_ssb_common(nr_ssb_search_params_t *params)
                                 &sss_metric,
                                 &sss_phase,
                                 &freq_offset_sss,
-                                rxdataF);
+                                *rxdataF);
 
   if (params->sss_metric)
     *params->sss_metric = sss_metric;
@@ -277,8 +284,7 @@ void nr_scan_ssb(void *arg)
   for (int nid2 = 0; nid2 < pss_sequence; nid2++)
     generate_pss_nr_time(fp, nid2, ssbInfo->gscnInfo.ssbFirstSC, pssTime[nid2]);
 
-  const uint32_t rxdataF_sz = fp->samples_per_slot_wCP;
-  __attribute__((aligned(32))) c16_t rxdataF[fp->nb_antennas_rx][rxdataF_sz];
+  __attribute__((aligned(32))) c16_t rxdataF[NR_N_SYMBOLS_SSB][fp->nb_antennas_rx][fp->ofdm_symbol_size];
 
   // initial sync performed on two successive frames, if pbch passes on first frame, no need to process second frame
   // only one frame is used for simulation tools
@@ -348,7 +354,7 @@ void nr_scan_ssb(void *arg)
                                                          &ssbInfo->pbchResult,
                                                          rxdataF); // start pbch detection at first symbol after pss
       if (ssbInfo->syncRes.cell_detected) {
-        uint32_t rsrp_avg = nr_ue_calculate_ssb_rsrp(ssbInfo->fp, rxdataF, 0, ssbInfo->gscnInfo.ssbFirstSC);
+        uint32_t rsrp_avg = nr_ue_calculate_ssb_rsrp(ssbInfo->fp, rxdataF[2], ssbInfo->gscnInfo.ssbFirstSC);
         int rsrp_db_per_re = 10 * log10(rsrp_avg);
         ssbInfo->adjust_rxgain = TARGET_RX_POWER - rsrp_db_per_re;
         LOG_I(PHY, "pbch rx ok. rsrp:%d dB/RE, adjust_rxgain:%d dB\n", rsrp_db_per_re, ssbInfo->adjust_rxgain);
