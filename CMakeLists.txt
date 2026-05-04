@@ -2202,6 +2202,7 @@ if(ENABLE_TESTS)
 
   find_package(benchmark)
   if (NOT benchmark_FOUND)
+    add_compile_options(-Wno-maybe-uninitialized)
     message(STATUS "benchmark package not found, will download benchmark automatically. To prevent that install google benchmark on your system (libbenchmark-dev)")
     CPMAddPackage(
       NAME benchmark
