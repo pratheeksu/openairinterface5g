@@ -189,7 +189,7 @@
     <yaml_path>ci-scripts/yaml_files/5g_rfsimulator_flexric</yaml_path>
     <always_exec>true</always_exec>
     <analysis>
-      <service>nearRT-RIC=LastLineContains=Removing E2 Node</service>
+      <service>nearRT-RIC=LastLineContains=The nearRT-RIC run SUCCESSFULLY</service>
       <service>xapp-rc-moni=LastLineContains=Test xApp run SUCCESSFULLY</service>
       <service>xapp-kpm-moni=LastLineContains=Test xApp run SUCCESSFULLY</service>
       <service>xapp-kpm-rc=LastLineContains=Test xApp run SUCCESSFULLY</service>
