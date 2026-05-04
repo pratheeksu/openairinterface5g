@@ -27,11 +27,26 @@ static void nr_pdcch_scrambling(uint32_t *in, uint32_t size, uint32_t Nid, uint3
     out[i] = in[i] ^ seq[i];
 }
 
+static inline void mark_prb(uint64_t *prb_mask, int prb_mask_words, int symbol, int prb)
+{
+  uint64_t *symbol_mask = prb_mask + symbol * prb_mask_words;
+  symbol_mask[prb >> 6] |= UINT64_C(1) << (prb & 63);
+}
+
+static inline bool prb_marked(const uint64_t *prb_mask, int prb)
+{
+  return (prb_mask[prb >> 6] >> (prb & 63)) & 0x1;
+}
+
 void nr_generate_dci(PHY_VARS_gNB *gNB,
                      const nfapi_nr_dl_tti_pdcch_pdu_rel15_t *pdcch_pdu_rel15,
                      NR_DL_FRAME_PARMS *frame_parms,
-                     int slot)
+                     int slot,
+                     uint64_t *phase_comp_prb_mask,
+                     int prb_mask_words)
 {
+  uint64_t local_phase_comp_prb_mask[gNB->common_vars.num_beams_period][frame_parms->symbols_per_slot][prb_mask_words];
+  memset(local_phase_comp_prb_mask, 0, sizeof(local_phase_comp_prb_mask));
   // fill reg list per symbol
   int reg_list[MAX_DCI_CORESET][NR_MAX_PDCCH_AGG_LEVEL * NR_NB_REG_PER_CCE];
   nr_fill_reg_list(reg_list, pdcch_pdu_rel15);
@@ -172,6 +187,7 @@ void nr_generate_dci(PHY_VARS_gNB *gNB,
           dmrs_idx = (reg_list[d][reg_count] + pdcch_pdu_rel15->BWPStart + rb_offset) * 3;
         else
           dmrs_idx = (reg_list[d][reg_count] + rb_offset) * 3;
+        const int reg_prb = pdcch_pdu_rel15->BWPStart + reg_list[d][reg_count] + rb_offset;
 
         int k_prime = 0;
 
@@ -199,6 +215,8 @@ void nr_generate_dci(PHY_VARS_gNB *gNB,
 
           k++;
         } // m
+        if (gNB->phase_comp)
+          mark_prb(&local_phase_comp_prb_mask[beam_nb][0][0], prb_mask_words, l, reg_prb);
       } // reg_count
     } // symbol_idx
 
@@ -207,4 +225,33 @@ void nr_generate_dci(PHY_VARS_gNB *gNB,
           dci_pdu->PayloadSizeBits,
           *(unsigned long long *)dci_pdu->Payload);
   } // for (int d=0;d<pdcch_pdu_rel15->numDlDci;d++)
+
+  if (!gNB->phase_comp)
+    return;
+
+  const int symb_offset = (slot % frame_parms->slots_per_subframe) * frame_parms->symbols_per_slot;
+  for (int beam = 0; beam < gNB->common_vars.num_beams_period; beam++) {
+    c16_t *txdataF = gNB->common_vars.txdataF[beam][0];
+    for (int symbol = pdcch_pdu_rel15->StartSymbolIndex;
+         symbol < pdcch_pdu_rel15->StartSymbolIndex + pdcch_pdu_rel15->DurationSymbols;
+         symbol++) {
+      uint64_t *local_symbol_mask = &local_phase_comp_prb_mask[beam][symbol][0];
+      int prb = 0;
+      while (prb < frame_parms->N_RB_DL) {
+        while (prb < frame_parms->N_RB_DL && !prb_marked(local_symbol_mask, prb))
+          prb++;
+        const int start_prb = prb;
+        while (prb < frame_parms->N_RB_DL && prb_marked(local_symbol_mask, prb))
+          prb++;
+        if (prb > start_prb) {
+          c16_t *this_symbol = txdataF + symbol * frame_parms->ofdm_symbol_size + start_prb * NR_NB_SC_PER_RB;
+          const c16_t *rot = &frame_parms->symbol_rotation[0][symb_offset + symbol];
+          rotate_cpx_vector(this_symbol, rot, this_symbol, (prb - start_prb) * NR_NB_SC_PER_RB, 15);
+          uint64_t *global_symbol_mask = phase_comp_prb_mask + (beam * frame_parms->symbols_per_slot + symbol) * prb_mask_words;
+          for (int rr = start_prb; rr < prb; rr++)
+            global_symbol_mask[rr >> 6] |= UINT64_C(1) << (rr & 63);
+        }
+      }
+    }
+  }
 }
