@@ -226,7 +226,6 @@ __device__ __forceinline__ void cnProcKernel_BG1_int8_G3(const int8_t *__restric
   sgn = __vxor4(sgn, ymm0);
 
   uint32_t BricksToBeMoved = __vsign4(min, sgn);
-  ;
 
   moveBricks_invput_circ((int8_t *)&p_bnProcBuf[idxBn], lane * 4, (uint8_t *)&BricksToBeMoved, Zc, circShift);
 }

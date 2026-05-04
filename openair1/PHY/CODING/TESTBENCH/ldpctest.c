@@ -27,11 +27,12 @@
 #endif
 
 #define NR_LDPC_PROFILER_DETAIL
+#define NR_LDPC_ENABLE_PARITY_CHECK
+
 ldpc_interface_t ldpc_orig, ldpc_toCompare;
-#define MAX_NUM_DLSCH_SEGMENTS_DL_ldpctest 132
-static double modulated_input[MAX_NUM_DLSCH_SEGMENTS_DL_ldpctest][68 * 384];
+static double modulated_input[MAX_NUM_NR_DLSCH_SEGMENTS_PER_LAYER * 4][68 * 384];
 #define MAX_TRIALS 20000
-static int8_t Failure_Mask[MAX_TRIALS][(MAX_NUM_NR_DLSCH_SEGMENTS_PER_LAYER*4)] = {0};
+static int8_t Failure_Mask[MAX_TRIALS][(MAX_NUM_NR_DLSCH_SEGMENTS_PER_LAYER * 4)] = {0};
 
 uint32_t use_gpu=0;
 

@@ -694,7 +694,8 @@ int main(int argc, char *argv[])
       printf("-L <log level, 0(errors), 1(warning), 2(info) 3(debug) 4 (trace)>\n");
       printf("-M Use limited buffer rate-matching\n");
       printf("-P Print ULSCH performances\n");
-      printf("-Q If -F used, read parameters from file\n");
+      //printf("-Q If -F used, read parameters from file\n");
+      printf("-Q Enable GPU\n");
       printf("-R Maximum number of available resorce blocks (N_RB_DL)\n");
       printf("-T Enable PTRS, arguments list: Number of arguments=2 L_PTRS{0,1,2} K_PTRS{2,4}, e.g. -T 0,2 \n");
       printf("-U Change DMRS Config, arguments list: Number of arguments=4, DMRS Mapping Type{0=A,1=B}, DMRS AddPos{0:3}, DMRS Config Type{1,2}, Number of CDM groups without data{1,2,3} e.g. -U 0,2,0,1 \n");

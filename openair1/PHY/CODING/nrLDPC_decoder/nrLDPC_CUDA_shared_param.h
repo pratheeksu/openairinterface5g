@@ -16,7 +16,11 @@
 #define NRLDPC_CUDA_SHARED_PARAM_H_
 
 #include <cuda_runtime.h>
-#define MAX_NUM_DLSCH_SEGMENTS_DL 132
+
+#ifndef MAX_NUM_NR_DLSCH_SEGMENTS_PER_LAYER
+#define MAX_NUM_NR_DLSCH_SEGMENTS_PER_LAYER 36
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -35,7 +39,8 @@ extern "C" {
 #define num_TotalBlocks_cn_BG1_R89_Node 5
 #define num_TotalBlocks_bn_BG1_R89_Node 27
 
-#define JETSON_ORIN 1 
+//#define JETSON_ORIN 0 
+#define GH200
 
 #if defined(GH200)
 #define NodeEdge_Switch_Cn_R13 32

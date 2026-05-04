@@ -46,8 +46,8 @@
 
 #define USE_GPU_FOR_RM_DEINTER 1
 
-cudaStream_t decoderStreams[MAX_NUM_DLSCH_SEGMENTS_DL];
-cudaStream_t decoderDoneEvents[MAX_NUM_DLSCH_SEGMENTS_DL];
+cudaStream_t decoderStreams[MAX_NUM_NR_DLSCH_SEGMENTS_PER_LAYER * 4];
+cudaStream_t decoderDoneEvents[MAX_NUM_NR_DLSCH_SEGMENTS_PER_LAYER * 4];
 
 int d_array_size = 0;
 
@@ -280,8 +280,8 @@ void LDPCint_rm_init(int max_num_pxsch) {
   AssertFatal(err == cudaSuccess,"CUDA Error (harq_d_array_dev): %s\n", cudaGetErrorString(err));
   LOG_I(PHY,"Allocated %ld bytes for harq_d_array_dev @ %p\n",sizeof(int16_t*)*max_num_pxsch,harq_d_array_dev);
   for (int i=0;i<max_num_pxsch;i++) {
-    err=cudaMalloc((void **)&harq_d_array[i],MAX_NUM_DLSCH_SEGMENTS_DL*OAI_LDPC_DECODER_MAX_NUM_LLR*sizeof(int16_t));
-    LOG_I(PHY,"Allocating %ld bytes for harq_d_array[%d] @ %p\n",MAX_NUM_DLSCH_SEGMENTS_DL*OAI_LDPC_DECODER_MAX_NUM_LLR*sizeof(int16_t),i,harq_d_array[i]);
+    err=cudaMalloc((void **)&harq_d_array[i],MAX_NUM_NR_DLSCH_SEGMENTS_PER_LAYER * 4 *OAI_LDPC_DECODER_MAX_NUM_LLR*sizeof(int16_t));
+    LOG_I(PHY,"Allocating %ld bytes for harq_d_array[%d] @ %p\n",MAX_NUM_NR_DLSCH_SEGMENTS_PER_LAYER * 4 *OAI_LDPC_DECODER_MAX_NUM_LLR*sizeof(int16_t),i,harq_d_array[i]);
     AssertFatal(err == cudaSuccess,"CUDA Error (harq_d_dev): %s\n", cudaGetErrorString(err));
   }
   cudaMemcpy(harq_d_array_dev,harq_d_array,sizeof(int16_t*)*max_num_pxsch,cudaMemcpyHostToDevice);

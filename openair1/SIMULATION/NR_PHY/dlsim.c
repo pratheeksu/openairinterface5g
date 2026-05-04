@@ -663,6 +663,7 @@ int main(int argc, char **argv)
       printf("-I Maximum LDPC decoder iterations\n");
       printf("-L <log level, 0(errors), 1(warning), 2(analysis), 3(info), 4(debug), 5(trace)>\n");
       printf("-P Print DLSCH performances\n");
+      printf("-Q Enable GPU\n");
       printf("-R N_RB_DL\n");
       printf("-T Enable PTRS, arguments list L_PTRS{0,1,2} K_PTRS{2,4}, e.g. -T 2 0 2 \n");
       printf("-U Change DMRS Config, arguments list DMRS TYPE{0=A,1=B} DMRS AddPos{0:2} DMRS ConfType{1:2}, e.g. -U 3 0 2 1 \n");
