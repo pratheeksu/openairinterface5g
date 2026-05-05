@@ -110,7 +110,10 @@ void init_timeshift_rotation(const int ofdm_symbol_size,
                              const uint ofdm_offset_divisor,
                              c16_t *timeshift_symbol_rotation);
 
-void apply_nr_rotation_symbol_RX(const NR_DL_FRAME_PARMS *frame_parms,
+void apply_nr_rotation_symbol_RX(const int symbols_per_slot,
+                                 const int slots_per_subframe,
+                                 const c16_t *timeshift_symbol_rotation,
+                                 const int first_carrier_offset,
                                  c16_t *rxdataF,
                                  const c16_t *rot,
                                  int nb_rb,
