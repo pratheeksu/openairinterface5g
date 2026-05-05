@@ -101,8 +101,7 @@ void nr_ofdm_demod_and_rx_rotation(c16_t **rxdata,
                                    int slot_offsetF,
                                    enum nr_Link linktype,
                                    bool was_symbol_used[NR_SYMBOLS_PER_SLOT]);
-
-void perform_symbol_rotation(NR_DL_FRAME_PARMS *fp, double f0, c16_t *symbol_rotation);
+void perform_symbol_rotation(const int nsymb, const int numerology_index, double f0, c16_t *symbol_rotation);
 
 void init_symbol_rotation(NR_DL_FRAME_PARMS *fp);
 

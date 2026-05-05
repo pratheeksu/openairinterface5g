@@ -573,13 +573,12 @@ void nr_dft(c16_t *z, c16_t *d, uint32_t Msc_PUSCH)
   }
 }
 
-void perform_symbol_rotation(NR_DL_FRAME_PARMS *fp, double f0, c16_t *symbol_rotation)
+void perform_symbol_rotation(const int nsymb, const int numerology_index, double f0, c16_t *symbol_rotation)
 {
-  const int nsymb = fp->symbols_per_slot * fp->slots_per_frame / 10;
   const double Tc = (1 / 480e3 / 4096);
-  const double Nu = 2048 * 64 * (1 / (float)(1 << fp->numerology_index));
-  const double Ncp0 = 16 * 64 + (144 * 64 * (1 / (float)(1 << fp->numerology_index)));
-  const double Ncp1 = (144 * 64 * (1 / (float)(1 << fp->numerology_index)));
+  const double Nu = 2048 * 64 * (1 / (float)(1 << numerology_index));
+  const double Ncp0 = 16 * 64 + (144 * 64 * (1 / (float)(1 << numerology_index)));
+  const double Ncp1 = (144 * 64 * (1 / (float)(1 << numerology_index)));
 
   LOG_D(PHY, "Doing symbol rotation calculation for TX/RX, f0 %f Hz, Nsymb %d\n", f0, nsymb);
 
@@ -590,7 +589,7 @@ void perform_symbol_rotation(NR_DL_FRAME_PARMS *fp, double f0, c16_t *symbol_rot
 
   for (int l = 0; l < nsymb; l++) {
     double Ncp;
-    if (l == 0 || l == (7 * (1 << fp->numerology_index))) {
+    if (l == 0 || l == (7 * (1 << numerology_index))) {
       Ncp = Ncp0;
     } else {
       Ncp = Ncp1;
@@ -624,8 +623,7 @@ void init_symbol_rotation(NR_DL_FRAME_PARMS *fp)
     if (f0 == 0)
       continue;
     c16_t *rot = fp->symbol_rotation[ll];
-
-    perform_symbol_rotation(fp, f0, rot);
+    perform_symbol_rotation(fp->symbols_per_slot * fp->slots_per_frame / 10, fp->numerology_index, f0, rot);
   }
 }
 
