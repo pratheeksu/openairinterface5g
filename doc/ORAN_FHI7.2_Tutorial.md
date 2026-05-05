@@ -844,6 +844,42 @@ sudo ./ru_emulator -c <path-to/protoru-OAI-B210-TDD-n78-40MHz-1x1-30kHz.yml>
 
 Finally, start the OAI gNB.
 
+#### WNC R1220
+
+**Version 1.9.0**
+
+The OAI configuration file [gnb.sa.band77.273prb.fhi72.4x4-wnc.conf](../targets/PROJECTS/GENERIC-NR-5GC/CONF/gnb.sa.band77.273prb.fhi72.4x4-wnc.conf) corresponds to:
+
+- TDD pattern `DDDDDDSUUU`, 5ms
+- Bandwidth 100MHz
+- 4TX4R
+
+##### RU configuration
+
+After switching on or rebooting the RU, you can check the RU PTP status with `show ptp clock` to make sure it's locked and run `show running-config` to check the current configuration.
+To enable RU transmission, use the `radio enable` command. Then verify the configuration with `show running-config`, which should reflect the enabled state:
+```
+radio 1
+  no shutdown
+```
+
+The required parameters to configure are:
+
+1. `center-frequency` →  3849990
+2. `transmit-power` →  24
+3. `lna-shutdown` →  **disabled**
+4. `transport-interface` →  configure the sub-interface (VLAN ID is defined during sub-interface creation)
+5. `transport-peer-mac` →  must match the DU MAC address
+6. `phase-compensation` →  **enabled**
+7. `bandwidth` →  100
+8. `sub-carrier` →  30
+9. `compress-oran-compliant` →  **enabled**
+
+**Note**
+  * Ensure that the VLAN configuration and MAC addressing are consistent with the DU setup.
+  * The RU must be PTP synchronized before starting the gNB.
+  * After reboot, the RU loads its `startup-config`. To save the current configuration, use `copy running-config startup-config`.
+
 ## Configure Network Interfaces and DPDK VFs
 
 The 7.2 fronthaul uses the xran library, which requires DPDK. In this step, we
