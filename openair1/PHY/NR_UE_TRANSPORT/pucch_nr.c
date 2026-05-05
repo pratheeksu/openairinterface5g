@@ -17,6 +17,7 @@
 #include "common/utils/LOG/log.h"
 #include "bits.h"
 #include "openair1/PHY/NR_REFSIG/nr_refsig.h"
+#include "PHY/CODING/nrPolar_tools/polar_interface.h"
 
 #include "T.h"
 //#define NR_UNIT_TEST 1
@@ -535,7 +536,7 @@ static inline void nr_pucch2_3_4_scrambling(uint16_t M_bit, uint16_t rnti, uint1
 #endif
 }
 
-void nr_uci_encoding(uint64_t payload, uint8_t nr_bit, uint8_t nrofPRB, bool uci_on_pusch, uint16_t E, uint8_t Qm, uint64_t *b)
+void nr_uci_encoding(const PHY_VARS_NR_UE *ue, uint64_t payload, uint8_t nr_bit, uint8_t nrofPRB, bool uci_on_pusch, uint16_t E, uint8_t Qm, uint64_t *b)
 {
   /*
    * Implementing TS 38.212 Subclause 6.3.1.2 and 6.3.2
@@ -673,11 +674,7 @@ void nr_uci_encoding(uint64_t payload, uint8_t nr_bit, uint8_t nrofPRB, bool uci
   } else if (A >= 12) {
     // Encoder reversal
     payload = reverse_bits(payload, A);
-
-    polar_encoder_fast(&payload, b, 0,0,
-                       NR_POLAR_UCI_PUCCH_MESSAGE_TYPE, 
-                       A, 
-                       nrofPRB);
+    ue->polar_interface.polar_encoder(&payload, b, NR_POLAR_UCI_MESSAGE_TYPE, A, nrofPRB, 0);
   }
 
   if (uci_on_pusch) {
@@ -727,7 +724,7 @@ void nr_uci_encoding(uint64_t payload, uint8_t nr_bit, uint8_t nrofPRB, bool uci
   }
 }
 //#if 0
-void nr_generate_pucch2(c16_t **txdataF,
+void nr_generate_pucch2(PHY_VARS_NR_UE *ue, c16_t **txdataF,
                         const NR_DL_FRAME_PARMS *frame_parms,
                         const int16_t amp16,
                         const int nr_slot_tx,
@@ -740,7 +737,7 @@ void nr_generate_pucch2(c16_t **txdataF,
   uint64_t b[16] = {0}; // limit to 1024-bit encoded length
   // M_bit is the number of bits of block b (payload after encoding)
   uint16_t M_bit = nr_pucch_output_sequence_length(pucch_pdu->format_type, pucch_pdu->nr_of_symbols, pucch_pdu->prb_size, 0, 0, 0);
-  nr_uci_encoding(pucch_pdu->payload, pucch_pdu->n_bit, pucch_pdu->prb_size, false, M_bit, 0, &b[0]);
+  nr_uci_encoding(ue, pucch_pdu->payload, pucch_pdu->n_bit, pucch_pdu->prb_size, false, M_bit, 0, &b[0]);
   /*
    * Implementing TS 38.211
    * Subclauses 6.3.2.5.1 Scrambling (PUCCH format 2)
@@ -911,7 +908,7 @@ void nr_generate_pucch2(c16_t **txdataF,
   }
 }
 //#if 0
-void nr_generate_pucch3_4(c16_t **txdataF,
+void nr_generate_pucch3_4(PHY_VARS_NR_UE *ue,c16_t **txdataF,
                           const NR_DL_FRAME_PARMS *frame_parms,
                           const int16_t amp16,
                           const int nr_slot_tx,
@@ -957,7 +954,7 @@ void nr_generate_pucch3_4(c16_t **txdataF,
                                           is_pi_over_2_bpsk_enabled,
                                           add_dmrs);
 
-  nr_uci_encoding(pucch_pdu->payload, pucch_pdu->n_bit, nrofPRB, false, M_bit, 0, b);
+  nr_uci_encoding(ue, pucch_pdu->payload, pucch_pdu->n_bit, nrofPRB, false, M_bit, 0, b);
   /*
    * Implementing TS 38.211
    * Subclauses 6.3.2.6.1 Scrambling (PUCCH formats 3 and 4)

@@ -14,7 +14,6 @@
 
 #include "executables/softmodem-common.h"
 #include "nr_transport_proto_ue.h"
-#include "PHY/CODING/nrPolar_tools/nr_polar_dci_defs.h"
 #include "PHY/phy_extern.h"
 #include "PHY/CODING/coding_extern.h"
 #include "PHY/nr_phy_common/inc/nr_phy_common.h"
@@ -22,6 +21,8 @@
 #include "common/utils/nr/nr_common.h"
 #include <openair1/PHY/TOOLS/phy_scope_interface.h>
 #include "PHY/NR_UE_ESTIMATION/nr_estimation.h"
+
+#include "PHY/CODING/nrPolar_tools/polar_interface.h"
 
 #include "assertions.h"
 #include "T.h"
@@ -484,7 +485,7 @@ static void nr_pdcch_unscrambling(c16_t *e_rx,
   }
 }
 
-static void nr_dci_decoding_procedure(const UE_nr_rxtx_proc_t *proc,
+static void nr_dci_decoding_procedure(PHY_VARS_NR_UE *ue,const UE_nr_rxtx_proc_t *proc,
                                       c16_t *pdcch_e_rx,
                                       fapi_nr_dl_config_dci_dl_pdu_rel15_t *rel15,
                                       fapi_nr_dci_indication_t *dci_ind)
@@ -533,7 +534,8 @@ static void nr_dci_decoding_procedure(const UE_nr_rxtx_proc_t *proc,
                             rel15->coreset.pdcch_dmrs_scrambling_id,
                             tmp_e);
 
-      const uint32_t crc = polar_decoder_int16(tmp_e, dci_estimation, 1, NR_POLAR_DCI_MESSAGE_TYPE, dci_length, L);
+      const uint32_t crc =
+          ue->polar_interface.polar_decoder(tmp_e, dci_estimation, NR_POLAR_DCI_MESSAGE_TYPE, dci_length, L);
 
       rnti_t n_rnti = rel15->rnti;
       if (crc == n_rnti) {
@@ -614,7 +616,7 @@ void nr_pdcch_dci_indication(const UE_nr_rxtx_proc_t *proc,
                                         rel15->L,
                                         llr_stride);
 
-      nr_dci_decoding_procedure(proc, pdcch_e_rx, rel15, &dci_ind);
+      nr_dci_decoding_procedure(ue, proc, pdcch_e_rx, rel15, &dci_ind);
     }
   }
 

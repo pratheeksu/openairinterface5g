@@ -173,6 +173,8 @@ static void configure_NR_UE(PHY_VARS_NR_UE *UE, int mu, int N_RB)
     printf("Error at UE NR initialisation\n");
     exit(-1);
   }
+  int ret = load_polar_interface(NULL, &UE->polar_interface);
+  AssertFatal(ret == 0, "Error loading Polar coding library\n");  
 }
 
 static void sl_init_frame_parameters(PHY_VARS_NR_UE *UE)

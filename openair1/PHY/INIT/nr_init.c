@@ -10,7 +10,7 @@
 #include "PHY/NR_REFSIG/nr_refsig.h"
 #include "PHY/INIT/nr_phy_init.h"
 #include "PHY/CODING/nrLDPC_coding/nrLDPC_coding_interface.h"
-#include "PHY/CODING/nrPolar_tools/nr_polar_pbch_defs.h"
+#include "PHY/CODING/nrPolar_tools/polar_interface.h"
 #include "PHY/NR_TRANSPORT/nr_transport_proto.h"
 #include "PHY/NR_TRANSPORT/nr_transport_common_proto.h"
 #include "PHY/NR_ESTIMATION/nr_ul_estimation.h"
@@ -121,6 +121,9 @@ void phy_init_nr_gNB(PHY_VARS_gNB *gNB)
 
   int ret_loader = load_nrLDPC_coding_interface(NULL, &gNB->nrLDPC_coding_interface);
   AssertFatal(ret_loader == 0, "error loading LDPC library\n");
+
+  int ret = load_polar_interface(NULL, &gNB->polar_interface);
+  AssertFatal(ret == 0, "Error loading Polar coding library\n");
 
   gNB->max_nb_pdsch = MAX_MOBILES_PER_GNB;
   init_delay_table(fp->ofdm_symbol_size, MAX_DELAY_COMP, NR_MAX_OFDM_SYMBOL_SIZE, fp->delay_table);

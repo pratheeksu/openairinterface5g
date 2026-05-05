@@ -12,9 +12,9 @@
 #include "common/platform_constants.h"
 #include "defs_nr_common.h"
 #include "PHY/nr_phy_common/inc/nr_phy_common.h"
-#include "CODING/nrPolar_tools/nr_polar_pbch_defs.h"
 #include "openair2/NR_PHY_INTERFACE/NR_IF_Module.h"
 #include "PHY/CODING/nrLDPC_coding/nrLDPC_coding_interface.h"
+#include "PHY/CODING/nrPolar_tools/polar_interface.h"
 #include "PHY/CODING/nrLDPC_extern.h"
 #include "PHY/CODING/nrLDPC_decoder/nrLDPC_types.h"
 #include "nfapi_nr_interface_scf.h"
@@ -407,6 +407,9 @@ typedef struct PHY_VARS_gNB_s {
   /// NR LDPC coding related
   nrLDPC_coding_interface_t nrLDPC_coding_interface;
   int max_ldpc_iterations;
+
+  /// NR Polar coding related
+  polar_interface_t polar_interface;
 
   /// indicate the channel estimation technique in time domain
   int chest_time;

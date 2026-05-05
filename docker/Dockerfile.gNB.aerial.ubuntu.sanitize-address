@@ -76,6 +76,7 @@ COPY --from=ran-build \
     /oai-ran/cmake_targets/ran_build/build/libparams_libconfig.so \
     /oai-ran/cmake_targets/ran_build/build/libdfts.so \
     /oai-ran/cmake_targets/ran_build/build/libldpc*.so \
+    /oai-ran/cmake_targets/ran_build/build/libpolar.so \
     /oai-ran/cmake_targets/ran_build/build/libparams_yaml.so \
     /usr/local/lib/
 

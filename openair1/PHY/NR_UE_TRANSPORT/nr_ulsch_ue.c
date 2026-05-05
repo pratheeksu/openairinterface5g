@@ -1189,7 +1189,7 @@ void nr_ue_ulsch_procedures(PHY_VARS_NR_UE *UE,
       return;
     }
 
-    nr_uci_encoding(pusch_pdu->pusch_uci.harq_payload,
+    nr_uci_encoding(UE, pusch_pdu->pusch_uci.harq_payload,
                     pusch_pdu->pusch_uci.harq_ack_bit_length,
                     pucch_pdu->prb_size,
                     true,
@@ -1209,7 +1209,7 @@ void nr_ue_ulsch_procedures(PHY_VARS_NR_UE *UE,
   uint64_t b_csi1[16] = {0}; // limit to 1024-bit encoded length
   uint64_t b_csi2[16] = {0}; // limit to 1024-bit encoded length
   if (pusch_pdu->pusch_uci.csi_payload.p1_bits != 0) {
-    nr_uci_encoding(pusch_pdu->pusch_uci.csi_payload.part1_payload,
+    nr_uci_encoding(UE, pusch_pdu->pusch_uci.csi_payload.part1_payload,
                     pusch_pdu->pusch_uci.csi_payload.p1_bits,
                     pucch_pdu->prb_size,
                     true,
@@ -1219,7 +1219,7 @@ void nr_ue_ulsch_procedures(PHY_VARS_NR_UE *UE,
 
     // Process CSI Part 2 if any
     if (pusch_pdu->pusch_uci.csi_payload.p2_bits > 0)
-      nr_uci_encoding(pusch_pdu->pusch_uci.csi_payload.part2_payload,
+      nr_uci_encoding(UE, pusch_pdu->pusch_uci.csi_payload.part2_payload,
                       pusch_pdu->pusch_uci.csi_payload.p2_bits,
                       pucch_pdu->prb_size,
                       true,

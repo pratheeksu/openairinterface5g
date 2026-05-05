@@ -3,13 +3,11 @@
  */
 
 #include "PHY/defs_nr_UE.h"
-#include "PHY/CODING/nrPolar_tools/nr_polar_psbch_defs.h"
-#include "PHY/CODING/nrPolar_tools/nr_polar_defs.h"
 #include "common/utils/LOG/log.h"
 #include "PHY/NR_UE_TRANSPORT/nr_transport_proto_ue.h"
 #include "PHY/TOOLS/phy_scope_interface.h"
 #include "PHY/nr_phy_common/inc/nr_phy_common.h"
-
+#include "PHY/CODING/nrPolar_tools/polar_interface.h"
 // #define DEBUG_PSBCH
 
 static void nr_psbch_extract(uint32_t rxdataF_sz,
@@ -186,12 +184,11 @@ int nr_rx_psbch(PHY_VARS_NR_UE *ue,
   nr_pbch_unscrambling(psbch_e_rx, slss_id, 0, 0, psbch_e_rx_idx, 0, 0, 0, NULL);
   // polar decoding de-rate matching
   uint64_t tmp = 0;
-  decoderState = polar_decoder_int16(psbch_e_rx,
-                                     (uint64_t *)&tmp,
-                                     0,
-                                     SL_NR_POLAR_PSBCH_MESSAGE_TYPE,
-                                     SL_NR_POLAR_PSBCH_PAYLOAD_BITS,
-                                     SL_NR_POLAR_PSBCH_AGGREGATION_LEVEL);
+  decoderState = ue->polar_interface.polar_decoder(psbch_e_rx,
+                                                         (uint64_t *)&tmp,
+                                                         SL_NR_POLAR_PSBCH_MESSAGE_TYPE,
+                                                         SL_NR_POLAR_PSBCH_PAYLOAD_BITS,
+                                                         SL_NR_POLAR_PSBCH_AGGREGATION_LEVEL);
 
   uint32_t psbch_payload = tmp;
 

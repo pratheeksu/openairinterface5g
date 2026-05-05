@@ -22,6 +22,7 @@
 #include "radio/ETHERNET/if_defs.h"
 #include "openair1/PHY/MODULATION/nr_modulation.h"
 #include "PHY/CODING/nrLDPC_coding/nrLDPC_coding_interface.h"
+#include "PHY/CODING/nrPolar_tools/polar_interface.h"
 #include "PHY/phy_vars_nr_ue.h"
 #include "PHY/NR_UE_TRANSPORT/nr_transport_proto_ue.h"
 
@@ -224,7 +225,6 @@ void *nrue_ru_start_thread(void *arg)
 
 int NB_UE_INST = 1;
 configmodule_interface_t *uniqCfg = NULL;
-nrLDPC_coding_interface_t nrLDPC_coding_interface = {0};
 
 int main(int argc, char **argv)
 {
@@ -260,9 +260,14 @@ int main(int argc, char **argv)
   itti_init(TASK_MAX, tasks_info);
 
   init_opt();
+  nrLDPC_coding_interface_t nrLDPC_coding_interface = {0};
 
   int ret_loader = load_nrLDPC_coding_interface(NULL, &nrLDPC_coding_interface);
   AssertFatal(ret_loader == 0, "error loading LDPC library\n");
+
+  polar_interface_t polar_interface = {0};
+  int retpolar = load_polar_interface(NULL, &polar_interface);
+  AssertFatal(retpolar == 0, "Error loading Polar coding library\n");
 
   // strdup to put the sring in the core file for post mortem identification
   char *pckg = strdup(OAI_PACKAGE_VERSION);
@@ -275,6 +280,7 @@ int main(int argc, char **argv)
       PHY_vars_UE_g[inst][CC_id] = calloc_or_fail(1, sizeof(*PHY_vars_UE_g[inst][CC_id]));
       // All instances use the same coding interface
       PHY_vars_UE_g[inst][CC_id]->nrLDPC_coding_interface = nrLDPC_coding_interface;
+      PHY_vars_UE_g[inst][CC_id]->polar_interface = polar_interface;
     }
   }
 

@@ -166,11 +166,11 @@ void pucch_procedures_ue_nr(PHY_VARS_NR_UE *ue,
           nr_generate_pucch1(txdataF, &ue->frame_parms, tx_amp, nr_slot_tx, pucch_pdu);
           break;
         case 2:
-          nr_generate_pucch2(txdataF, &ue->frame_parms, tx_amp, nr_slot_tx, pucch_pdu);
+          nr_generate_pucch2(ue, txdataF, &ue->frame_parms, tx_amp, nr_slot_tx, pucch_pdu);
           break;
         case 3:
         case 4:
-          nr_generate_pucch3_4(txdataF, &ue->frame_parms, tx_amp, nr_slot_tx, pucch_pdu);
+          nr_generate_pucch3_4(ue, txdataF, &ue->frame_parms, tx_amp, nr_slot_tx, pucch_pdu);
           break;
       }
     }

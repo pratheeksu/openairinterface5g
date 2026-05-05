@@ -7,6 +7,9 @@
  *  Original UMTS version by P. Humblet
  */
 
+#include "coding_defs.h"
+#include "assertions.h"
+
 #if !defined(__SSE4_1__) && !defined(__aarch64__)
 #define USE_INTEL_CRC 0
 #else
@@ -14,8 +17,6 @@
 #include "crc.h"
 #endif
 
-#include "coding_defs.h"
-#include "assertions.h"
 /*ref 36-212 v8.6.0 , pp 8-9 */
 /* the highest degree is set by default */
 
@@ -76,23 +77,7 @@ static uint32_t crc11Table[256];
 static uint32_t crc8Table[256];
 static uint32_t crc6Table[256];
 
-#if USE_INTEL_CRC
-static const struct crc_pclmulqdq_ctx lte_crc24a_pclmulqdq __attribute__((aligned(16))) = {
-        0x64e4d700,     /**< k1 */
-        0x2c8c9d00,     /**< k2 */
-        0xd9fe8c00,     /**< k3 */
-        0xf845fe24,     /**< q */
-        0x864cfb00,     /**< p */
-        0ULL            /**< res */
-};
-simde__m128i crc_xmm_be_le_swap128;
 
-const uint8_t crc_xmm_shift_tab[48]
-    __attribute__((aligned(16))) = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-                                    0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f,
-                                    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
-
-#endif
 
 void crcTableInit (void)
 {
@@ -108,11 +93,6 @@ void crcTableInit (void)
     crc8Table[c] = crcbit(&c, 1, poly8) >> 24;
     crc6Table[c] = crcbit(&c, 1, poly6) >> 24;
   } while (++c);
-#if defined(__SSE4_1__) || defined(__aarch64__) 
-    crc_xmm_be_le_swap128 = simde_mm_setr_epi32(0x0c0d0e0f, 0x08090a0b,
-				    	        0x04050607, 0x00010203);
-
-#endif
 }
 
 /*********************************************************
