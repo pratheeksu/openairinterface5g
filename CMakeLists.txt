@@ -833,17 +833,6 @@ include_directories(${NFAPI_USER_DIR})
 
 # Layer 1
 #############################
-set(PHY_TURBOIF
-  ${OPENAIR1_DIR}/PHY/CODING/coding_load.c
-)
-
-set(PHY_NRLDPC_CODINGIF
-  ${OPENAIR1_DIR}/PHY/CODING/nrLDPC_coding/nrLDPC_coding_interface_load.c
-)
-
-set(PHY_NR_POLAR
-    ${OPENAIR1_DIR}/PHY/CODING/nrPolar_tools/polar_interface_load.c
-)
 
 add_library(dfts MODULE ${OPENAIR1_DIR}/PHY/TOOLS/oai_dfts.c ${OPENAIR1_DIR}/PHY/TOOLS/oai_dfts_neon.c)
 
@@ -872,7 +861,6 @@ set(PHY_SRC_COMMON
   ${OPENAIR1_DIR}/PHY/CODING/ccoding_byte.c
   ${OPENAIR1_DIR}/PHY/CODING/ccoding_byte_lte.c
   ${OPENAIR1_DIR}/PHY/CODING/3gpplte_sse.c
-  ${PHY_TURBOIF}
   ${OPENAIR1_DIR}/PHY/CODING/lte_rate_matching.c
   ${OPENAIR1_DIR}/PHY/CODING/viterbi.c
   ${OPENAIR1_DIR}/PHY/CODING/viterbi_lte.c
@@ -1017,8 +1005,6 @@ set(PHY_SRC_UE
   ${OPENAIR1_DIR}/PHY/TOOLS/dB_routines.c
   ${OPENAIR1_DIR}/PHY/TOOLS/sqrt.c
   ${OPENAIR1_DIR}/PHY/TOOLS/oai_arith_operations.c
-  ${PHY_NRLDPC_CODINGIF}
-  ${PHY_NR_POLAR}
   ${OPENAIR1_DIR}/PHY/NR_TRANSPORT/pucch_rx.c
   ${OPENAIR1_DIR}/PHY/NR_TRANSPORT/srs_rx.c
   ${OPENAIR1_DIR}/PHY/NR_TRANSPORT/nr_uci_tools_common.c
@@ -1067,8 +1053,6 @@ set(PHY_SRC_UE
   ${OPENAIR1_DIR}/PHY/TOOLS/sqrt.c
   ${OPENAIR1_DIR}/PHY/TOOLS/oai_arith_operations.c
   ${OPENAIR1_DIR}/PHY/INIT/nr_init_ue.c
-  ${PHY_NRLDPC_CODINGIF}
-  ${PHY_NR_POLAR}
   )
 
 
@@ -1078,7 +1062,7 @@ endif  (${SMBV})
 
 add_library(PHY_COMMON ${PHY_SRC_COMMON})
 target_link_libraries(PHY_COMMON
-  PRIVATE shlib_loader asn1_lte_rrc_hdrs crc_byte
+  PRIVATE shlib_loader asn1_lte_rrc_hdrs turbo_load crc_byte
   PUBLIC UTIL
 )
 add_dependencies(PHY_COMMON dfts)
@@ -1093,14 +1077,14 @@ add_library(PHY_NR_COMMON ${PHY_NR_SRC_COMMON})
 target_link_libraries(PHY_NR_COMMON PUBLIC UTIL)
 
 add_library(PHY_NR ${PHY_NR_SRC})
-target_link_libraries(PHY_NR nr_phy_common nr_common nr_fapi_p5 smallblock ds)
+target_link_libraries(PHY_NR nr_phy_common nr_common nr_fapi_p5 smallblock polar_load ldpc_load ds)
 
 add_library(PHY_NR_NO_AVX_256 ${PHY_NR_SRC})
 target_link_libraries(PHY_NR_NO_AVX_256 nr_phy_common nr_common)
 target_compile_definitions(PHY_NR_NO_AVX_256 PUBLIC USE_128BIT)
 
 add_library(PHY_NR_UE ${PHY_NR_UE_SRC})
-target_link_libraries(PHY_NR_UE PRIVATE asn1_nr_rrc_hdrs nr_phy_common nr_common UTIL smallblock)
+target_link_libraries(PHY_NR_UE PRIVATE asn1_nr_rrc_hdrs nr_phy_common nr_common UTIL smallblock polar_load ldpc_load)
 
 add_library(PHY_RU ${PHY_SRC_RU})
 target_link_libraries(PHY_RU PRIVATE asn1_lte_rrc_hdrs UTIL)

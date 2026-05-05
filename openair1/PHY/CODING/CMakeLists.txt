@@ -35,6 +35,9 @@ add_dependencies(nr_dlschsim ldpc ldpc_orig)
 
 add_library(crc_byte OBJECT crc_byte.c)
 
+add_library(turbo_load OBJECT coding_load.c)
+target_link_libraries(turbo_load PRIVATE log_headers)
+
 add_subdirectory(nrLDPC_coding)
 add_subdirectory(nrLDPC_decoder)
 add_subdirectory(nrPolar_tools)

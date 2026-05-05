@@ -25,3 +25,6 @@ add_dependencies(nr_ulsim polar)
 add_dependencies(nr_ulschsim polar)
 add_dependencies(nr_dlsim polar)
 add_dependencies(nr_dlschsim polar)
+
+add_library(polar_load OBJECT polar_interface_load.c)
+target_link_libraries(polar_load PRIVATE log_headers)
