@@ -797,14 +797,15 @@ static void ldpcnblocks(nrLDPC_TB_encoding_parameters_t *nrLDPC_TB_encoding_para
   // nrLDPC_encoder output is in "d"
   // let's make this interface happy!
 //  uint32_t d[4][68*384];
-  uint8_t *c[nrLDPC_TB_encoding_parameters->C];
+ // uint8_t *c[nrLDPC_TB_encoding_parameters->C];
+  extern uint32_t **input_host;
 
   if (!nrLDPC_TB_encoding_parameters->c_dev)  
     for (int r = 0; r < nrLDPC_TB_encoding_parameters->C; r++) {
-      c[r] = nrLDPC_TB_encoding_parameters->segments[r].c;
+      input_host[r] = nrLDPC_TB_encoding_parameters->segments[r].c;
     }
   start_meas(&nrLDPC_TB_encoding_parameters->segments[impp.first_seg].ts_ldpc_encode);
-  LDPCencoder32(nrLDPC_TB_encoding_parameters->c_dev ? nrLDPC_TB_encoding_parameters->c_dev : c, &impp);
+  LDPCencoder32(nrLDPC_TB_encoding_parameters->c_dev ? nrLDPC_TB_encoding_parameters->c_dev : input_host, &impp);
   stop_meas(&nrLDPC_TB_encoding_parameters->segments[impp.first_seg].ts_ldpc_encode);
   // Compute where to place in output buffer that is concatenation of all segments
 
