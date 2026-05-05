@@ -53,7 +53,6 @@
   #define  SYNCHRO_RATE_CHANGE_FACTOR  (1)
 #endif
 
-void init_context_synchro_nr(NR_DL_FRAME_PARMS *frame_parms_ue);
 int pss_synchro_nr(const c16_t **rxdata,
                    const NR_DL_FRAME_PARMS *frame_parms,
                    const c16_t pssTime[NUMBER_PSS_SEQUENCE][frame_parms->ofdm_symbol_size],
@@ -77,8 +76,7 @@ int pss_search_time_nr(const c16_t **rxdata,
                        int search_start,
                        int search_length);
 void generate_pss_nr_time(const NR_DL_FRAME_PARMS *fp, const int N_ID_2, int ssbFirstSCS, c16_t pssTime[fp->ofdm_symbol_size]);
-int16_t *get_primary_synchro_nr2(const int nid2);
-
+void generate_pss_nr(const int N_ID_2, int16_t *pss);
 #endif /* PSS_NR_H */
 
 

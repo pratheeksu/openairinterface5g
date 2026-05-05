@@ -43,9 +43,6 @@
 
 #define SSS_METRIC_FLOOR_NR   (30000)
 
-void init_context_sss_nr(int amp);
-void free_context_sss_nr(void);
-
 bool rx_sss_nr(const NR_DL_FRAME_PARMS *frame_parms,
                int nid2,
                int target_Nid_cell,

@@ -46,9 +46,7 @@
 
 #define INITIAL_SSS_NR    (7)
 
-static int16_t d_sss[N_ID_2_NUMBER][N_ID_1_NUMBER][LENGTH_SSS_NR];
-
-void init_context_sss_nr(int amp)
+static void init_context_sss_nr(int amp, int16_t d_sss[N_ID_2_NUMBER][N_ID_1_NUMBER][LENGTH_SSS_NR])
 {
   int16_t x0[LENGTH_SSS_NR];
   int16_t x1[LENGTH_SSS_NR];
@@ -107,14 +105,14 @@ void init_context_sss_nr(int amp)
 *
 *********************************************************************/
 
-static void pss_ch_est_nr(const NR_DL_FRAME_PARMS *frame_parms,
-                         int nid2,
-                         c16_t pss_ext[frame_parms->nb_antennas_rx][LENGTH_PSS_NR],
-                         c16_t sss_ext[frame_parms->nb_antennas_rx][LENGTH_SSS_NR])
+static void pss_ch_est_nr(int nb_antennas_rx,
+                          int nid2,
+                          c16_t pss_ext[nb_antennas_rx][LENGTH_PSS_NR],
+                          c16_t sss_ext[nb_antennas_rx][LENGTH_SSS_NR])
 {
-  int16_t *pss = get_primary_synchro_nr2(nid2);
-
-  for (int aarx = 0; aarx < frame_parms->nb_antennas_rx; aarx++) {
+  int16_t pss[LENGTH_PSS_NR];
+  generate_pss_nr(nid2, pss);
+  for (int aarx = 0; aarx < nb_antennas_rx; aarx++) {
     c16_t *sss_ext2 = sss_ext[aarx];
     c16_t *pss_ext2 = pss_ext[aarx];
     for (int i = 0; i < LENGTH_PSS_NR; i++) {
@@ -201,6 +199,8 @@ bool rx_sss_nr(const NR_DL_FRAME_PARMS *frame_parms,
   c16_t pss_ext[frame_parms->nb_antennas_rx][LENGTH_PSS_NR];
   c16_t sss_ext[frame_parms->nb_antennas_rx][LENGTH_SSS_NR];
   const int Nid2 = GET_NID2(nid2);
+  int16_t d_sss[N_ID_2_NUMBER][N_ID_1_NUMBER][LENGTH_SSS_NR];
+  init_context_sss_nr(AMP, d_sss);
 
   // pss sss extraction
   pss_sss_extract_nr(frame_parms, pss_ext, sss_ext, ssb_start_subcarrier, rxdataF); /* subframe */
@@ -254,8 +254,8 @@ bool rx_sss_nr(const NR_DL_FRAME_PARMS *frame_parms,
 
 #ifdef DEBUG_SSS_NR
         LOG_D(PHY,
-              "(phase,Nid1) (%d,%d), metric_phase %d tot_metric %d, phase_max %d \n",
-              phase,
+              "(phase,Nid1) (%d,%d), metric_phase %ld tot_metric %d, phase_max %d \n",
+              *phase_max,
               n1,
               metric,
               *tot_metric,

@@ -33,13 +33,6 @@
 //#define DBG_PSS_NR
 static time_stats_t generic_time[TIME_LAST];
 
-static int16_t d_pss[NUMBER_PSS_SEQUENCE][LENGTH_PSS_NR] = {0};
-static c16_t primary_synchro[NUMBER_PSS_SEQUENCE][LENGTH_PSS_NR] = {0};
-int16_t *get_primary_synchro_nr2(const int nid2)
-{
-  return d_pss[nid2];
-}
-
 /*******************************************************************
 *
 * NAME :         generate_pss_nr
@@ -54,43 +47,20 @@ int16_t *get_primary_synchro_nr2(const int nid2)
 *
 *********************************************************************/
 
-void generate_pss_nr(NR_DL_FRAME_PARMS *fp, int N_ID_2)
+void generate_pss_nr(const int N_ID_2, int16_t *pss)
 {
-  AssertFatal(fp->ofdm_symbol_size > 127,"Illegal ofdm_symbol_size %d\n",fp->ofdm_symbol_size);
-  AssertFatal(N_ID_2 >= 0 && N_ID_2 <= 2, "Illegal N_ID_2 %d\n", N_ID_2);
+  AssertFatal(N_ID_2 >= 0 && N_ID_2 < NUMBER_PSS_SEQUENCE, "Illegal N_ID_2 %d\n", N_ID_2);
   int16_t x[LENGTH_PSS_NR];
-
 #define INITIAL_PSS_NR (7)
   const int16_t x_initial[INITIAL_PSS_NR] = {0, 1, 1, 0, 1, 1, 1};
-  assert(N_ID_2 < NUMBER_PSS_SEQUENCE);
   memcpy(x, x_initial, sizeof(x_initial));
 
   for (int i = 0; i < (LENGTH_PSS_NR - INITIAL_PSS_NR); i++)
-    x[i + INITIAL_PSS_NR] = (x[i + 4] + x[i]) % (2);
-  int16_t *pss = d_pss[N_ID_2];
+    x[i + INITIAL_PSS_NR] = (x[i + 4] + x[i]) % 2;
   for (int n=0; n < LENGTH_PSS_NR; n++) {
     const int m = (n + 43 * N_ID_2) % (LENGTH_PSS_NR);
     pss[n] = 1 - 2 * x[m];
   }
-
-  /* PSS is directly mapped to subcarrier without modulation 38.211 */
-  for (int i=0; i < LENGTH_PSS_NR; i++) {
-    primary_synchro[N_ID_2][i].r = (pss[i] * SHRT_MAX) >> SCALING_PSS_NR; /* Maximum value for type short int ie int16_t */
-  }
-
-#ifdef DBG_PSS_NR
-
-  if (N_ID_2 == 0) {
-    char output_file[255];
-    char sequence_name[255];
-    sprintf(output_file, "pss_seq_%d_%u.m", N_ID_2, fp->ofdm_symbol_size);
-    sprintf(sequence_name, "pss_seq_%d_%u", N_ID_2, fp->ofdm_symbol_size);
-    printf("file %s sequence %s\n", output_file, sequence_name);
-
-    LOG_M(output_file, sequence_name, primary_synchro, LENGTH_PSS_NR, 1, 1);
-  }
-
-#endif
 }
 
   /* call of IDFT should be done with ordered input as below
@@ -120,10 +90,12 @@ void generate_pss_nr_time(const NR_DL_FRAME_PARMS *fp, const int N_ID_2, int ssb
   c16_t synchroF_tmp[fp->ofdm_symbol_size] __attribute__((aligned(32)));
   memset(synchroF_tmp, 0, sizeof(synchroF_tmp));
   unsigned int k = fp->first_carrier_offset + ssbFirstSCS + subcarrier_start;
+  int16_t pss[LENGTH_PSS_NR];
+  generate_pss_nr(N_ID_2, pss);
   for (int i=0; i < LENGTH_PSS_NR; i++) {
     if (k >= fp->ofdm_symbol_size)
       k -= fp->ofdm_symbol_size;
-    synchroF_tmp[k] = primary_synchro[N_ID_2][i];
+    synchroF_tmp[k] = (c16_t){.r = (pss[i] * SHRT_MAX) >> SCALING_PSS_NR}; /* Maximum value for type short int ie int16_t */
     k++;
   }
 
@@ -132,159 +104,6 @@ void generate_pss_nr_time(const NR_DL_FRAME_PARMS *fp, const int N_ID_2, int ssb
        (int16_t *)synchroF_tmp, /* complex input but legacy type is wrong*/
        (int16_t *)pssTime, /* complex output */
        1); /* scaling factor */
-
-#ifdef DBG_PSS_NR
-
-  if (N_ID_2 == 0) {
-    char output_file[255];
-    char sequence_name[255];
-    sprintf(output_file, "%s%d_%u%s","pss_seq_t_", N_ID_2, length, ".m");
-    sprintf(sequence_name, "%s%d_%u","pss_seq_t_", N_ID_2, length);
-
-    printf("file %s sequence %s\n", output_file, sequence_name);
-
-    LOG_M(output_file, sequence_name, primary_synchro_time, length, 1, 1);
-    sprintf(output_file, "%s%d_%u%s","pss_seq_f_", N_ID_2, length, ".m");
-    sprintf(sequence_name, "%s%d_%u","pss_seq_f_", N_ID_2, length);
-    LOG_M(output_file, sequence_name, synchroF_tmp, length, 1, 1);
-  }
-
-#endif
-}
-
-/*******************************************************************
-*
-* NAME :         init_context_pss_nr
-*
-* PARAMETERS :   structure NR_DL_FRAME_PARMS give frame parameters
-*
-* RETURN :       generate binary pss sequences (this is a m-sequence)
-*
-* DESCRIPTION :  3GPP TS 38.211 7.4.2.2 Primary synchronisation signal
-*                Sequence generation
-*
-*********************************************************************/
-
-static void init_context_pss_nr(NR_DL_FRAME_PARMS *frame_parms_ue)
-{
-  AssertFatal(frame_parms_ue->ofdm_symbol_size > 127, "illegal ofdm_symbol_size %d\n", frame_parms_ue->ofdm_symbol_size);
-  int pss_sequence = get_softmodem_params()->sl_mode == 0 ? NUMBER_PSS_SEQUENCE : NUMBER_PSS_SEQUENCE_SL;
-  for (int i = 0; i < pss_sequence; i++) {
-    generate_pss_nr(frame_parms_ue,i);
-  }
-}
-
-/*******************************************************************
-*
-* NAME :         init_context_synchro_nr
-*
-* PARAMETERS :   none
-*
-* RETURN :       generate context for pss and sss
-*
-* DESCRIPTION :  initialise contexts and buffers for synchronisation
-*
-*********************************************************************/
-
-void init_context_synchro_nr(NR_DL_FRAME_PARMS *frame_parms_ue)
-{
-  /* initialise global buffers for synchronisation */
-  init_context_pss_nr(frame_parms_ue);
-  init_context_sss_nr(AMP);
-}
-
-/*******************************************************************
-*
-* NAME :         set_frame_context_pss_nr
-*
-* PARAMETERS :   configuration for UE with new FFT size
-*
-* RETURN :       0 if OK else error
-*
-* DESCRIPTION :  initialisation of UE contexts
-*
-*********************************************************************/
-
-void set_frame_context_pss_nr(NR_DL_FRAME_PARMS *frame_parms_ue, int rate_change)
-{
-  /* set new value according to rate_change */
-  frame_parms_ue->ofdm_symbol_size = (frame_parms_ue->ofdm_symbol_size / rate_change);
-  frame_parms_ue->samples_per_subframe = (frame_parms_ue->samples_per_subframe / rate_change);
-
-  /* pss reference have to be rebuild with new parameters ie ofdm symbol size */
-  init_context_synchro_nr(frame_parms_ue);
-
-#ifdef SYNCHRO_DECIMAT
-  set_pss_nr(frame_parms_ue->ofdm_symbol_size);
-#endif
-}
-
-/*******************************************************************
-*
-* NAME :         restore_frame_context_pss_nr
-*
-* PARAMETERS :   configuration for UE and eNB with new FFT size
-*
-* RETURN :       0 if OK else error
-*
-* DESCRIPTION :  initialisation of UE and eNode contexts
-*
-*********************************************************************/
-
-void restore_frame_context_pss_nr(NR_DL_FRAME_PARMS *frame_parms_ue, int rate_change)
-{
-  frame_parms_ue->ofdm_symbol_size = frame_parms_ue->ofdm_symbol_size * rate_change;
-  frame_parms_ue->samples_per_subframe = frame_parms_ue->samples_per_subframe * rate_change;
-
-  /* pss reference have to be rebuild with new parameters ie ofdm symbol size */
-  init_context_synchro_nr(frame_parms_ue);
-#ifdef SYNCHRO_DECIMAT
-  set_pss_nr(frame_parms_ue->ofdm_symbol_size);
-#endif
-}
-
-/********************************************************************
-*
-* NAME :         decimation_synchro_nr
-*
-* INPUT :        UE context
-*                for first and second pss sequence
-*                - position of pss in the received UE buffer
-*                - number of pss sequence
-*
-* RETURN :      0 if OK else error
-*
-* DESCRIPTION :  detect pss sequences in the received UE buffer
-*
-********************************************************************/
-
-void decimation_synchro_nr(PHY_VARS_NR_UE *PHY_vars_UE, int rate_change, int **rxdata)
-{
-  NR_DL_FRAME_PARMS *frame_parms = &(PHY_vars_UE->frame_parms);
-  int samples_for_frame = 2*frame_parms->samples_per_frame;
-
-  start_meas(&generic_time[TIME_RATE_CHANGE]);
-/* build with cic filter does not work properly. Performances are significantly deteriorated */
-#ifdef CIC_DECIMATOR
-
-  cic_decimator((int16_t *)&(PHY_vars_UE->common_vars.rxdata[0][0]), (int16_t *)&(rxdata[0][0]),
-                            samples_for_frame, rate_change, CIC_FILTER_STAGE_NUMBER, 0, FIR_RATE_CHANGE);
-#else
-
-  fir_decimator((int16_t *)&(PHY_vars_UE->common_vars.rxdata[0][0]), (int16_t *)&(rxdata[0][0]),
-                            samples_for_frame, rate_change, 0);
-
-#endif
-
-  set_frame_context_pss_nr(frame_parms, rate_change);
-
-#if TEST_SYNCHRO_TIMING_PSS
-
-  stop_meas(&generic_time[TIME_RATE_CHANGE]);
-
-  printf("Rate change execution duration %5.2f \n", generic_time[TIME_RATE_CHANGE].p_time/(cpuf*1000.0));
-
-#endif
 }
 
 /*******************************************************************
@@ -310,11 +129,6 @@ int pss_synchro_nr(const c16_t **rxdata,
                    int *pssPeak,
                    int *pssAvg)
 {
-#ifdef DBG_PSS_NR
-  LOG_M("rxdata0_rand.m", "rxd0_rand", &PHY_vars_UE->common_vars.rxdata[0][0], frame_parms->samples_per_frame, 1, 1);
-  LOG_M("rxdata0_des.m", "rxd0_des", &rxdata[0][0], frame_parms->samples_per_frame, 1, 1);
-#endif
-
   start_meas(&generic_time[TIME_PSS]);
   int synchro_position =
       pss_search_time_nr(rxdata, frame_parms, pssTime, fo_flag, is, target_Nid_cell, nid2, f_off, pssPeak, pssAvg, -1, -1);
@@ -326,18 +140,6 @@ int pss_synchro_nr(const c16_t **rxdata,
 #ifndef NR_UNIT_TEST
   LOG_D(PHY, "PSS execution duration %4d microseconds \n", duration_ms);
 #endif
-#endif
-
-#ifdef SYNCHRO_DECIMAT
-  if (rate_change != 1) {
-    if (rxdata[0] != NULL) {
-      for (int aa=0;aa<frame_parms->nb_antennas_rx;aa++) {
-        free(rxdata[aa]);
-      }
-      free(rxdata);
-    }
-    restore_frame_context_pss_nr(frame_parms, rate_change);
-  }
 #endif
 
   return synchro_position;

@@ -470,7 +470,6 @@ void phy_init_nr_top(PHY_VARS_NR_UE *ue) {
   crcTableInit();
   init_byte2m128i();
   load_dftslib();
-  init_context_synchro_nr(frame_parms);
   generate_ul_reference_signal_sequences(SHRT_MAX);
 }
 
