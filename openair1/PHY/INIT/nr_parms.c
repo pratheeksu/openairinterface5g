@@ -572,7 +572,7 @@ int nr_init_frame_parms_ue_sl(NR_DL_FRAME_PARMS *fp,
                           fp->numerology_index,
                           fp->sl_CarrierFreq,
                           fp->symbol_rotation[link_type_sl]);
-  init_timeshift_rotation(fp);
+  init_timeshift_rotation(fp->ofdm_symbol_size, fp->nb_prefix_samples, fp->ofdm_offset_divisor, fp->timeshift_symbol_rotation);
 
   // Not used for Sidelink
   fp->Lmax = 0;
