@@ -468,6 +468,7 @@ typedef struct {
   int foFlag;
   int targetNidCell;
   c16_t **rxdata;
+  int rxdata_sz;
   NR_DL_FRAME_PARMS *fp;
   UE_nr_rxtx_proc_t *proc;
   int nFrames;
@@ -487,14 +488,27 @@ typedef struct {
 
 // Common SSB search parameters - used by both initial sync and neighbor cell search
 typedef struct {
-  const NR_DL_FRAME_PARMS *frame_parms;
-  c16_t **rxdata;
+  uint64_t dl_CarrierFreq;
+  uint sampling_rate;
+  int slots_per_frame;
+  int slots_per_subframe;
+  int numerology_index;
+  int ofdm_symbol_size;
+  uint ofdm_offset_divisor;
+  int nb_antennas_rx;
+  int symbols_per_slot;
+  int first_carrier_offset;
+  int N_RB_DL;
   uint32_t rxdata_size;
+  c16_t **rxdata;
+  int nb_prefix_samples;
+  int nb_prefix_samples0;
   int ssb_start_subcarrier;
+  int subcarrier_spacing;
+  int samples_per_slot_wCP;
   int target_nid_cell; // -1 for blind search, specific PCI for targeted search
   int exclude_nid_cell; // -1 for no exclusion, or serving cell PCI to exclude
   bool apply_freq_offset; // whether to compensate frequency offset
-  int search_frame_id; // Frame index to search (0, 1, 2...) within rxdata buffer
   bool fo_flag; // frequency offset estimation flag for pss_synchro_nr()
   void *rxdataF; // Pre-allocated rxdataF buffer
   void *pssTime; // Pre-generated PSS time sequences

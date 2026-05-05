@@ -239,14 +239,27 @@ static bool search_neighboring_cell(NR_DL_FRAME_PARMS *frame_parms,
   int freq_offset_sss = 0;
 
   nr_ssb_search_params_t search_params = {
-      .frame_parms = frame_parms,
-      .rxdata = rxdata,
+      .dl_CarrierFreq = frame_parms->dl_CarrierFreq,
+      .sampling_rate = frame_parms->samples_per_subframe * 1000,
+      .slots_per_frame = frame_parms->slots_per_frame,
+      .slots_per_subframe = frame_parms->slots_per_subframe,
+      .numerology_index = frame_parms->numerology_index,
+      .ofdm_symbol_size = frame_parms->ofdm_symbol_size,
+      .ofdm_offset_divisor = frame_parms->ofdm_offset_divisor,
+      .nb_antennas_rx = frame_parms->nb_antennas_rx,
+      .symbols_per_slot = frame_parms->symbols_per_slot,
+      .first_carrier_offset = frame_parms->first_carrier_offset,
+      .N_RB_DL = frame_parms->N_RB_DL,
       .rxdata_size = rxdata_size,
+      .rxdata = rxdata,
+      .nb_prefix_samples = frame_parms->nb_prefix_samples,
+      .nb_prefix_samples0 = frame_parms->nb_prefix_samples0,
       .ssb_start_subcarrier = frame_parms->ssb_start_subcarrier,
+      .subcarrier_spacing = frame_parms->subcarrier_spacing,
+      .samples_per_slot_wCP = frame_parms->samples_per_slot_wCP,
       .target_nid_cell = -1, // Blind search
       .exclude_nid_cell = frame_parms->Nid_cell, // Exclude serving cell
       .apply_freq_offset = false,
-      .search_frame_id = 0, // Search in first frame of buffer
       .fo_flag = false,
       .rxdataF = rxdataF,
       .pssTime = pssTime,
@@ -297,10 +310,11 @@ static bool validate_known_pci(NR_DL_FRAME_PARMS *frame_parms,
   int length = neighboring_cell_info->pss_search_length;
 
   int peak_position = pss_search_time_nr((const c16_t **)rxdata,
-                                         frame_parms,
+                                         frame_parms->ofdm_symbol_size,
+                                         frame_parms->nb_antennas_rx,
+                                         frame_parms->subcarrier_spacing,
                                          pssTime,
                                          false, // no frequency offset estimation for tracking
-                                         0, // first frame
                                          known_pci,
                                          &pss_index,
                                          &f_off,
@@ -380,7 +394,11 @@ void do_neighboring_cell_measurements(UE_nr_rxtx_proc_t *proc, PHY_VARS_NR_UE *u
   // Generate PSS time-domain sequences once for all neighbor cells
   __attribute__((aligned(32))) c16_t pssTime[NUMBER_PSS_SEQUENCE][frame_parms->ofdm_symbol_size];
   for (int nid2_idx = 0; nid2_idx < NUMBER_PSS_SEQUENCE; nid2_idx++) {
-    generate_pss_nr_time(frame_parms, nid2_idx, frame_parms->ssb_start_subcarrier, pssTime[nid2_idx]);
+    generate_pss_nr_time(frame_parms->ofdm_symbol_size,
+                         frame_parms->first_carrier_offset,
+                         nid2_idx,
+                         frame_parms->ssb_start_subcarrier,
+                         pssTime[nid2_idx]);
   }
 
   __attribute__((aligned(32))) c16_t rxdataF[NR_N_SYMBOLS_SSB][frame_parms->nb_antennas_rx][rxdataF_sz];

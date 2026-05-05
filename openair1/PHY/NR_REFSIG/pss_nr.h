@@ -54,20 +54,24 @@
 #endif
 
 int pss_synchro_nr(const c16_t **rxdata,
-                   const NR_DL_FRAME_PARMS *frame_parms,
-                   const c16_t pssTime[NUMBER_PSS_SEQUENCE][frame_parms->ofdm_symbol_size],
-                   int is,
+                   int nb_ant,
+                   int ofdm_symbol_size,
+                   int rxdata_size,
+                   int subcarrier_spacing,
+                   const c16_t pssTime[NUMBER_PSS_SEQUENCE][ofdm_symbol_size],
                    bool fo_flag,
                    int target_Nid_cell,
                    int *nid2,
                    int *f_off,
                    int *pssPeak,
                    int *pssAvg);
+
 int pss_search_time_nr(const c16_t **rxdata,
-                       const NR_DL_FRAME_PARMS *frame_parms,
-                       const c16_t pssTime[NUMBER_PSS_SEQUENCE][frame_parms->ofdm_symbol_size],
+                       int ofdm_symbol_size,
+                       int nb_antennas_rx,
+                       int subcarrier_spacing,
+                       const c16_t pssTime[NUMBER_PSS_SEQUENCE][ofdm_symbol_size],
                        bool fo_flag,
-                       int is,
                        int target_Nid_cell,
                        int *nid2,
                        int *f_off,
@@ -75,7 +79,11 @@ int pss_search_time_nr(const c16_t **rxdata,
                        int *pssAvg,
                        int search_start,
                        int search_length);
-void generate_pss_nr_time(const NR_DL_FRAME_PARMS *fp, const int N_ID_2, int ssbFirstSCS, c16_t pssTime[fp->ofdm_symbol_size]);
+void generate_pss_nr_time(int ofdm_symbol_size,
+                          int first_carrier_offset,
+                          const int N_ID_2,
+                          int ssbFirstSCS,
+                          c16_t pssTime[ofdm_symbol_size]);
 void generate_pss_nr(const int N_ID_2, int16_t *pss);
 #endif /* PSS_NR_H */
 

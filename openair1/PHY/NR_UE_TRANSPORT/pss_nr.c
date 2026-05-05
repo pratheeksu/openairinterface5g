@@ -84,23 +84,27 @@ void generate_pss_nr(const int N_ID_2, int16_t *pss)
   *
   * sample 0 is for continuous frequency which is used here
   */
-void generate_pss_nr_time(const NR_DL_FRAME_PARMS *fp, const int N_ID_2, int ssbFirstSCS, c16_t pssTime[fp->ofdm_symbol_size])
+void generate_pss_nr_time(int ofdm_symbol_size,
+                          int first_carrier_offset,
+                          const int N_ID_2,
+                          int ssbFirstSCS,
+                          c16_t pssTime[ofdm_symbol_size])
 {
   unsigned int subcarrier_start = get_softmodem_params()->sl_mode == 0 ? PSS_SSS_SUB_CARRIER_START : PSS_SSS_SUB_CARRIER_START_SL;
-  c16_t synchroF_tmp[fp->ofdm_symbol_size] __attribute__((aligned(32)));
+  c16_t synchroF_tmp[ofdm_symbol_size] __attribute__((aligned(32)));
   memset(synchroF_tmp, 0, sizeof(synchroF_tmp));
-  unsigned int k = fp->first_carrier_offset + ssbFirstSCS + subcarrier_start;
+  unsigned int k = first_carrier_offset + ssbFirstSCS + subcarrier_start;
   int16_t pss[LENGTH_PSS_NR];
   generate_pss_nr(N_ID_2, pss);
   for (int i=0; i < LENGTH_PSS_NR; i++) {
-    if (k >= fp->ofdm_symbol_size)
-      k -= fp->ofdm_symbol_size;
+    if (k >= ofdm_symbol_size)
+      k -= ofdm_symbol_size;
     synchroF_tmp[k] = (c16_t){.r = (pss[i] * SHRT_MAX) >> SCALING_PSS_NR}; /* Maximum value for type short int ie int16_t */
     k++;
   }
 
   /* IFFT will give temporal signal of Pss */
-  idft((int16_t)get_idft(fp->ofdm_symbol_size),
+  idft((int16_t)get_idft(ofdm_symbol_size),
        (int16_t *)synchroF_tmp, /* complex input but legacy type is wrong*/
        (int16_t *)pssTime, /* complex output */
        1); /* scaling factor */
@@ -119,9 +123,11 @@ void generate_pss_nr_time(const NR_DL_FRAME_PARMS *fp, const int N_ID_2, int ssb
 *********************************************************************/
 
 int pss_synchro_nr(const c16_t **rxdata,
-                   const NR_DL_FRAME_PARMS *frame_parms,
-                   const c16_t pssTime[NUMBER_PSS_SEQUENCE][frame_parms->ofdm_symbol_size],
-                   int is,
+                   int nb_ant,
+                   int ofdm_symbol_size,
+                   int rxdata_size,
+                   int subcarrier_spacing,
+                   const c16_t pssTime[NUMBER_PSS_SEQUENCE][ofdm_symbol_size],
                    bool fo_flag,
                    int target_Nid_cell,
                    int *nid2,
@@ -130,8 +136,19 @@ int pss_synchro_nr(const c16_t **rxdata,
                    int *pssAvg)
 {
   start_meas(&generic_time[TIME_PSS]);
-  int synchro_position =
-      pss_search_time_nr(rxdata, frame_parms, pssTime, fo_flag, is, target_Nid_cell, nid2, f_off, pssPeak, pssAvg, -1, -1);
+  int synchro_position = pss_search_time_nr(rxdata,
+                                            ofdm_symbol_size,
+                                            nb_ant,
+                                            subcarrier_spacing,
+                                            pssTime,
+                                            fo_flag,
+                                            target_Nid_cell,
+                                            nid2,
+                                            f_off,
+                                            pssPeak,
+                                            pssAvg,
+                                            0,
+                                            rxdata_size - ofdm_symbol_size);
   stop_meas(&generic_time[TIME_PSS]);
 
 #if TEST_SYNCHRO_TIMING_PSS
@@ -196,10 +213,11 @@ int pss_synchro_nr(const c16_t **rxdata,
 *********************************************************************/
 
 int pss_search_time_nr(const c16_t **rxdata,
-                       const NR_DL_FRAME_PARMS *frame_parms,
-                       const c16_t pssTime[NUMBER_PSS_SEQUENCE][frame_parms->ofdm_symbol_size],
+                       int ofdm_symbol_size,
+                       int nb_antennas_rx,
+                       int subcarrier_spacing,
+                       const c16_t pssTime[NUMBER_PSS_SEQUENCE][ofdm_symbol_size],
                        bool fo_flag,
-                       int is,
                        int target_Nid_cell,
                        int *nid2,
                        int *f_off,
@@ -210,24 +228,13 @@ int pss_search_time_nr(const c16_t **rxdata,
 {
   // Determine search window
   unsigned int start, length;
-  if (search_start >= 0 && search_length > 0) {
-    // Use provided search window for known neighboring cells
-    start = search_start;
-    length = search_length;
-  } else {
-    // For initial cell search
-    start = 0;
-    if (is == 0)
-      length = frame_parms->samples_per_frame + (2 * frame_parms->ofdm_symbol_size);
-    else
-      length = frame_parms->samples_per_frame;
-  }
-
-  AssertFatal(length > 0, "illegal length %d\n", length);
+  // Use provided search window for known neighboring cells
+  start = search_start;
+  length = search_length;
   int maxval=0;
   int max_size = get_softmodem_params()->sl_mode == 0 ?  NUMBER_PSS_SEQUENCE : NUMBER_PSS_SEQUENCE_SL;
   for (int j = 0; j < max_size; j++)
-    for (int i = 0; i < frame_parms->ofdm_symbol_size; i++) {
+    for (int i = 0; i < ofdm_symbol_size; i++) {
       maxval = max(maxval, abs(pssTime[j][i].r));
       maxval = max(maxval, abs(pssTime[j][i].i));
     }
@@ -256,12 +263,9 @@ int pss_search_time_nr(const c16_t **rxdata,
       int64_t pss_corr_ue = 0;
       /* calculate dot product of primary_synchro_time_nr and rxdata[ar][n]
        * (ar=0..nb_ant_rx) and store the sum in temp[n]; */
-      for (int ar = 0; ar < frame_parms->nb_antennas_rx; ar++) {
+      for (int ar = 0; ar < nb_antennas_rx; ar++) {
         /* perform correlation of rx data and pss sequence ie it is a dot product */
-        const c32_t result = dot_product(pssTime[pss_index],
-                                         &rxdata[ar][n + is * frame_parms->samples_per_frame],
-                                         frame_parms->ofdm_symbol_size,
-                                         shift);
+        const c32_t result = dot_product(pssTime[pss_index], &rxdata[ar][n], ofdm_symbol_size, shift);
         const c64_t r64 = {.r = result.r, .i = result.i};
         pss_corr_ue += squaredMod(r64);
       }
@@ -274,7 +278,7 @@ int pss_search_time_nr(const c16_t **rxdata,
         pss_source = pss_index;
 
 #ifdef DEBUG_PSS_NR
-        printf("pss_index %d: n %6u peak_value %15llu\n", pss_index, n, (unsigned long long)pss_corr_ue[n]);
+        printf("pss_index %d: n %6u peak_value %lu\n", pss_index, n, pss_corr_ue);
 #endif
       }
     }
@@ -288,15 +292,12 @@ int pss_search_time_nr(const c16_t **rxdata,
     // International Conference on Communications and Networking in China, 2012.
 
     // Computing cross-correlation at peak on half the symbol size for first half of data
-    c32_t r1 = dot_product(pssTime[pss_source],
-                           &(rxdata[0][peak_position + is * frame_parms->samples_per_frame]),
-                           frame_parms->ofdm_symbol_size >> 1,
-                           shift);
+    c32_t r1 = dot_product(pssTime[pss_source], &(rxdata[0][peak_position]), ofdm_symbol_size >> 1, shift);
     // Computing cross-correlation at peak on half the symbol size for data shifted by half symbol size
     // as it is real and complex it is necessary to shift by a value equal to symbol size to obtain such shift
-    c32_t r2 = dot_product(pssTime[pss_source] + (frame_parms->ofdm_symbol_size >> 1),
-                           &(rxdata[0][peak_position + is * frame_parms->samples_per_frame]) + (frame_parms->ofdm_symbol_size >> 1),
-                           frame_parms->ofdm_symbol_size >> 1,
+    c32_t r2 = dot_product(pssTime[pss_source] + (ofdm_symbol_size >> 1),
+                           &(rxdata[0][peak_position]) + (ofdm_symbol_size >> 1),
+                           ofdm_symbol_size >> 1,
                            shift);
     cd_t r1d = {r1.r, r1.i}, r2d = {r2.r, r2.i};
     // estimation of fractional frequency offset: angle[(result1)'*(result2)]/pi
@@ -307,7 +308,7 @@ int pss_search_time_nr(const c16_t **rxdata,
 #endif
   }
   // computing absolute value of frequency offset
-  *f_off = ffo_est * frame_parms->subcarrier_spacing;
+  *f_off = ffo_est * subcarrier_spacing;
 
   *nid2 = pss_source;
   *pssPeak = dB_fixed64(peak_value);
@@ -329,10 +330,7 @@ int pss_search_time_nr(const c16_t **rxdata,
 #ifdef DBG_PSS_NR
   static int debug_cnt = 0;
   if (debug_cnt == 0) {
-    if (is)
-      LOG_M("rxdata1.m", "rxd0", rxdata[frame_parms->samples_per_frame], length, 1, 1);
-    else
-      LOG_M("rxdata0.m", "rxd0", rxdata[0], length, 1, 1);
+    LOG_M("rxdata0.m", "rxd0", rxdata[0], length, 1, 1);
   } else {
     debug_cnt++;
   }
