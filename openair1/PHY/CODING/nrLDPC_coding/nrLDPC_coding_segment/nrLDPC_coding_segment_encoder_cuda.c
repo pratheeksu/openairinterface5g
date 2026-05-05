@@ -651,68 +651,7 @@ void nr_interleaving_ldpc32(uint32_t E, uint8_t Qm, uint32_t *e, uint32_t *f)
       uint32_t *e7 = e6 + EQm;
       
       int i = 0;
-#if 0 /*def __AVX2__, this needs to be fixed, revert to 128-bit below*/
-      simde__m256i *e0_256 = (simde__m256i *)e0;
-      simde__m256i *e1_256 = (simde__m256i *)e1;
-      simde__m256i *e2_256 = (simde__m256i *)e2;
-      simde__m256i *e3_256 = (simde__m256i *)e3;
-      simde__m256i *e4_256 = (simde__m256i *)e4;
-      simde__m256i *e5_256 = (simde__m256i *)e5;
-      simde__m256i *e6_256 = (simde__m256i *)e6;
-      simde__m256i *e7_256 = (simde__m256i *)e7;
-      simde__m256i *f256   = (simde__m256i *)f;
 
-      for (; i < (EQm & ~7); i += 8) {
-        simde__m256i e0j = simde_mm256_loadu_si256(e0_256++);
-        simde__m256i e1j = simde_mm256_loadu_si256(e1_256++);
-        simde__m256i e2j = simde_mm256_loadu_si256(e2_256++);
-        simde__m256i e3j = simde_mm256_loadu_si256(e3_256++);
-        simde__m256i e4j = simde_mm256_loadu_si256(e4_256++);
-        simde__m256i e5j = simde_mm256_loadu_si256(e5_256++);
-        simde__m256i e6j = simde_mm256_loadu_si256(e6_256++);
-        simde__m256i e7j = simde_mm256_loadu_si256(e7_256++);
-
-        simde__m256i tmp0 = simde_mm256_unpacklo_epi32(e0j, e1j);   // e0(i) e1(i) e0(i+1) e1(i+1) e0(i+4) e1(i+4) e0(i+5) e1(i+5) 
-        simde__m256i tmp1 = simde_mm256_unpacklo_epi32(e2j, e3j);   // e2(i) e3(i) e2(i+1) e3(i+1) e2(i+4) e3(i+4) e2(i+5) e3(i+5)
-        simde__m256i tmp2 = simde_mm256_unpacklo_epi32(e4j, e5j);   // e4(i) e5(i) e4(i+1) e5(i+1) e4(i+4) e5(i+4) e4(i+5) e5(i+5) 
-        simde__m256i tmp3 = simde_mm256_unpacklo_epi32(e6j, e7j);   // e6(i) e7(i) e6(i+1) e7(i+1) e6(i+4) e7(i+4) e6(i+5) e7(i+5)
-								    //
-        simde__m256i tmp4 = simde_mm256_unpacklo_epi64(tmp0, tmp1);   // e0(i) e1(i) e2(i) e3(i) e0(i+4) e1(i+4) e2(i+4) e3(i+4) 
-        simde__m256i tmp5 = simde_mm256_unpacklo_epi64(tmp2, tmp3);   // e4(i) e5(i) e6(i) e7(i) e4(i+4) e5(i+4) e6(i+4) e7(i+4) 
-								 
-        simde_mm256_storeu_si256(f256++,_mm256_permute2x128_si256(tmp4,tmp5,0x20)); // e0(i) e1(i) e2(i) e3(i) e4(i) e5(i) e6(i) e7(i) 
-										    
-        simde__m256i tmp6 = simde_mm256_unpackhi_epi64(tmp0, tmp1);   // e0(i+1) e1(i+1) e2(i+1) e3(i+1) e0(i+5) e1(i+5) e2(i+5) e3(i+5) 
-        simde__m256i tmp7 = simde_mm256_unpackhi_epi64(tmp2, tmp3);   // e4(i+1) e5(i+1) e6(i+1) e7(i+1) e4(i+5) e5(i+5) e6(i+5) e7(i+5) 
-        simde_mm256_storeu_si256(f256++,_mm256_permute2x128_si256(tmp6,tmp7,0x20)); // e0(i+1) e1(i+1) e2(i+1) e3(i+1) e4(i+1) e5(i+1) e6(i+1) e7(i+1) 
-										    //
-        tmp0 = simde_mm256_unpackhi_epi32(e0j, e1j);   // e0(i+2) e1(i+2) e0(i+3) e1(i+3) e0(i+6) e1(i+6) e0(i+7) e1(i+7) 
-        tmp1 = simde_mm256_unpackhi_epi32(e2j, e3j);   // e2(i+2) e3(i+2) e2(i+3) e3(i+3) e2(i+6) e3(i+6) e2(i+7) e3(i+7)
-        tmp2 = simde_mm256_unpackhi_epi32(e4j, e5j);   // e4(i+2) e5(i+2) e4(i+3) e5(i+3) e4(i+6) e5(i+6) e4(i+7) e5(i+7) 
-        tmp3 = simde_mm256_unpackhi_epi32(e6j, e7j);   // e6(i+2) e7(i+2) e6(i+3) e7(i+3) e6(i+6) e7(i+6) e6(i+7) e7(i+7)
-								    //
-        simde__m256i tmp8 = simde_mm256_unpacklo_epi64(tmp0, tmp1);   // e0(i+2) e1(i+2) e2(i+2) e3(i+2) e0(i+6) e1(i+6) e2(i+6) e3(i+6) 
-        simde__m256i tmp9 = simde_mm256_unpacklo_epi64(tmp2, tmp3);   // e4(i+2) e5(i+2) e6(i+2) e7(i+2) e4(i+6) e5(i+6) e6(i+6) e7(i+6) 
-								 
-        simde_mm256_storeu_si256(f256++,_mm256_permute2x128_si256(tmp8,tmp9,0x20)); // e0(i+2) e1(i+2) e2(i+2) e3(i+2) e4(i+2) e5(i+2) e6(i+2) e7(i+2) 
-        simde__m256i tmp10 = simde_mm256_unpackhi_epi64(tmp0, tmp1);   // e0(i+3) e1(i+3) e2(i+3) e3(i+3) e0(i+7) e1(i+7) e2(i+7) e3(i+7) 
-        simde__m256i tmp11 = simde_mm256_unpackhi_epi64(tmp2, tmp3);   // e4(i+3) e5(i+3) e6(i+3) e7(i+3) e4(i+7) e5(i+7) e6(i+7) e7(i+7) 
-        simde_mm256_storeu_si256(f256++,_mm256_permute2x128_si256(tmp10,tmp11,0x20)); // e0(i+3) e1(i+3) e2(i+3) e3(i+3) e4(i+3) e5(i+3) e6(i+3) e7(i+3) 
-        simde_mm256_storeu_si256(f256++,_mm256_permute2x128_si256(tmp4,tmp5,0x31)); // e0(i+4) e1(i+4) e2(i+4) e3(i+4) e4(i+4) e5(i+4) e6(i+4) e7(i+4) 
-        simde_mm256_storeu_si256(f256++,_mm256_permute2x128_si256(tmp6,tmp7,0x31)); // e0(i+5) e1(i+5) e2(i+5) e3(i+5) e4(i+5) e5(i+5) e6(i+5) e7(i+5) 
-        simde_mm256_storeu_si256(f256++,_mm256_permute2x128_si256(tmp8,tmp9,0x31)); // e0(i+6) e1(i+6) e2(i+6) e3(i+6) e4(i+6) e5(i+6) e6(i+6) e7(i+6) 
-        simde_mm256_storeu_si256(f256++,_mm256_permute2x128_si256(tmp10,tmp11,0x31)); // e0(i+7) e1(i+7) e2(i+7) e3(i+7) e4(i+7) e5(i+7) e6(i+7) e7(i+7) 
-      }
-      e0 = (uint32_t *)e0_256;
-      e1 = (uint32_t *)e1_256;
-      e2 = (uint32_t *)e2_256;
-      e3 = (uint32_t *)e3_256;
-      e4 = (uint32_t *)e4_256;
-      e5 = (uint32_t *)e5_256;
-      e6 = (uint32_t *)e6_256;
-      e7 = (uint32_t *)e7_256;
-      f = (uint32_t *)f256;
-#endif
       simde__m128i *e0_128 = (simde__m128i *)e0;
       simde__m128i *e1_128 = (simde__m128i *)e1;
       simde__m128i *e2_128 = (simde__m128i *)e2;
@@ -763,6 +702,17 @@ void nr_interleaving_ldpc32(uint32_t E, uint8_t Qm, uint32_t *e, uint32_t *f)
       e6 = (uint32_t *)e6_128;
       e7 = (uint32_t *)e7_128;
        f = (uint32_t *)f128;
+      
+      for (; i < EQm; i++) { 
+        *f++ = *e0++;
+        *f++ = *e1++;
+        *f++ = *e2++;
+        *f++ = *e3++;
+        *f++ = *e4++;
+        *f++ = *e5++;
+        *f++ = *e6++;
+        *f++ = *e7++;
+      }
     } 
     break;
     default:
