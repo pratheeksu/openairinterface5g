@@ -207,8 +207,7 @@ bool nr_search_ssb_common(nr_ssb_search_params_t *params)
 
   // Extract SSB symbols to frequency domain
   // Symbol ordering: 0=PSS, 1=PBCH, 2=SSS, 3=PBCH
-  c16_t(*rxdataF)[NR_N_SYMBOLS_SSB][fp->nb_antennas_rx][fp->ofdm_symbol_size] =
-      (c16_t(*)[NR_N_SYMBOLS_SSB][fp->nb_antennas_rx][fp->ofdm_symbol_size])params->rxdataF;
+  c16_t(*rxdataF)[fp->nb_antennas_rx][fp->ofdm_symbol_size] = (c16_t(*)[fp->nb_antennas_rx][fp->ofdm_symbol_size])params->rxdataF;
 
   __attribute__((aligned(32))) c16_t rxdataF_tmp[fp->nb_antennas_rx][fp->samples_per_slot_wCP];
 
@@ -217,7 +216,7 @@ bool nr_search_ssb_common(nr_ssb_search_params_t *params)
     nr_slot_fep(NULL, fp, 0, i, rxdataF_tmp, link_type_dl, sample_offset, (c16_t **)params->rxdata);
     // TODO: In later commit, call the modified symbol demod function and remove the following memcpy.
     for (int aarx = 0; aarx < fp->nb_antennas_rx; aarx++)
-      memcpy((*rxdataF)[i][aarx], &rxdataF_tmp[aarx][i * fp->ofdm_symbol_size], sizeof(c16_t) * fp->ofdm_symbol_size);
+      memcpy(rxdataF[i][aarx], &rxdataF_tmp[aarx][i * fp->ofdm_symbol_size], sizeof(c16_t) * fp->ofdm_symbol_size);
   }
 
   // Perform SSS detection
@@ -225,17 +224,15 @@ bool nr_search_ssb_common(nr_ssb_search_params_t *params)
   int32_t sss_metric = 0;
   uint8_t sss_phase = 0;
   int freq_offset_sss = 0;
+  nr_sss_params_t p = (nr_sss_params_t){.nb_antennas_rx = fp->nb_antennas_rx,
+                                        .samples_per_slot_wCP = fp->samples_per_slot_wCP,
+                                        .ofdm_symbol_size = fp->ofdm_symbol_size,
+                                        .first_carrier_offset = fp->first_carrier_offset,
+                                        .ssb_start_subcarrier = fp->ssb_start_subcarrier,
+                                        .subcarrier_spacing = fp->subcarrier_spacing};
 
-  bool sss_detected = rx_sss_nr(fp,
-                                nid2,
-                                params->target_nid_cell,
-                                freq_offset_pss,
-                                params->ssb_start_subcarrier,
-                                &detected_nid_cell,
-                                &sss_metric,
-                                &sss_phase,
-                                &freq_offset_sss,
-                                *rxdataF);
+  bool sss_detected =
+      rx_sss_nr(&p, nid2, -1, freq_offset_pss, &detected_nid_cell, &sss_metric, &sss_phase, &freq_offset_sss, rxdataF);
 
   if (params->sss_metric)
     *params->sss_metric = sss_metric;

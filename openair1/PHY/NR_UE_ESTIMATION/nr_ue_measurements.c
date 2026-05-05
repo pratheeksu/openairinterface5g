@@ -342,16 +342,14 @@ static bool validate_known_pci(NR_DL_FRAME_PARMS *frame_parms,
   int32_t sss_metric = 0;
   uint8_t sss_phase = 0;
   int freq_offset_sss = 0;
-  bool sss_detected = rx_sss_nr(frame_parms,
-                                pss_index,
-                                known_pci,
-                                0,
-                                frame_parms->ssb_start_subcarrier,
-                                &detected_nid_cell,
-                                &sss_metric,
-                                &sss_phase,
-                                &freq_offset_sss,
-                                rxdataF);
+  nr_sss_params_t p = (nr_sss_params_t){.nb_antennas_rx = frame_parms->nb_antennas_rx,
+                                        .samples_per_slot_wCP = frame_parms->samples_per_slot_wCP,
+                                        .ofdm_symbol_size = frame_parms->ofdm_symbol_size,
+                                        .first_carrier_offset = frame_parms->first_carrier_offset,
+                                        .ssb_start_subcarrier = frame_parms->ssb_start_subcarrier,
+                                        .subcarrier_spacing = frame_parms->subcarrier_spacing};
+  bool sss_detected =
+      rx_sss_nr(&p, pss_index, known_pci, 0, &detected_nid_cell, &sss_metric, &sss_phase, &freq_offset_sss, rxdataF);
 
   if (!sss_detected) {
     if (neighboring_cell_info->valid_meas)
