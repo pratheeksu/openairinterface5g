@@ -537,12 +537,11 @@ static int nr_ue_pdsch_procedures(PHY_VARS_NR_UE *ue,
 
   const uint32_t rx_size_symbol = (freq_alloc->num_rbs * NR_NB_SC_PER_RB + 15) & ~15;
   fourDimArray_t *toFree2 = NULL;
-  allocCast4D(rxdataF_comp,
+  allocCast3D(rxdataF_comp,
               c16_t,
               toFree2,
               ue->frame_parms.symbols_per_slot,
-              dlsch[0].Nl,
-              ue->frame_parms.nb_antennas_rx,
+              dlsch[0].Nl * ue->frame_parms.nb_antennas_rx,
               rx_size_symbol,
               false);
 
@@ -626,30 +625,27 @@ static int nr_ue_pdsch_procedures(PHY_VARS_NR_UE *ue,
                                                          &mt);
   }
   fourDimArray_t *toFree3 = NULL;
-  allocCast4D(dl_ch_mag,
+  allocCast3D(dl_ch_mag,
               c16_t,
               toFree3,
               NR_SYMBOLS_PER_SLOT,
-              dlsch[0].Nl,
-              ue->frame_parms.nb_antennas_rx,
+              dlsch[0].Nl * ue->frame_parms.nb_antennas_rx,
               rx_size_symbol,
               false);
   fourDimArray_t *toFree4 = NULL;
-  allocCast4D(dl_ch_magb,
+  allocCast3D(dl_ch_magb,
               c16_t,
               toFree4,
               NR_SYMBOLS_PER_SLOT,
-              dlsch[0].Nl,
-              ue->frame_parms.nb_antennas_rx,
+              dlsch[0].Nl * ue->frame_parms.nb_antennas_rx,
               rx_size_symbol,
               false);
   fourDimArray_t *toFree5 = NULL;
-  allocCast4D(dl_ch_magr,
+  allocCast3D(dl_ch_magr,
               c16_t,
               toFree5,
               NR_SYMBOLS_PER_SLOT,
-              dlsch[0].Nl,
-              ue->frame_parms.nb_antennas_rx,
+              dlsch[0].Nl * ue->frame_parms.nb_antennas_rx,
               rx_size_symbol,
               false);
   for (int m = dlschCfg->start_symbol; m < (dlschCfg->number_symbols + dlschCfg->start_symbol); m++) {
