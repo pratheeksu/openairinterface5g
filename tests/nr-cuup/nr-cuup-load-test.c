@@ -260,11 +260,12 @@ static bool recv_f1(protocol_ctxt_t *ctxt,
                     const uint32_t *destinationL2Id)
 {
   int skip_bytes = 2;
-  uint32_t *payload = (uint32_t *) &buf[skip_bytes];
+  uint32_t payload;
+  memcpy(&payload, &buf[skip_bytes], sizeof(uint32_t));
   DevAssert((size - skip_bytes) % 4 == 0);
   int ue_id = ctxt->rntiMaybeUEid;
   struct ue_stat *s = &ue_stat[ue_id][DL];
-  s->count = estimate_packetloss(*payload, s->count, &s->lost);
+  s->count = estimate_packetloss(payload, s->count, &s->lost);
   s->received += size - skip_bytes;
 
   return true;
@@ -428,7 +429,8 @@ static void *sender_thread(void *v)
     for (uint32_t i = 0; i < pps_now; ++i) {
       if (d->is_ul)
         write_pdcp_header(packet_count, PDCP_SN_LEN_12, buf);
-      *payload = packet_count++;
+      memcpy(payload, &packet_count, sizeof(packet_count));
+      packet_count++;
       gtpv1uSendDirect(d->inst, d->ue_id, bearer, (uint8_t *)buf, packet_len, false, false);
       d->total_data += d->data_len;
     }
