@@ -495,6 +495,14 @@ typedef struct {
   int avg; // PSS correlation average power
 } pss_detection_result_t;
 
+typedef struct {
+  bool success;
+  int nid_cell; // detected PCI
+  int32_t metric; // SSS detection metric
+  int freq_offset; // SSS frequency offset estimate
+  int phase; // SSS phase
+} sss_detection_result_t;
+
 // Common SSB search parameters - used by both initial sync and neighbor cell search
 typedef struct {
   uint64_t dl_CarrierFreq;
@@ -523,10 +531,7 @@ typedef struct {
   void *pssTime; // Pre-generated PSS time sequences
   // Output parameters
   pss_detection_result_t pss_res;
-  int *detected_nid_cell; // detected PCI
-  int32_t *sss_metric; // SSS detection metric
-  int *freq_offset_sss; // SSS frequency offset estimate
-  uint8_t *sss_phase; // SSS phase
+  sss_detection_result_t sss_res;
 } nr_ssb_search_params_t;
 
 typedef struct nr_phy_data_tx_s {

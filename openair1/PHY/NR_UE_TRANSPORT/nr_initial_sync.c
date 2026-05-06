@@ -240,10 +240,6 @@ bool nr_search_ssb_common(nr_ssb_search_params_t *params)
   do_time_to_freq(params, ssb_time_offset);
 
   // Perform SSS detection
-  int detected_nid_cell = -1;
-  int32_t sss_metric = 0;
-  uint8_t sss_phase = 0;
-  int freq_offset_sss = 0;
   nr_sss_params_t p = (nr_sss_params_t){.nb_antennas_rx = params->nb_antennas_rx,
                                         .samples_per_slot_wCP = params->samples_per_slot_wCP,
                                         .ofdm_symbol_size = params->ofdm_symbol_size,
@@ -253,34 +249,15 @@ bool nr_search_ssb_common(nr_ssb_search_params_t *params)
 
   c16_t(*rxdataF)[params->nb_antennas_rx][params->ofdm_symbol_size] =
       (c16_t(*)[params->nb_antennas_rx][params->ofdm_symbol_size])params->rxdataF;
-  bool sss_detected = rx_sss_nr(&p,
-                                params->pss_res.nid2,
-                                -1,
-                                params->pss_res.freq_offset,
-                                &detected_nid_cell,
-                                &sss_metric,
-                                &sss_phase,
-                                &freq_offset_sss,
-                                rxdataF);
+  params->sss_res = rx_sss_nr(&p, &params->pss_res, -1, rxdataF);
 
-  if (params->sss_metric)
-    *params->sss_metric = sss_metric;
-  if (params->sss_phase)
-    *params->sss_phase = sss_phase;
-  if (params->freq_offset_sss)
-    *params->freq_offset_sss = freq_offset_sss;
-
-  if (!sss_detected || detected_nid_cell < 0) {
+  if (!params->sss_res.success || params->sss_res.nid_cell < 0) {
     return false;
   }
 
   // Check if we should exclude the serving cell
-  if (params->exclude_nid_cell >= 0 && detected_nid_cell == params->exclude_nid_cell) {
+  if (params->exclude_nid_cell >= 0 && params->sss_res.nid_cell == params->exclude_nid_cell)
     return false;
-  }
-
-  if (params->detected_nid_cell)
-    *params->detected_nid_cell = detected_nid_cell;
 
   return true;
 }
@@ -318,12 +295,6 @@ void nr_scan_ssb(void *arg)
     compensate_freq_offset(rxdata, fp->nb_antennas_rx, ssbInfo->rxdata_sz, ssbInfo->freqOffset, fp->samples_per_subframe * 1000);
 
   for (int frame_id = 0; frame_id < ssbInfo->nFrames && !ssbInfo->syncRes.cell_detected; frame_id++) {
-    int detected_nid_cell = -1;
-    int freq_offset_pss = 0;
-    int freq_offset_sss = 0;
-    int32_t sss_metric = 0;
-    uint8_t sss_phase = 0;
-
     c16_t *rxdataShift[fp->nb_antennas_rx];
     for (int i = 0; i < fp->nb_antennas_rx; i++)
       rxdataShift[i] = rxdata[i] + fp->samples_per_frame * frame_id;
@@ -353,10 +324,6 @@ void nr_scan_ssb(void *arg)
         .fo_flag = ssbInfo->foFlag,
         .rxdataF = rxdataF,
         .pssTime = pssTime,
-        .detected_nid_cell = &detected_nid_cell,
-        .sss_metric = &sss_metric,
-        .freq_offset_sss = &freq_offset_sss,
-        .sss_phase = &sss_phase,
     };
 
     ssbInfo->syncRes.frame_id = frame_id;
@@ -367,8 +334,7 @@ void nr_scan_ssb(void *arg)
     }
 
     ssbInfo->ssbOffset = search_params.pss_res.pos - search_params.nb_prefix_samples;
-    ;
-    ssbInfo->nidCell = detected_nid_cell;
+    ssbInfo->nidCell = search_params.sss_res.nid_cell;
 
 #ifdef DEBUG_INITIAL_SYNCH
     LOG_I(PHY,
@@ -379,7 +345,7 @@ void nr_scan_ssb(void *arg)
           sss_phase,
           ssbInfo->syncRes.rx_offset);
 #endif
-    ssbInfo->freqOffset += freq_offset_pss + freq_offset_sss;
+    ssbInfo->freqOffset += search_params.pss_res.freq_offset + search_params.sss_res.freq_offset;
 
     if (ssbInfo->syncRes.cell_detected) { // we got sss channel
       ssbInfo->syncRes.cell_detected = nr_pbch_detection(ssbInfo->proc,

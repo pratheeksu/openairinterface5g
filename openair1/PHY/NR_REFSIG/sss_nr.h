@@ -51,14 +51,9 @@ typedef struct {
   int ssb_start_subcarrier;
   int subcarrier_spacing;
 } nr_sss_params_t;
-bool rx_sss_nr(nr_sss_params_t *params,
-               int nid2,
-               int target_Nid_cell,
-               int freq_offset_pss,
-               int *Nid_cell,
-               int32_t *tot_metric,
-               uint8_t *phase_max,
-               int *freq_offset_sss,
-               c16_t rxdataF[NR_N_SYMBOLS_SSB][params->nb_antennas_rx][params->ofdm_symbol_size]); /* SSS_NR_H */
+sss_detection_result_t rx_sss_nr(nr_sss_params_t *params,
+                                 pss_detection_result_t *pss,
+                                 int target_Nid_cell,
+                                 c16_t rxdataF[NR_N_SYMBOLS_SSB][params->nb_antennas_rx][params->ofdm_symbol_size]);
 
-#endif
+#endif /* SSS_NR_H */

@@ -229,11 +229,6 @@ static bool search_neighboring_cell(NR_DL_FRAME_PARMS *frame_parms,
                                     c16_t rxdataF[][frame_parms->nb_antennas_rx][frame_parms->ofdm_symbol_size],
                                     c16_t pssTime[][frame_parms->ofdm_symbol_size])
 {
-  int detected_nid_cell = -1;
-  int32_t sss_metric = 0;
-  uint8_t sss_phase = 0;
-  int freq_offset_sss = 0;
-
   nr_ssb_search_params_t search_params = {
       .dl_CarrierFreq = frame_parms->dl_CarrierFreq,
       .sampling_rate = frame_parms->samples_per_subframe * 1000,
@@ -259,20 +254,16 @@ static bool search_neighboring_cell(NR_DL_FRAME_PARMS *frame_parms,
       .fo_flag = false,
       .rxdataF = rxdataF,
       .pssTime = pssTime,
-      .detected_nid_cell = &detected_nid_cell,
-      .sss_metric = &sss_metric,
-      .freq_offset_sss = &freq_offset_sss,
-      .sss_phase = &sss_phase,
   };
 
   bool found = nr_search_ssb_common(&search_params);
 
   if (found) {
-    nr_neighboring_cell->Nid_cell = detected_nid_cell;
+    nr_neighboring_cell->Nid_cell = search_params.sss_res.nid_cell;
     LOG_I(NR_PHY,
           "Found neighbor cell PCI=%d (sss_metric=%d, pss peak pos =%d, pss_peak=%d dB, pss_avg=%d dB)\n",
-          detected_nid_cell,
-          sss_metric,
+          search_params.sss_res.nid_cell,
+          search_params.sss_res.metric,
           search_params.pss_res.pos,
           search_params.pss_res.peak,
           search_params.pss_res.avg);
@@ -293,7 +284,6 @@ static bool validate_known_pci(NR_DL_FRAME_PARMS *frame_parms,
                                c16_t pssTime[][frame_parms->ofdm_symbol_size])
 {
   int known_pci = nr_neighboring_cell->Nid_cell;
-  int pss_index = GET_NID2(known_pci);
 
   int start = neighboring_cell_info->pss_search_start;
   int length = neighboring_cell_info->pss_search_length;
@@ -339,31 +329,26 @@ static bool validate_known_pci(NR_DL_FRAME_PARMS *frame_parms,
            sizeof(c16_t) * frame_parms->ofdm_symbol_size);
   }
 
-  int detected_nid_cell = -1;
-  int32_t sss_metric = 0;
-  uint8_t sss_phase = 0;
-  int freq_offset_sss = 0;
   nr_sss_params_t p = (nr_sss_params_t){.nb_antennas_rx = frame_parms->nb_antennas_rx,
                                         .samples_per_slot_wCP = frame_parms->samples_per_slot_wCP,
                                         .ofdm_symbol_size = frame_parms->ofdm_symbol_size,
                                         .first_carrier_offset = frame_parms->first_carrier_offset,
                                         .ssb_start_subcarrier = frame_parms->ssb_start_subcarrier,
                                         .subcarrier_spacing = frame_parms->subcarrier_spacing};
-  bool sss_detected =
-      rx_sss_nr(&p, pss_index, known_pci, 0, &detected_nid_cell, &sss_metric, &sss_phase, &freq_offset_sss, rxdataF);
+  sss_detection_result_t res = rx_sss_nr(&p, &pss_res, known_pci, rxdataF);
 
-  if (!sss_detected) {
+  if (!res.success) {
     if (neighboring_cell_info->valid_meas)
       neighboring_cell_info->consec_fail++;
     LOG_D(NR_PHY,
           "Known PCI validation failed for PCI=%d (metric=%d), consec_fail=%d\n",
           known_pci,
-          sss_metric,
+          res.metric,
           neighboring_cell_info->consec_fail);
     return false;
   }
 
-  LOG_D(NR_PHY, "Known PCI validation completed for PCI=%d, metric=%d\n", known_pci, sss_metric);
+  LOG_D(NR_PHY, "Known PCI validation completed for PCI=%d, metric=%d\n", known_pci, res.metric);
   neighboring_cell_info->consec_fail = 0;
   neighboring_cell_info->valid_meas = true;
   neighboring_cell_info->pss_search_start = pss_res.pos - 16;
