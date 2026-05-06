@@ -387,4 +387,41 @@ typedef struct {
 bool check_rb_in_bitmap(const freq_alloc_bitmap_t *alloc, int rb);
 freq_alloc_bitmap_t set_start_end_from_bitmap(int size, int alloc_size, const uint8_t bitmap[alloc_size]);
 freq_alloc_bitmap_t set_bitmap_from_start_size(int start, int size);
+
+/**
+ * @brief Common channel compensation function shared by DL (PDSCH) and UL (PUSCH) paths.
+ *
+ * Computes matched-filter output (rxComp) and channel magnitude arrays used for LLR
+ * computation. MRC across Rx antennas is performed inline: for each layer, contributions
+ * from all Rx antennas are accumulated into rxComp[layer * nb_rx_ant][symbol * buffer_length].
+ * Uses AVX2 (256-bit SIMD) for throughput.
+ *
+ * @param buffer_length   Number of complex samples per symbol (must be a multiple of 8)
+ * @param nb_rx_ant       Number of Rx antennas
+ * @param nb_layers       Number of spatial layers
+ * @param rxFext          Extracted received signal [nb_rx_ant][buffer_length]
+ * @param chFext          Extracted channel estimates [nb_layers][nb_rx_ant][buffer_length]
+ * @param ch_maga         Output magnitude array for threshold 'a' [nb_layers][buffer_length]
+ * @param ch_magb         Output magnitude array for threshold 'b' [nb_layers][buffer_length]
+ * @param ch_magc         Output magnitude array for threshold 'c' [nb_layers][buffer_length]
+ * @param rxComp          Output compensated signal; row [l * nb_rx_ant] holds the MRC result
+ *                        for layer l at offset [symbol * buffer_length]
+ * @param rho             Tx-correlation matrix [nb_layers][nb_layers][buffer_length], or NULL
+ * @param mod_order       Modulation order (2=QPSK, 4=16QAM, 6=64QAM, 8=256QAM)
+ * @param symbol          OFDM symbol index (used to compute offset into rxComp rows)
+ * @param output_shift    Right-shift applied after each complex multiply
+ */
+void nr_channel_compensation(uint32_t buffer_length,
+                             int nb_rx_ant,
+                             int nb_layers,
+                             c16_t rxFext[nb_rx_ant][buffer_length],
+                             c16_t chFext[nb_layers][nb_rx_ant][buffer_length],
+                             c16_t ch_maga[nb_layers][buffer_length],
+                             c16_t ch_magb[nb_layers][buffer_length],
+                             c16_t ch_magc[nb_layers][buffer_length],
+                             c16_t **rxComp,
+                             c16_t (*rho)[nb_layers][buffer_length],
+                             int mod_order,
+                             uint32_t symbol,
+                             uint32_t output_shift);
 #endif
