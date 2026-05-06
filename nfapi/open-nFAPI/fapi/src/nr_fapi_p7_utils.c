@@ -585,7 +585,7 @@ bool eq_crc_indication_CRC(const nfapi_nr_crc_t *a, const nfapi_nr_crc_t *b)
   EQ(a->tb_crc_status, b->tb_crc_status);
   EQ(a->num_cb, b->num_cb);
   if (a->num_cb > 0) {
-    for (int cb = 0; cb < (a->num_cb / 8) + 1; ++cb) {
+    for (int cb = 0; cb < nr_bits_to_bytes(a->num_cb); ++cb) {
       EQ(a->cb_crc_status[cb], b->cb_crc_status[cb]);
     }
   }
@@ -618,7 +618,7 @@ bool eq_uci_indication_sr_pdu_0_1(const nfapi_nr_sr_pdu_0_1_t *a, const nfapi_nr
 bool eq_uci_indication_sr_pdu_2_3_4(const nfapi_nr_sr_pdu_2_3_4_t *a, const nfapi_nr_sr_pdu_2_3_4_t *b)
 {
   EQ(a->sr_bit_len, b->sr_bit_len);
-  for (int i = 0; i < (a->sr_bit_len / 8) + 1; ++i) {
+  for (int i = 0; i < nr_bits_to_bytes(a->sr_bit_len); ++i) {
     EQ(a->sr_payload[i], b->sr_payload[i]);
   }
   return true;
@@ -638,7 +638,7 @@ bool eq_uci_indication_harq_pdu_2_3_4(const nfapi_nr_harq_pdu_2_3_4_t *a, const 
 {
   EQ(a->harq_crc, b->harq_crc);
   EQ(a->harq_bit_len, b->harq_bit_len);
-  for (int i = 0; i < (a->harq_bit_len / 8) + 1; ++i) {
+  for (int i = 0; i < nr_bits_to_bytes(a->harq_bit_len); ++i) {
     EQ(a->harq_payload[i], b->harq_payload[i]);
   }
   return true;
@@ -648,7 +648,7 @@ bool eq_uci_indication_csi_part1(const nfapi_nr_csi_part1_pdu_t *a, const nfapi_
 {
   EQ(a->csi_part1_crc, b->csi_part1_crc);
   EQ(a->csi_part1_bit_len, b->csi_part1_bit_len);
-  for (int i = 0; i < (a->csi_part1_bit_len / 8) + 1; ++i) {
+  for (int i = 0; i < nr_bits_to_bytes(a->csi_part1_bit_len); ++i) {
     EQ(a->csi_part1_payload[i], b->csi_part1_payload[i]);
   }
   return true;
@@ -658,7 +658,7 @@ bool eq_uci_indication_csi_part2(const nfapi_nr_csi_part2_pdu_t *a, const nfapi_
 {
   EQ(a->csi_part2_crc, b->csi_part2_crc);
   EQ(a->csi_part2_bit_len, b->csi_part2_bit_len);
-  for (int i = 0; i < (a->csi_part2_bit_len / 8) + 1; ++i) {
+  for (int i = 0; i < nr_bits_to_bytes(a->csi_part2_bit_len); ++i) {
     EQ(a->csi_part2_payload[i], b->csi_part2_payload[i]);
   }
   return true;
@@ -1583,7 +1583,7 @@ void copy_crc_indication_CRC(const nfapi_nr_crc_t *src, nfapi_nr_crc_t *dst)
   dst->tb_crc_status = src->tb_crc_status;
   dst->num_cb = src->num_cb;
   if (dst->num_cb > 0) {
-    const uint16_t cb_len = (dst->num_cb / 8) + 1;
+    const uint16_t cb_len = nr_bits_to_bytes(dst->num_cb);
     dst->cb_crc_status = calloc(cb_len, sizeof(uint8_t));
     for (int cb = 0; cb < cb_len; ++cb) {
       dst->cb_crc_status[cb] = src->cb_crc_status[cb];
@@ -1641,7 +1641,7 @@ void copy_uci_indication_sr_pdu_0_1(const nfapi_nr_sr_pdu_0_1_t *src, nfapi_nr_s
 void copy_uci_indication_sr_pdu_2_3_4(const nfapi_nr_sr_pdu_2_3_4_t *src, nfapi_nr_sr_pdu_2_3_4_t *dst)
 {
   dst->sr_bit_len = src->sr_bit_len;
-  const uint16_t sr_len = (dst->sr_bit_len / 8) + 1;
+  const uint16_t sr_len = nr_bits_to_bytes(dst->sr_bit_len);
   dst->sr_payload = calloc(sr_len, sizeof(*dst->sr_payload));
   for (int i = 0; i < sr_len; ++i) {
     dst->sr_payload[i] = src->sr_payload[i];
@@ -1661,7 +1661,7 @@ void copy_uci_indication_harq_pdu_2_3_4(const nfapi_nr_harq_pdu_2_3_4_t *src, nf
 {
   dst->harq_crc = src->harq_crc;
   dst->harq_bit_len = src->harq_bit_len;
-  const uint16_t harq_length = (dst->harq_bit_len / 8) + 1;
+  const uint16_t harq_length = nr_bits_to_bytes(dst->harq_bit_len);
   dst->harq_payload = calloc(harq_length, sizeof(*dst->harq_payload));
   for (int i = 0; i < harq_length; ++i) {
     dst->harq_payload[i] = src->harq_payload[i];
@@ -1672,7 +1672,7 @@ void copy_uci_indication_csi_part1(const nfapi_nr_csi_part1_pdu_t *src, nfapi_nr
 {
   dst->csi_part1_crc = src->csi_part1_crc;
   dst->csi_part1_bit_len = src->csi_part1_bit_len;
-  const uint16_t payload_length = (dst->csi_part1_bit_len / 8) + 1;
+  const uint16_t payload_length = nr_bits_to_bytes(dst->csi_part1_bit_len);
   dst->csi_part1_payload = calloc(payload_length, sizeof(*dst->csi_part1_payload));
   for (int i = 0; i < payload_length; ++i) {
     dst->csi_part1_payload[i] = src->csi_part1_payload[i];
@@ -1683,7 +1683,7 @@ void copy_uci_indication_csi_part2(const nfapi_nr_csi_part2_pdu_t *src, nfapi_nr
 {
   dst->csi_part2_crc = src->csi_part2_crc;
   dst->csi_part2_bit_len = src->csi_part2_bit_len;
-  const uint16_t payload_length = (dst->csi_part2_bit_len / 8) + 1;
+  const uint16_t payload_length = nr_bits_to_bytes(dst->csi_part2_bit_len);
   dst->csi_part2_payload = calloc(payload_length, sizeof(*dst->csi_part2_payload));
   for (int i = 0; i < payload_length; ++i) {
     dst->csi_part2_payload[i] = src->csi_part2_payload[i];
@@ -1818,13 +1818,13 @@ size_t get_uci_indication_size(const nfapi_nr_uci_indication_t *msg)
 
         // HARQ payload, CSI Part 1 and 2 are conditionally allocated
         if ((uci_pdu->pusch_pdu.pduBitmap >> 1) & 0x01) {
-          total_size += uci_pdu->pusch_pdu.harq.harq_bit_len / 8 + 1;
+          total_size += nr_bits_to_bytes(uci_pdu->pusch_pdu.harq.harq_bit_len);
         }
         if ((uci_pdu->pusch_pdu.pduBitmap >> 2) & 0x01) {
-          total_size += uci_pdu->pusch_pdu.csi_part1.csi_part1_bit_len / 8 + 1;
+          total_size += nr_bits_to_bytes(uci_pdu->pusch_pdu.csi_part1.csi_part1_bit_len);
         }
         if ((uci_pdu->pusch_pdu.pduBitmap >> 3) & 0x01) {
-          total_size += uci_pdu->pusch_pdu.csi_part2.csi_part2_bit_len / 8 + 1;
+          total_size += nr_bits_to_bytes(uci_pdu->pusch_pdu.csi_part2.csi_part2_bit_len);
         }
         break;
 
@@ -1838,16 +1838,16 @@ size_t get_uci_indication_size(const nfapi_nr_uci_indication_t *msg)
 
         // SR, HARQ, CSI Part 1, and CSI Part 2 are conditionally allocated
         if (uci_pdu->pucch_pdu_format_2_3_4.pduBitmap & 0x01) {
-          total_size += uci_pdu->pucch_pdu_format_2_3_4.sr.sr_bit_len / 8 + 1;
+          total_size += nr_bits_to_bytes(uci_pdu->pucch_pdu_format_2_3_4.sr.sr_bit_len);
         }
         if ((uci_pdu->pucch_pdu_format_2_3_4.pduBitmap >> 1) & 0x01) {
-          total_size += uci_pdu->pucch_pdu_format_2_3_4.harq.harq_bit_len / 8 + 1;
+          total_size += nr_bits_to_bytes(uci_pdu->pucch_pdu_format_2_3_4.harq.harq_bit_len);
         }
         if ((uci_pdu->pucch_pdu_format_2_3_4.pduBitmap >> 2) & 0x01) {
-          total_size += uci_pdu->pucch_pdu_format_2_3_4.csi_part1.csi_part1_bit_len / 8 + 1;
+          total_size += nr_bits_to_bytes(uci_pdu->pucch_pdu_format_2_3_4.csi_part1.csi_part1_bit_len);
         }
         if ((uci_pdu->pucch_pdu_format_2_3_4.pduBitmap >> 3) & 0x01) {
-          total_size += uci_pdu->pucch_pdu_format_2_3_4.csi_part2.csi_part2_bit_len / 8 + 1;
+          total_size += nr_bits_to_bytes(uci_pdu->pucch_pdu_format_2_3_4.csi_part2.csi_part2_bit_len);
         }
         break;
 
@@ -1993,7 +1993,7 @@ static void dump_dl_dci_pdu(const nfapi_nr_dl_dci_pdu_t *pdu, int depth)
   INDENTED_PRINTF("powerControlOffsetSS = %d\n", pdu->powerControlOffsetSS);
   INDENTED_PRINTF("PayloadSizeBits = %d\n", pdu->PayloadSizeBits);
   INDENTED_PRINTF("Payload = ");
-  for (int i = 0; i < (pdu->PayloadSizeBits + 7) / 8; ++i) {
+  for (int i = 0; i < nr_bits_to_bytes(pdu->PayloadSizeBits); ++i) {
     printf("0x%02x ", pdu->Payload[i]);
   }
   printf("\n");
@@ -2632,7 +2632,7 @@ void dump_crc_indication(const nfapi_nr_crc_indication_t *msg)
     INDENTED_PRINTF("HarqID = 0x%02x\n", crc->harq_id);
     INDENTED_PRINTF("TbCrcStatus = 0x%02x\n", crc->tb_crc_status);
     INDENTED_PRINTF("NumCb = 0x%02x\n", crc->num_cb);
-    const uint16_t cb_len = (crc->num_cb / 8) + 1; // length is ceil(NumCb/8)
+    const uint16_t cb_len = nr_bits_to_bytes(crc->num_cb); // length is ceil(NumCb/8)
     INDENTED_PRINTF("CbCrcStatus =\n");
     for (int j = 0; j < cb_len; j++) {
       printf("%02x ", crc->cb_crc_status[j]);
@@ -2650,7 +2650,7 @@ static void dump_harq_2_3_4(const nfapi_nr_harq_pdu_2_3_4_t *harq, int depth)
   INDENTED_PRINTF("HARQ CRC = %01x\n", harq->harq_crc);
   INDENTED_PRINTF("HARQ Bit Length = %d\n", harq->harq_bit_len);
   INDENTED_PRINTF("HARQ Payload = ");
-  for (int i = 0; i < harq->harq_bit_len / 8 + 1; i++) {
+  for (int i = 0; i < nr_bits_to_bytes(harq->harq_bit_len); i++) {
     printf("%x ", harq->harq_payload[i]);
   }
   printf("\n");
@@ -2661,7 +2661,7 @@ static void dump_csi_part_1(const nfapi_nr_csi_part1_pdu_t *csi, int depth)
   INDENTED_PRINTF("CSI Part 1 CRC = %01x\n", csi->csi_part1_crc);
   INDENTED_PRINTF("CSI Part 1 Bit Length = %d\n", csi->csi_part1_bit_len);
   INDENTED_PRINTF("CSI Part 1 Payload = ");
-  for (int i = 0; i < csi->csi_part1_bit_len / 8 + 1; i++) {
+  for (int i = 0; i < nr_bits_to_bytes(csi->csi_part1_bit_len); i++) {
     printf("%x ", csi->csi_part1_payload[i]);
   }
   printf("\n");
@@ -2672,7 +2672,7 @@ static void dump_csi_part_2(const nfapi_nr_csi_part2_pdu_t *csi, int depth)
   INDENTED_PRINTF("CSI Part 1 CRC = %01x\n", csi->csi_part2_crc);
   INDENTED_PRINTF("CSI Part 1 Bit Length = %d\n", csi->csi_part2_bit_len);
   INDENTED_PRINTF("CSI Part 1 Payload = ");
-  for (int i = 0; i < csi->csi_part2_bit_len / 8 + 1; i++) {
+  for (int i = 0; i < nr_bits_to_bytes(csi->csi_part2_bit_len); i++) {
     printf("%x ", csi->csi_part2_payload[i]);
   }
   printf("\n");
@@ -2740,7 +2740,7 @@ static void dump_sr_2_3_4(const nfapi_nr_sr_pdu_2_3_4_t *sr, int depth)
 {
   INDENTED_PRINTF("SR Bit Length = %d\n", sr->sr_bit_len);
   INDENTED_PRINTF("SR Payload ");
-  for (int i = 0; i < sr->sr_bit_len / 8 + 1; i++) {
+  for (int i = 0; i < nr_bits_to_bytes(sr->sr_bit_len); i++) {
     printf("%x ", sr->sr_payload[i]);
   }
   printf("\n");
