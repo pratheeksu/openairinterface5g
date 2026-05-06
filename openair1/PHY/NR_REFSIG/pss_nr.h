@@ -17,7 +17,7 @@
 
 #include "PHY/defs_nr_common.h"
 #include "PHY/NR_REFSIG/ss_pbch_nr.h"
-
+#include "PHY/defs_nr_UE.h"
 /************** CODE GENERATION ***********************************/
 
 //#define PSS_DECIMATOR                          /* decimation of sample is done between time correlation */
@@ -53,32 +53,16 @@
   #define  SYNCHRO_RATE_CHANGE_FACTOR  (1)
 #endif
 
-int pss_synchro_nr(const c16_t **rxdata,
-                   int nb_ant,
-                   int ofdm_symbol_size,
-                   int rxdata_size,
-                   int subcarrier_spacing,
-                   const c16_t pssTime[NUMBER_PSS_SEQUENCE][ofdm_symbol_size],
-                   bool fo_flag,
-                   int target_Nid_cell,
-                   int *nid2,
-                   int *f_off,
-                   int *pssPeak,
-                   int *pssAvg);
+pss_detection_result_t pss_search_time_nr(const c16_t **rxdata,
+                                          int ofdm_symbol_size,
+                                          int nb_antennas_rx,
+                                          int subcarrier_spacing,
+                                          const c16_t pssTime[NUMBER_PSS_SEQUENCE][ofdm_symbol_size],
+                                          bool fo_flag,
+                                          int target_Nid_cell,
+                                          int search_start,
+                                          int search_length);
 
-int pss_search_time_nr(const c16_t **rxdata,
-                       int ofdm_symbol_size,
-                       int nb_antennas_rx,
-                       int subcarrier_spacing,
-                       const c16_t pssTime[NUMBER_PSS_SEQUENCE][ofdm_symbol_size],
-                       bool fo_flag,
-                       int target_Nid_cell,
-                       int *nid2,
-                       int *f_off,
-                       int *pssPeak,
-                       int *pssAvg,
-                       int search_start,
-                       int search_length);
 void generate_pss_nr_time(int ofdm_symbol_size,
                           int first_carrier_offset,
                           const int N_ID_2,

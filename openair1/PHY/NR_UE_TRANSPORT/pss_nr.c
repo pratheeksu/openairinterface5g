@@ -30,8 +30,7 @@
 #include "PHY/NR_REFSIG/sss_nr.h"
 #include "PHY/NR_UE_TRANSPORT/cic_filter_nr.h"
 
-//#define DBG_PSS_NR
-static time_stats_t generic_time[TIME_LAST];
+// #define DBG_PSS_NR
 
 /*******************************************************************
 *
@@ -112,58 +111,6 @@ void generate_pss_nr_time(int ofdm_symbol_size,
 
 /*******************************************************************
 *
-* NAME :         pss_synchro_nr
-*
-* PARAMETERS :   int rate_change
-*
-* RETURN :       position of detected pss
-*
-* DESCRIPTION :  pss search can be done with sampling decimation.*
-*
-*********************************************************************/
-
-int pss_synchro_nr(const c16_t **rxdata,
-                   int nb_ant,
-                   int ofdm_symbol_size,
-                   int rxdata_size,
-                   int subcarrier_spacing,
-                   const c16_t pssTime[NUMBER_PSS_SEQUENCE][ofdm_symbol_size],
-                   bool fo_flag,
-                   int target_Nid_cell,
-                   int *nid2,
-                   int *f_off,
-                   int *pssPeak,
-                   int *pssAvg)
-{
-  start_meas(&generic_time[TIME_PSS]);
-  int synchro_position = pss_search_time_nr(rxdata,
-                                            ofdm_symbol_size,
-                                            nb_ant,
-                                            subcarrier_spacing,
-                                            pssTime,
-                                            fo_flag,
-                                            target_Nid_cell,
-                                            nid2,
-                                            f_off,
-                                            pssPeak,
-                                            pssAvg,
-                                            0,
-                                            rxdata_size - ofdm_symbol_size);
-  stop_meas(&generic_time[TIME_PSS]);
-
-#if TEST_SYNCHRO_TIMING_PSS
-
-  int duration_ms = generic_time[TIME_PSS].p_time / (cpuf * 1000.0);
-#ifndef NR_UNIT_TEST
-  LOG_D(PHY, "PSS execution duration %4d microseconds \n", duration_ms);
-#endif
-#endif
-
-  return synchro_position;
-}
-
-/*******************************************************************
-*
 * NAME :         pss_search_time_nr
 *
 * PARAMETERS :   received buffer in time domain
@@ -212,25 +159,21 @@ int pss_synchro_nr(const c16_t **rxdata,
 *
 *********************************************************************/
 
-int pss_search_time_nr(const c16_t **rxdata,
-                       int ofdm_symbol_size,
-                       int nb_antennas_rx,
-                       int subcarrier_spacing,
-                       const c16_t pssTime[NUMBER_PSS_SEQUENCE][ofdm_symbol_size],
-                       bool fo_flag,
-                       int target_Nid_cell,
-                       int *nid2,
-                       int *f_off,
-                       int *pssPeak,
-                       int *pssAvg,
-                       int search_start,
-                       int search_length)
+pss_detection_result_t pss_search_time_nr(const c16_t **rxdata,
+                                          int ofdm_symbol_size,
+                                          int nb_antennas_rx,
+                                          int subcarrier_spacing,
+                                          const c16_t pssTime[NUMBER_PSS_SEQUENCE][ofdm_symbol_size],
+                                          bool fo_flag,
+                                          int target_Nid_cell,
+                                          int start,
+                                          int length)
 {
-  // Determine search window
-  unsigned int start, length;
-  // Use provided search window for known neighboring cells
-  start = search_start;
-  length = search_length;
+  if (start < 0 || length == 0) {
+    LOG_E(PHY, "inconsistent call to pss_search_time_nr %d, %d\n", start, length);
+    return (pss_detection_result_t){.success = false};
+  }
+
   int maxval=0;
   int max_size = get_softmodem_params()->sl_mode == 0 ?  NUMBER_PSS_SEQUENCE : NUMBER_PSS_SEQUENCE_SL;
   for (int j = 0; j < max_size; j++)
@@ -307,12 +250,6 @@ int pss_search_time_nr(const c16_t **rxdata,
     printf("ffo %lf\n", ffo_est);
 #endif
   }
-  // computing absolute value of frequency offset
-  *f_off = ffo_est * subcarrier_spacing;
-
-  *nid2 = pss_source;
-  *pssPeak = dB_fixed64(peak_value);
-  *pssAvg = dB_fixed64(avg[pss_source]);
 
   LOG_D(PHY,
         "[UE] nr_synchro_time: Sync source (nid2) = %d, Peak found at pos %d, val = %ld (%d dB power over signal avg %d dB), ffo "
@@ -324,8 +261,8 @@ int pss_search_time_nr(const c16_t **rxdata,
         dB_fixed64(avg[pss_source]),
         ffo_est);
 
-  if ((search_start < 0 || search_length == 0) && peak_value < 5 * avg[pss_source])
-    return (-1);
+  if (peak_value == 0 || peak_value < 5 * avg[pss_source])
+    return (pss_detection_result_t){.success = false};
 
 #ifdef DBG_PSS_NR
   static int debug_cnt = 0;
@@ -336,7 +273,12 @@ int pss_search_time_nr(const c16_t **rxdata,
   }
 #endif
 
-  return peak_position;
+  return (pss_detection_result_t){.success = true,
+                                  .nid2 = pss_source,
+                                  .pos = peak_position,
+                                  .freq_offset = ffo_est * subcarrier_spacing,
+                                  .peak = dB_fixed64(peak_value),
+                                  .avg = dB_fixed64(avg[pss_source])};
 }
 
 void sl_generate_pss(SL_NR_UE_INIT_PARAMS_t *sl_init_params, uint8_t n_sl_id2, uint16_t scaling)

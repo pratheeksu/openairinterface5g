@@ -486,6 +486,15 @@ typedef struct {
   task_ans_t *ans;
 } nr_ue_ssb_scan_t;
 
+typedef struct {
+  bool success;
+  int pos;
+  int nid2;
+  int freq_offset; // PSS frequency offset estimate
+  int peak; // PSS correlation peak power
+  int avg; // PSS correlation average power
+} pss_detection_result_t;
+
 // Common SSB search parameters - used by both initial sync and neighbor cell search
 typedef struct {
   uint64_t dl_CarrierFreq;
@@ -513,14 +522,11 @@ typedef struct {
   void *rxdataF; // Pre-allocated rxdataF buffer
   void *pssTime; // Pre-generated PSS time sequences
   // Output parameters
+  pss_detection_result_t pss_res;
   int *detected_nid_cell; // detected PCI
-  int *ssb_offset; // SSB offset in samples
   int32_t *sss_metric; // SSS detection metric
-  int *freq_offset_pss; // PSS frequency offset estimate
   int *freq_offset_sss; // SSS frequency offset estimate
   uint8_t *sss_phase; // SSS phase
-  int *pss_peak; // PSS correlation peak power
-  int *pss_avg; // PSS correlation average power
 } nr_ssb_search_params_t;
 
 typedef struct nr_phy_data_tx_s {
