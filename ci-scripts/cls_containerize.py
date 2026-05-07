@@ -648,7 +648,7 @@ class Containerize():
 				raise ValueError(f'Invalid value for num_attempts: {num_attempts}, must be greater than 0')
 			for attempt in range(num_attempts):
 				logging.info(f'will start services {services}')
-				status = ssh.run(f'docker compose -f {wd_yaml} up -d --wait --wait-timeout 60 -- {services}')
+				status = ssh.run(f'docker compose -f {wd_yaml} up -d --wait --wait-timeout 120 -- {services}')
 				info = ssh.run(f"docker compose -f {wd_yaml} ps --all --format=\'table {{{{.Service}}}} [{{{{.Image}}}}] {{{{.Status}}}}\' -- {services} | column -t")
 				deployed = status.returncode == 0
 				if not deployed:

@@ -241,6 +241,12 @@ information on how the images are built.
   ~5G-NR ~nrUE
   - 5G-NR SA test setup: OAI VNF + PNF/NVIDIA CUBB on gracehopper1-oai + WNC RU, OAIUE on jetson1-oai + B210, OAI CN5G
   - OpenShift cluster for CN deployment and container images for gNB and UE deployment
+- [RAN-SA-FHI72-MPLANE-CN5G](https://jenkins-oai.eurecom.fr/view/RAN/job/RAN-SA-FHI72-MPLANE-CN5G/)
+  ~5G-NR
+  - cacofonix + FHI72 + Benetel550 (gNB), AmarisoftUE, OAI CN5G
+  - OpenShift cluster for CN deployment
+  - FHI 7.2 testing with 40 MHz, 4x4 MIMO configuration and 100 MHz, 2x2 MIMO configuration
+  - FHI 7.2 Configuration and Performance Management via NETCONF session of an O-RU
 
 ### RAN-CI-NSA-Trigger
 

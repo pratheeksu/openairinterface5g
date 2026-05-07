@@ -199,11 +199,14 @@ bool manage_ru(ru_session_t *ru_session, const openair0_config_t *oai, const siz
   while (1) {
     sleep(5);
     if (!ru_session->ru_notif.ptp_state && !ru_session->ru_notif.hardware.oper_state && !ru_session->ru_notif.hardware.admin_state && !ru_session->ru_notif.hardware.avail_state) {
+      success = get_running_u_plane_config(ru_session);
+      AssertError(success, return false, "[MPLANE] Unable to get running U-plane configuration.\n");
+
       char *content = NULL;
       success = configure_ru_from_yang(ru_session, oai, num_rus, &content);
       AssertError(success, return false, "[MPLANE] Unable to create content for <edit-config> RPC for start-up procedure.\n");
 
-      success = edit_val_commmit_rpc(ru_session, content);
+      success = edit_val_commmit_rpc(ru_session, content, NC_RPC_EDIT_DFLTOP_MERGE);
       AssertError(success, return false, "[MPLANE] Unable to continue.\n");
       free(content);
       break;
@@ -220,7 +223,7 @@ bool pm_conf(ru_session_t *ru_session, const char *active)
 {
   char *content = get_pm_content(ru_session, active);
 
-  bool success = edit_val_commmit_rpc(ru_session, content);
+  bool success = edit_val_commmit_rpc(ru_session, content, NC_RPC_EDIT_DFLTOP_MERGE);
   AssertError(success, return false, "[MPLANE] Cannot continue.\n");
 
   free(content);

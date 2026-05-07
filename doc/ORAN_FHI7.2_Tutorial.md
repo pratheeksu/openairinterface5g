@@ -62,9 +62,11 @@ We tested the category A radio units listed below.
 |Vendor           |Software Version                             |
 |-----------------|---------------------------------------------|
 |VVDN LPRU        |03-v3.0.5                                    |
-|LiteON RU        |01.00.08/02.00.03/02.00.10                   |
-|Benetel 650      |RAN650-1v1.0.4-dda1bf5/RAN650-1v1.2.2-2fa04bc/RAN650-1v1.4.2-NM-c48047d|
-|Benetel 550      |RAN550-1v1.0.4-605a25a/RAN550-1v1.2.2-2fa04bc/RAN550-1v1.4.1-M-25fa970/RAN550-1v2.0.5-M-92a9d2c|
+|LiteON RU FR1    |01.00.08/02.00.03/02.00.10                   |
+|LiteON RU FR2    |02.00.07                                     |
+|Metanoia RU FR1  |2.0.6                                        |
+|Benetel 650      |RAN650-1v2.1.0-M-0820797                     |
+|Benetel 550      |RAN550-1v2.1.0-M-0820797                     |
 |Foxconn RPQN     |v3.1.15q.551_rc10                            |
 
 Tested libxran releases:
@@ -1495,7 +1497,9 @@ sudo ldconfig
 If you would like to install these libraries in the custom path, please replace `/usr/local` default path to e.g. `/opt/mplane-v2`.
 
 ## Benetel O-RU
-Note: RAN550/650 v1.2.2 and v1.4.1 have been successfully tested.
+Note: RAN550-1v2.1.0-M-0820797 has been successfully tested.
+
+We added a [CI M-plane pipeline](https://jenkins-oai.eurecom.fr/job/RAN-SA-FHI72-MPLANE-CN5G/) showcasing the M-plane integration.
 
 #### One time steps
 Connect to the RU as user `root`, enable the mplane service, and reboot:
