@@ -301,7 +301,7 @@ static int trigger_ngap_pdu_session_release(char *buf, int debug, telnet_printfu
     ERROR_MSG_RET("Missing input. Usage: trigger_pdu_session_release [ue_id=gNB_ue_ngap_id(int,opt)],pdusession_id(int)[,pdusession_id(int)...]\n");
   }
 
-  char *tokens[NGAP_MAX_PDU_SESSION + 1];
+  char *tokens[NR_MAX_NB_PDU_SESSIONS + 1];
   int count = 0;
 
   for (char *tok = strtok(buf, ","); tok != NULL && count < (int)sizeofArray(tokens); tok = strtok(NULL, ",")) {
