@@ -85,6 +85,14 @@ oc-cn5g-20897:
   Undeploy: "! scripts/oc-cn5g-undeploy.sh /opt/oai-cn5g-fed-develop-2026-apr oaicicd-core-for-fhi72"
   LogCollect: "! scripts/oc-cn5g-logcollect.sh /opt/oai-cn5g-fed-develop-2026-apr oaicicd-core-for-fhi72 %%log_dir%%"
 
+oc-cn5g-00105:
+  Host: cacofonix
+  NetworkScript: echo "inet 172.21.6.118"
+  RunIperf3Server: False
+  Deploy: "! scripts/oc-cn5g-deploy.sh /opt/oai-cn5g-fed-develop-2026-apr-00105 oaicicd-core-for-fhi72"
+  Undeploy: "! scripts/oc-cn5g-undeploy.sh /opt/oai-cn5g-fed-develop-2026-apr-00105 oaicicd-core-for-fhi72"
+  LogCollect: "! scripts/oc-cn5g-logcollect.sh /opt/oai-cn5g-fed-develop-2026-apr-00105 oaicicd-core-for-fhi72 %%log_dir%%"
+
 oc-cn5g-00103-ho:
   Host: groot
   NetworkScript: echo "inet 172.21.6.111"
@@ -181,6 +189,16 @@ amarisoft_ue:
 amarisoft_ue_2x2:
   Host: amariue
   InitScript: /root/lteue-linux-2025-03-15/lteue /root/oaicicd/ran_sa_aw2s_asue_20MHz_2x2/aw2s-multi-00102-2x2-v2.cfg &
+  TermScript: /root/lteue-linux-2025-03-15/ws.js -t 10 127.0.0.1:9002 '{"message":"quit"}' || killall -KILL lteue-avx2
+  NetworkScript: ip netns exec ue1 ip a show dev pdn0
+amarisoft_00105_40MHz:
+  Host: amariue
+  InitScript: /root/lteue-linux-2025-03-15/lteue /root/oaicicd/ran_sa_fhi72_mplane_40MHz/multi-00105-40.cfg &
+  TermScript: /root/lteue-linux-2025-03-15/ws.js -t 10 127.0.0.1:9002 '{"message":"quit"}' || killall -KILL lteue-avx2
+  NetworkScript: ip netns exec ue1 ip a show dev pdn0
+amarisoft_00105_100MHz:
+  Host: amariue
+  InitScript: /root/lteue-linux-2025-03-15/lteue /root/oaicicd/ran_sa_fhi72_mplane_100MHz/multi-00105-100.cfg &
   TermScript: /root/lteue-linux-2025-03-15/ws.js -t 10 127.0.0.1:9002 '{"message":"quit"}' || killall -KILL lteue-avx2
   NetworkScript: ip netns exec ue1 ip a show dev pdn0
 amarisoft_ue_1:

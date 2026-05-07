@@ -27,6 +27,7 @@
 #include "NR_SIB3.h"
 #include "NR_SIB4.h"
 #include "NR_Q-OffsetRange.h"
+#include "NR_asn_constant.h"
 #include "openair2/RRC/NR/MESSAGES/asn1_msg.h"
 #include "rrc_gNB_mobility.h"
 #include "openair2/F1AP/f1ap_common.h"

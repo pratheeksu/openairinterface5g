@@ -58,11 +58,13 @@ done
 # Merged commits
 # ----------------------------
 mergeCommits=$(git rev-list --merges --abbrev-commit "$TARGET_BRANCH".."$SOURCE_BRANCH")
-if [[ -n "$mergeCommits" ]]; then
-    message="> ERROR: Following merge commits are found in the source branch history. Please rebase your branch.\n>\n"
-    message+="> $(echo "$mergeCommits" | paste -sd ',' -)\n"
-    echo -e "$message"
-    exit 3
+if [[ ! "$SOURCE_BRANCH" =~ ^(origin/)?integration_[0-9]{4}_w[0-9]{2}$ ]]; then
+    if [[ -n "$mergeCommits" ]]; then
+        message="> ERROR: Following merge commits are found in the source branch history. Please rebase your branch.\n>\n"
+        message+="> $(echo "$mergeCommits" | paste -sd ',' -)\n"
+        echo -e "$message"
+        exit 3
+    fi
 fi
 
 # ----------------------------

@@ -175,7 +175,7 @@ int LDPCencoder(uint8_t **input, uint8_t *output, encoder_implemparams_t *impp)
     if(impp->tprep != NULL) stop_meas(impp->tprep);
     //parity check part
     if(impp->tparity != NULL) start_meas(impp->tparity);
-    encode_parity_check_part_optim(cc, dd, BG, Zc, Kb, simd_size, ncols);
+    encode_parity_check_part_optim(cc, dd, BG, Zc, simd_size, ncols);
     if(impp->tparity != NULL) stop_meas(impp->tparity);
   }
   else {

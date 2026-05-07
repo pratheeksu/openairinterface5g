@@ -560,7 +560,7 @@ void nr_rrc_trigger_n2_ho(gNB_RRC_INST *rrc, gNB_RRC_UE_t *ue, const nr_neighbou
 {
   bool has_active_pdu_session = false;
   FOR_EACH_SEQ_ARR (rrc_pdu_session_param_t *, pduSession, &ue->pduSessions) {
-    if (pduSession->status == PDU_SESSION_STATUS_DONE || pduSession->status == PDU_SESSION_STATUS_ESTABLISHED) {
+    if (pduSession->status == PDU_SESSION_STATUS_ESTABLISHED) {
       has_active_pdu_session = true;
       break;
     }

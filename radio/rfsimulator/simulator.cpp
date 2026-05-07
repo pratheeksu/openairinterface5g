@@ -1324,7 +1324,7 @@ static void rfsimulator_read_internal(rfsimulator_state_t *t,
           rxAddInput(input, temp_array[aarx], aarx, ptr->channel_model, nsamps);
         }
       } else {
-        if (is_first_beam && is_first_peer && (ptr->nbAnt == 1 || nbAnt == 1)) {
+        if (is_first_beam && is_first_peer && (ptr->nbAnt == 1 && nbAnt == 1)) {
           // optimization: The buffer is uninitialized so samples can be written directly in the buffer
           combine_received_beams(t, ptr->received_packets, timestamp - t->chan_offset, 1, nsamps, rx_beam_id, samples);
         } else {

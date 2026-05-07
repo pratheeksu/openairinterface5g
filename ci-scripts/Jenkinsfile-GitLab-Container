@@ -98,7 +98,9 @@ pipeline {
             )
             def mrValidationMessage = readFile(mrValidationLog).trim()
             sh "rm -f ${mrValidationLog}"
-            addGitLabMRComment comment: "${mrValidationMessage}"
+            if (mrValidationExitCode >= 1) {
+              addGitLabMRComment comment: "${mrValidationMessage}"
+            }
             if (mrValidationExitCode >= 2) {
               error("${mrValidationMessage}")
             }
@@ -757,6 +759,29 @@ pipeline {
               script {
                 currentBuild.result = 'FAILURE'
                 failingStages += saFHI72Status
+              }
+            }
+          }
+        }
+        stage ("SA-FHI72-MPLANE-CN5G") {
+          when { expression {do5Gtest} }
+          steps {
+            script {
+              triggerSlaveJob ('RAN-SA-FHI72-MPLANE-CN5G', 'SA-FHI72-MPLANE-CN5G')
+            }
+          }
+          post {
+            always {
+              script {
+                // Using a unique variable name for each test stage to avoid overwriting on a global variable
+                // due to parallel-time concurrency
+                saFHI72MplaneStatus = finalizeSlaveJob('RAN-SA-FHI72-MPLANE-CN5G')
+              }
+            }
+            failure {
+              script {
+                currentBuild.result = 'FAILURE'
+                failingStages += saFHI72MplaneStatus
               }
             }
           }

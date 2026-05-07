@@ -483,7 +483,6 @@ static void nr_fill_indication(const PHY_VARS_gNB *gNB,
 
 // Function to fill UL RB mask to be used for N0 measurements
 static void fill_ul_rb_mask(PHY_VARS_gNB *gNB,
-                            fsn_t now,
                             uint32_t rb_mask_ul[14][MAX_BWP_SIZE],
                             const NR_gNB_PUCCH_job_t *pucch,
                             int n_pucch,
@@ -710,8 +709,7 @@ nr_srs_info_t nr_srs_rx_procedures(PHY_VARS_gNB *gNB,
     for (int ant_rx_ind = 0; ant_rx_ind < nb_antennas_rx; ant_rx_ind++) {
       for (int p_ind = 0; p_ind < N_ap; p_ind++) {
         uint32_t signal_power = 0;
-        nr_srs_channel_interpolation(ant_rx_ind,
-                                     p_ind,
+        nr_srs_channel_interpolation(p_ind,
                                      ofdm_symbol_size,
                                      frame_parms->first_carrier_offset,
                                      N_symb_SRS,
@@ -1156,7 +1154,7 @@ int phy_procedures_gNB_uespec_RX(PHY_VARS_gNB *gNB, int frame_rx, int slot_rx, N
   {
     // Mask of occupied RBs, per symbol and PRB
     uint32_t rb_mask_ul[14][MAX_BWP_SIZE] = {0};
-    fill_ul_rb_mask(gNB, now, rb_mask_ul, pucch, n_pucch, pusch, n_pusch_jobs, srs, n_srs);
+    fill_ul_rb_mask(gNB, rb_mask_ul, pucch, n_pucch, pusch, n_pusch_jobs, srs, n_srs);
 
     int first_symb = 0, num_symb = 0;
     if (frame_parms->frame_type == TDD) {

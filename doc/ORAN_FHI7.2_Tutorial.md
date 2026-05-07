@@ -62,10 +62,13 @@ We tested the category A radio units listed below.
 |Vendor           |Software Version                             |
 |-----------------|---------------------------------------------|
 |VVDN LPRU        |03-v3.0.5                                    |
-|LiteON RU        |01.00.08/02.00.03/02.00.10                   |
-|Benetel 650      |RAN650-1v1.0.4-dda1bf5/RAN650-1v1.2.2-2fa04bc/RAN650-1v1.4.2-NM-c48047d|
-|Benetel 550      |RAN550-1v1.0.4-605a25a/RAN550-1v1.2.2-2fa04bc/RAN550-1v1.4.1-M-25fa970/RAN550-1v2.0.5-M-92a9d2c|
+|LiteON RU FR1    |01.00.08/02.00.03/02.00.10                   |
+|LiteON RU FR2    |02.00.07                                     |
+|Metanoia RU FR1  |2.0.6                                        |
+|Benetel 650      |RAN650-1v2.1.0-M-0820797                     |
+|Benetel 550      |RAN550-1v2.1.0-M-0820797                     |
 |Foxconn RPQN     |v3.1.15q.551_rc10                            |
+|Microamp RU      |0.1.174                                      |
 
 Tested libxran releases:
 
@@ -630,81 +633,480 @@ eAXC_id 0 1 # set PRACH eAxC IDs
 ...
 ```
 
-#### MICROAMP FR2
+#### Microamp FR2
+
+#### Firmware starting from 0.1.174
+
+Requirements:
+- sshpass:
+  ```bash
+  #RHEL
+  sudo dnf install sshpass -y
+  #Ubuntu
+  sudo apt install sshpass -y
+  ``` 
+
+To check PTP status, you can use the following command:
+```bash
+sshpass -p microampcfg ssh remctl@<RU_IP_ADDR> "logs-ptp"
+```
+<details>
+  <summary>PTP output will be similar to:</summary>
+
+  ```
+  Apr 27 11:58:35 bbv1 ptp4l[74545]: ptp4l[357120.237]: rms    8 max   16 freq   -100 +/- 142 delay  1183 +/-   0
+  Apr 27 11:58:34 bbv1 ptp4l[74545]: ptp4l[357119.114]: rms    1 max    1 freq   +189 +/-  25 delay  1183 +/-   0
+  Apr 27 11:58:33 bbv1 ptp4l[74545]: ptp4l[357117.991]: rms    1 max    1 freq    +99 +/-  30 delay  1183 +/-   0
+  Apr 27 11:58:32 bbv1 ptp4l[74545]: ptp4l[357116.869]: rms    1 max    1 freq    +22 +/-  18 delay  1183 +/-   0
+  Apr 27 11:58:31 bbv1 ptp4l[74545]: ptp4l[357115.746]: rms    1 max    1 freq    -51 +/-  20 delay  1183 +/-   0
+  Apr 27 11:58:30 bbv1 ptp4l[74545]: ptp4l[357114.624]: rms    1 max    2 freq   -126 +/-  29 delay  1183 +/-   0
+  Apr 27 11:58:29 bbv1 ptp4l[74545]: ptp4l[357113.501]: rms    8 max   16 freq    -16 +/- 200 delay  1184 +/-   0
+  Apr 27 11:58:28 bbv1 ptp4l[74545]: ptp4l[357112.378]: rms    1 max    2 freq   +164 +/-  29 delay  1183 +/-   0
+  Apr 27 11:58:26 bbv1 ptp4l[74545]: ptp4l[357111.256]: rms    1 max    2 freq    +54 +/-  39 delay  1183 +/-   0
+  Apr 27 11:58:25 bbv1 ptp4l[74545]: ptp4l[357110.133]: rms    1 max    2 freq    -34 +/-  19 delay  1183 +/-   0
+  Apr 27 11:58:24 bbv1 ptp4l[74545]: ptp4l[357109.010]: rms    1 max    2 freq   -112 +/-  26 delay  1183 +/-   0
+  Apr 27 11:58:23 bbv1 ptp4l[74545]: ptp4l[357107.888]: rms    8 max   16 freq    -48 +/- 174 delay  1183 +/-   0
+  Apr 27 11:58:22 bbv1 ptp4l[74545]: ptp4l[357106.766]: rms    1 max    1 freq   +197 +/-  25 delay  1183 +/-   0
+  Apr 27 11:58:21 bbv1 ptp4l[74545]: ptp4l[357105.642]: rms    1 max    2 freq   +149 +/-  26 delay  1183 +/-   0
+  Apr 27 11:58:20 bbv1 ptp4l[74545]: ptp4l[357104.519]: rms    1 max    2 freq    +66 +/-  27 delay  1183 +/-   0
+  Apr 27 11:58:19 bbv1 ptp4l[74545]: ptp4l[357103.396]: rms    1 max    2 freq    -17 +/-  24 delay  1183 +/-   0
+  Apr 27 11:58:17 bbv1 ptp4l[74545]: ptp4l[357102.273]: rms    1 max    1 freq    -94 +/-  23 delay  1183 +/-   0
+  Apr 27 11:58:16 bbv1 ptp4l[74545]: ptp4l[357101.150]: rms    7 max   16 freq   +107 +/- 180 delay  1183 +/-   0
+  Apr 27 11:58:15 bbv1 ptp4l[74545]: ptp4l[357100.027]: rms    1 max    2 freq   +166 +/-  11 delay  1184 +/-   0
+  Apr 27 11:58:14 bbv1 ptp4l[74545]: ptp4l[357098.906]: rms    1 max    1 freq   +140 +/-  21 delay  1183 +/-   0
+  ```
+
+</details>
+
+###### RU configuration
+
+You can use the following command to display the current RU configuration:
+
+```bash
+sshpass -p microampcfg ssh remctl@<RU_IP_ADDR> get-cfg
+```
+
+<details>
+  <summary>
+  The OAI configuration file [`gnb.sa.band257.132prb.fhi72.2x2-microamp.conf`](../targets/PROJECTS/GENERIC-NR-5GC/CONF/gnb.sa.band257.132prb.fhi72.2x2-microamp.conf) corresponds to the following RU configuration:
+  </summary>
+
+  ```
+  PRACH0 CC ID: 0
+  PRACH0 RU port ID: 0
+  PRACH1 CC ID: 1
+  PRACH1 RU port ID: 1
+  Bandwidth: 200M [Hz]
+  Carrier frequency: 28049280000.0 [Hz]
+  Compression enable: True
+  TDD config: DDDSU
+  eCPRI VLAN support enable: True
+  eCPRI VLAN tag: 600
+    MAC address: 10:70:fd:b8:86:02
+    VLAN PTP status: ENABLED
+    VLAN MGMT enabled: ENABLED
+    State: ENABLED_WITH_VLAN
+      Dynamic beamforming with mirrored beams
+  PL MAC address:
+    RU MAC: 10-70-FD-B8-86-02
+    DU MAC: 50-7C-6F-31-00-61
+  RF Power level: -5 dB - relative to maximum
+  ```
+
+</details>
+
+Execute the following command to check how to configure the RU:
+
+```bash
+sshpass -p microampcfg ssh remctl@<RU_IP_ADDR> "help"
+```
+<details>
+  <summary>Help output will be similar to:</summary>
+
+  ```
+  Usage: remctl <subcommand> [options]
+
+  Allowed Subcommands:
+    set-cfg, get-cfg, stat, logs-ptp, reboot, set-power, help, clear-cfg
+
+  Allowed 'set-cfg' options:
+    --bandwidth
+    --tdd-cfg
+    --compression-enable
+    --compression-disable
+    --ecpri-vlan-tag
+    --ecpri-vlan-support-enable
+    --ecpri-vlan-support-disable
+    --ru-mac
+    --du-mac
+    --beamforming
+    --carrier-freq
+    --eth-ipv4
+    --prach0-cc-id
+    --prach0-ru-port-id
+    --prach1-cc-id
+    --prach1-ru-port-id
+
+  ```
+
+</details>
 
 
+
+You can also execute the following command to show fronthaul statistics including on-time/late packet' counters:
+```bash
+sshpass -p microampcfg ssh remctl@<RU_IP_ADDR> "stat"
+```
+
+<details>
+  <summary>Statistics output will be similar to:</summary>
+
+  ```
+  ORAN RX C-plane on time:    71645874
+  ORAN RX C-plane early:      0
+  ORAN RX C-plane late:       16
+  ORAN TX U-plane:            229686268
+  ORAN RX DL C-plane on time: 53987559
+  ORAN RX DL C-plane early:   0
+  ORAN RX DL C-plane late:    12
+  ORAN RX DL U-plane on time: 701836967
+  ORAN RX DL U-plane early:   0
+  ORAN RX DL U-plane late:    52
+  ORAN RX UL C-plane on time: 17658315
+  ORAN RX UL C-plane early:   0
+  ORAN RX UL C-plane late:    4
+  CLASSIFIER LLC: overflow protection:    0
+  CLASSIFIER LLC: frame err:              28
+  CLASSIFIER LLC: packet too long:        0
+  CLASSIFIER LLC: dropped:                28
+  CLASSIFIER LLC: passed:                 804719078
+  CLASSIFIER ETH: dst MAC addr err:       0
+  CLASSIFIER ETH: VLAN LEGACY:            275571
+  CLASSIFIER ETH: VLAN Dot1Q:             804443507
+  CLASSIFIER ETH: VLAN Dot1AD:            0
+  CLASSIFIER ETH: VLAN Tag ID pass:       773482909
+  CLASSIFIER ETH: VLAN Tag ID error:      0
+  CLASSIFIER ETH: multicast:              31233828
+  CLASSIFIER ETH: PTP:                    29502626
+  CLASSIFIER ETH: eCPRI:                  773482909
+  CLASSIFIER ETH: to OS:                  31236169
+  CLASSIFIER ETH: dropped:                0
+  CLASSIFIER ETH: passed:                 804719078
+  CLASSIFIER ECPRI: prot rev unsupported: 0
+  CLASSIFIER ECPRI: concat unsupported:   0
+  CLASSIFIER ECPRI: msg type unsupported: 0
+  CLASSIFIER ECPRI: pld size err:         0
+  CLASSIFIER ECPRI: U-Plane:              701837019
+  CLASSIFIER ECPRI: C-Plane:              71645890
+  CLASSIFIER ECPRI: delay:                0
+  CLASSIFIER ECPRI: dropped:              0
+  CLASSIFIER ECPRI: passed:               773482909
+  CPLANE PARSER: ul early:                        0
+  CPLANE PARSER: ul late:                         4
+  CPLANE PARSER: ul on time:                      17658315
+  CPLANE PARSER: dl early:                        0
+  CPLANE PARSER: dl late:                         12
+  CPLANE PARSER: dl on time:                      53987559
+  CPLANE PARSER: timing dropped:                  16
+  CPLANE PARSER: timing passed:                   71645874
+  CPLANE PARSER: bad du port id:                  0
+  CPLANE PARSER: bad bandsector id:               0
+  CPLANE PARSER: bad cc id:                       663059
+  CPLANE PARSER: bad ru port id:                  2794
+  CPLANE PARSER: bad sequence id:                 0
+  CPLANE PARSER: bad e bit:                       0
+  CPLANE PARSER: bad subsequence id:              0
+  CPLANE PARSER: ecpri transport header dropped:  665623
+  CPLANE PARSER: ecpri transport header passed:   70980251
+  CPLANE PARSER: bad payloadversion:              0
+  CPLANE PARSER: bad filterindex:                 0
+  CPLANE PARSER: bad subframeid:                  0
+  CPLANE PARSER: bad slotid:                      0
+  CPLANE PARSER: bad startsymbolid:               0
+  CPLANE PARSER: bad numberofsections:            0
+  CPLANE PARSER: bad sectiontype:                 0
+  CPLANE PARSER: bad timeoffset:                  0
+  CPLANE PARSER: bad fftsize:                     0
+  CPLANE PARSER: bad subcarrierspacing:           0
+  CPLANE PARSER: bad cplength:                    0
+  CPLANE PARSER: bad udiqwidth:                   0
+  CPLANE PARSER: radio aplication header dropped: 0
+  CPLANE PARSER: radio aplication header passed:  70980251
+  CPLANE PARSER: bad rb:                          0
+  CPLANE PARSER: bad startprbc:                   0
+  CPLANE PARSER: bad numprbc:                     0
+  CPLANE PARSER: bad remask:                      0
+  CPLANE PARSER: bad numsymbol:                   0
+  CPLANE PARSER: bad ef:                          0
+  CPLANE PARSER: bad freqoffset:                  0
+  CPLANE PARSER: common section fields dropped:   0
+  CPLANE PARSER: common section fields passed:    70980251
+  CPLANE PARSER: bad section to symbol map:       0
+  CPLANE PARSER: dropped:                         0
+  CPLANE PARSER: passed:                          70980251
+  CPLANE PARSER: expected uplanes number:         701813698
+  UPLANE PARSER: sequence ID err:       0
+  UPLANE PARSER: IQ pld size err:       0
+  UPLANE PARSER: C-Plane match err:     114225
+  UPLANE PARSER: eAxC ID unsupported:   24631
+  UPLANE PARSER: any value unsupported: 24631
+  UPLANE PARSER: dropped:               138886
+  UPLANE PARSER: passed:                701698133
+  UPLANE ENCAPSULATOR 0: false drop error: 0
+  UPLANE ENCAPSULATOR 0: passed:           94598642
+  UPLANE ENCAPSULATOR 1: false drop error: 0
+  UPLANE ENCAPSULATOR 1: passed:           94598642
+  UPLANE ENCAPSULATOR 2: false drop error: 0
+  UPLANE ENCAPSULATOR 2: passed:           0
+  UPLANE ENCAPSULATOR 3: false drop error: 0
+  UPLANE ENCAPSULATOR 3: passed:           0
+  COMMON COMMON: symbol counter: 57757250505
+  DSP CHAIN 0: dl fft overflow: 0
+  DSP CHAIN 0: ul fft overflow: 0
+  DSP CHAIN 1: dl fft overflow: 0
+  DSP CHAIN 1: ul fft overflow: 0
+  ```
+
+</details>
+
+
+##### Firmware older than 0.1.174
 Interaction with RU is performed using `rucfg` utility provided by Microamp.
 
-To check PTP status, you can use `rucfg ptp`. the output should be similar to:
-```bash
-[INFO] Check if RU is available
-[INFO] RU available
-[INFO] Check SSH to RU available
-[INFO] SSH to RU available
-[INFO] Getting PTP status
-[INFO] ptp4l status = 
-{
-Feb 12 16:26:02 bbv1 ptp4l[23822]: ptp4l[6280.658]: rms    0 max    1 freq     +2 +/-   7 delay  1184 +/-   0
-Feb 12 16:26:00 bbv1 ptp4l[23822]: ptp4l[6279.535]: rms    0 max    1 freq     -8 +/-  13 delay  1184 +/-   0
-Feb 12 16:25:59 bbv1 ptp4l[23822]: ptp4l[6278.413]: rms    1 max    1 freq    -35 +/-  13 delay  1184 +/-   0
-Feb 12 16:25:58 bbv1 ptp4l[23822]: ptp4l[6277.290]: rms    0 max    1 freq    -68 +/-   9 delay  1184 +/-   0
-Feb 12 16:25:57 bbv1 ptp4l[23822]: ptp4l[6276.167]: rms    1 max    1 freq    -69 +/-  10 delay  1184 +/-   0
-Feb 12 16:25:56 bbv1 ptp4l[23822]: ptp4l[6275.044]: rms    0 max    1 freq    -46 +/-   9 delay  1184 +/-   0
-Feb 12 16:25:55 bbv1 ptp4l[23822]: ptp4l[6273.921]: rms    1 max    1 freq    -65 +/-  10 delay  1184 +/-   0
-Feb 12 16:25:54 bbv1 ptp4l[23822]: ptp4l[6272.800]: rms    0 max    1 freq    -91 +/-   6 delay  1184 +/-   0
-Feb 12 16:25:53 bbv1 ptp4l[23822]: ptp4l[6271.677]: rms    4 max   17 freq   -107 +/-  48 delay  1184 +/-   0
-Feb 12 16:25:52 bbv1 ptp4l[23822]: ptp4l[6270.554]: rms    6 max   17 freq   +179 +/- 106 delay  1184 +/-   0
-Feb 12 16:25:50 bbv1 ptp4l[23822]: ptp4l[6269.431]: rms    1 max    2 freq   +191 +/-  12 delay  1184 +/-   0
-Feb 12 16:25:49 bbv1 ptp4l[23822]: ptp4l[6268.308]: rms    1 max    1 freq   +119 +/-  21 delay  1184 +/-   0
-Feb 12 16:25:48 bbv1 ptp4l[23822]: ptp4l[6267.186]: rms    1 max    1 freq   +103 +/-  13 delay  1184 +/-   0
-Feb 12 16:25:47 bbv1 ptp4l[23822]: ptp4l[6266.063]: rms    7 max   17 freq   -101 +/- 160 delay  1184 +/-   0
-Feb 12 16:25:46 bbv1 ptp4l[23822]: ptp4l[6264.940]: rms    7 max   17 freq    -65 +/- 154 delay  1184 +/-   0
-Feb 12 16:25:45 bbv1 ptp4l[23822]: ptp4l[6263.817]: rms    1 max    2 freq   +176 +/-  33 delay  1183 +/-   0
-Feb 12 16:25:44 bbv1 ptp4l[23822]: ptp4l[6262.695]: rms    0 max    1 freq   +100 +/-   7 delay  1184 +/-   0
-Feb 12 16:25:43 bbv1 ptp4l[23822]: ptp4l[6261.572]: rms    1 max    2 freq    +56 +/-  34 delay  1184 +/-   0
-Feb 12 16:25:41 bbv1 ptp4l[23822]: ptp4l[6260.449]: rms    1 max    1 freq    -37 +/-  14 delay  1184 +/-   0
-Feb 12 16:25:40 bbv1 ptp4l[23822]: ptp4l[6259.326]: rms    7 max   16 freq   +114 +/- 149 delay  1183 +/-   0
-}
+To check PTP status, you can use `rucfg ptp`. 
 
-```
 
-##### RU configuration
+<details>
+  <summary>PTP output will be similar to:</summary>
 
-You can use `rucfg show` to display the current RU configuration. 
+  ```
+  [INFO] Check if RU is available
+  [INFO] RU available
+  [INFO] Check SSH to RU available
+  [INFO] SSH to RU available
+  [INFO] Getting PTP status
+  [INFO] ptp4l status = 
+  {
+  Feb 12 16:26:02 bbv1 ptp4l[23822]: ptp4l[6280.658]: rms    0 max    1 freq     +2 +/-   7 delay  1184 +/-   0
+  Feb 12 16:26:00 bbv1 ptp4l[23822]: ptp4l[6279.535]: rms    0 max    1 freq     -8 +/-  13 delay  1184 +/-   0
+  Feb 12 16:25:59 bbv1 ptp4l[23822]: ptp4l[6278.413]: rms    1 max    1 freq    -35 +/-  13 delay  1184 +/-   0
+  Feb 12 16:25:58 bbv1 ptp4l[23822]: ptp4l[6277.290]: rms    0 max    1 freq    -68 +/-   9 delay  1184 +/-   0
+  Feb 12 16:25:57 bbv1 ptp4l[23822]: ptp4l[6276.167]: rms    1 max    1 freq    -69 +/-  10 delay  1184 +/-   0
+  Feb 12 16:25:56 bbv1 ptp4l[23822]: ptp4l[6275.044]: rms    0 max    1 freq    -46 +/-   9 delay  1184 +/-   0
+  Feb 12 16:25:55 bbv1 ptp4l[23822]: ptp4l[6273.921]: rms    1 max    1 freq    -65 +/-  10 delay  1184 +/-   0
+  Feb 12 16:25:54 bbv1 ptp4l[23822]: ptp4l[6272.800]: rms    0 max    1 freq    -91 +/-   6 delay  1184 +/-   0
+  Feb 12 16:25:53 bbv1 ptp4l[23822]: ptp4l[6271.677]: rms    4 max   17 freq   -107 +/-  48 delay  1184 +/-   0
+  Feb 12 16:25:52 bbv1 ptp4l[23822]: ptp4l[6270.554]: rms    6 max   17 freq   +179 +/- 106 delay  1184 +/-   0
+  Feb 12 16:25:50 bbv1 ptp4l[23822]: ptp4l[6269.431]: rms    1 max    2 freq   +191 +/-  12 delay  1184 +/-   0
+  Feb 12 16:25:49 bbv1 ptp4l[23822]: ptp4l[6268.308]: rms    1 max    1 freq   +119 +/-  21 delay  1184 +/-   0
+  Feb 12 16:25:48 bbv1 ptp4l[23822]: ptp4l[6267.186]: rms    1 max    1 freq   +103 +/-  13 delay  1184 +/-   0
+  Feb 12 16:25:47 bbv1 ptp4l[23822]: ptp4l[6266.063]: rms    7 max   17     freq   -101 +/- 160 delay  1184 +/-   0
+  Feb 12 16:25:46 bbv1 ptp4l[23822]: ptp4l[6264.940]: rms    7 max   17 freq    -65 +/- 154 delay  1184 +/-   0
+  Feb 12 16:25:45 bbv1 ptp4l[23822]: ptp4l[6263.817]: rms    1 max    2 freq   +176 +/-  33 delay  1183 +/-   0
+  Feb 12 16:25:44 bbv1 ptp4l[23822]: ptp4l[6262.695]: rms    0 max    1 freq   +100 +/-   7 delay  1184 +/-   0
+  Feb 12 16:25:43 bbv1 ptp4l[23822]: ptp4l[6261.572]: rms    1 max    2 freq    +56 +/-  34 delay  1184 +/-   0
+  Feb 12 16:25:41 bbv1 ptp4l[23822]: ptp4l[6260.449]: rms    1 max    1 freq    -37 +/-  14 delay  1184 +/-   0
+  Feb 12 16:25:40 bbv1 ptp4l[23822]: ptp4l[6259.326]: rms    7 max   16 freq   +114 +/- 149 delay  1183 +/-   0
+  } 
+  ```
 
-The OAI configuration file [`gnb.sa.band257.132prb.fhi72.2x2-microamp.conf`](../targets/PROJECTS/GENERIC-NR-5GC/CONF/gnb.sa.band257.132prb.fhi72.2x2-microamp.conf) corresponds to the following RU configuration:
+</details>
 
-```bash
-[INFO] Check if RU is available
-[INFO] RU available
-[INFO] Check SSH to RU available
-[INFO] SSH to RU available
-[INFO] Downloading oran_autostart
-[INFO] Downloading ructl_config.sh
-[INFO] Downloading udc_pll_configurator_startup
-[INFO] Downloaded Cellbox config = 
-{
-	eCPRI Compression: True
-	RF Bandwidth: 200MHz
-	CC Bandwidth: 200MHz
-	CCs: 1
-	LO frequency: 7.91642667e9
-	UL compensation frequency: 28.04928e9
-	DL compensation frequency: -28.04928e9
-	RU MAC: 10:70:FD:B8:86:02
-	DU MAC: 50:7C:6F:31:00:61
-	TDD config: dddsu
-	RF Power level: -5 dB - relative to maximum
-	VLAN ORAN: Enabled, tag: 600
-	VLAN PTP: Enabled, tag: 1
-	VLAN MGMT: False
-	Beamforming: dynamic-mirrored-beam
-}
-```
+###### RU configuration
+
+You can use `rucfg show` command to display the current RU configuration. 
+
+<details>
+  <summary>
+  The OAI configuration file [`gnb.sa.band257.132prb.fhi72.2x2-microamp.conf`](../targets/PROJECTS/GENERIC-NR-5GC/CONF/gnb.sa.band257.132prb.fhi72.2x2-microamp.conf) corresponds to the following RU configuration:
+  </summary>
+
+  ```
+  [INFO] Check if RU is available
+  [INFO] RU available
+  [INFO] Check SSH to RU available
+  [INFO] SSH to RU available
+  [INFO] Downloading oran_autostart
+  [INFO] Downloading ructl_config.sh
+  [INFO] Downloading udc_pll_configurator_startup
+  [INFO] Downloaded Cellbox config = 
+  {
+    eCPRI Compression: True
+    RF Bandwidth: 200MHz
+    CC Bandwidth: 200MHz
+    CCs: 1
+    LO frequency: 7.91642667e9
+    UL compensation frequency: 28.04928e9
+    DL compensation frequency: -28.04928e9
+    RU MAC: 10:70:FD:B8:86:02
+    DU MAC: 50:7C:6F:31:00:61
+    TDD config: dddsu
+    RF Power level: -5 dB - relative to maximum
+    VLAN ORAN: Enabled, tag: 600
+    VLAN PTP: Enabled, tag: 1
+    VLAN MGMT: False
+    Beamforming: dynamic-mirrored-beam
+  }
+  ```
+
+</details>
+
 
 Execute `rucfg config -h` to check how to configure the RU.
 
+<details>
+<summary>Help output will be similar to:</summary>
+
+```
+usage: rucfg config [-h] [-f frequency] [-b bandwidth] [-t TDD pattern] [-p RU Power]
+                    [--cc carrier components] [--compression compression] [--vlan-oran vlan-oran]
+                    [--vlan-ptp vlan-ptp] [--mac DU MAC address]
+
+options:
+  -h, --help            show this help message and exit
+  -f frequency, --freq frequency
+                        Sets the 5G NR frequency. Allowed range: 24.0-29.9 GHz, default: <no conf
+                        change>
+  -b bandwidth, --bandwidth bandwidth
+                        Sets RF bandwidth 100/200 [MHz] per CC, default: <no conf change>
+  -t TDD pattern, --tdd TDD pattern
+                        Sets TDD pattern DDDSU/DDSUU/DSUUU, default: <no conf change>
+  -p RU Power, --power RU Power
+                        Sets Power in (0-100), default: <no conf change>
+  --cc carrier components
+                        Sets number of carrier components 1/2, default: <no conf change>
+  --compression compression
+                        Sets eCPRI compression True/False, default: <no conf change>
+  --vlan-oran vlan-oran
+                        Sets ORAN VLAN to None or <TAG>, default: <no conf change>
+  --vlan-ptp vlan-ptp   Sets PTP VLAN to None or <TAG>, default: <no conf change>
+  --mac DU MAC address  Sets DU MAC address (where RU sends eCPRI packets), format
+                        AA:BB:CC:DD:EE:FF, default: <no conf change>
+```
+
+</details>
+
+
+
 You can also execute `rucfg stats` to show fronthaul statistics including on-time/late packet' counters.
+
+
+<details>
+  <summary>Statistics output will be similar to:</summary>
+
+  ```
+  [INFO] Check if RU is available
+  [INFO] RU available
+  [INFO] Check SSH to RU available
+  [INFO] SSH to RU available
+  [INFO] Getting RU stats
+  [WARN] Received non-zero rc from ructl: 255
+  [INFO] ru stats = 
+  {
+  Preaccumulator overflow detected
+  ORAN RX C-plane on time:    5442384
+  ORAN RX C-plane early:      0
+  ORAN RX C-plane late:       4
+  ORAN TX U-plane:            15908424
+  ORAN RX DL C-plane on time: 3349166
+  ORAN RX DL C-plane early:   0
+  ORAN RX DL C-plane late:    0
+  ORAN RX DL U-plane on time: 43538742
+  ORAN RX DL U-plane early:   0
+  ORAN RX DL U-plane late:    93
+  ORAN RX UL C-plane on time: 2093218
+  ORAN RX UL C-plane early:   0
+  ORAN RX UL C-plane late:    4
+  CLASSIFIER LLC: overflow protection:    0
+  CLASSIFIER LLC: frame err:              0
+  CLASSIFIER LLC: packet too long:        0
+  CLASSIFIER LLC: dropped:                0
+  CLASSIFIER LLC: passed:                 49044133
+  CLASSIFIER ETH: dst MAC addr err:       0
+  CLASSIFIER ETH: VLAN LEGACY:            1524
+  CLASSIFIER ETH: VLAN Dot1Q:             49042609
+  CLASSIFIER ETH: VLAN Dot1AD:            0
+  CLASSIFIER ETH: VLAN Tag ID pass:       48981223
+  CLASSIFIER ETH: VLAN Tag ID error:      0
+  CLASSIFIER ETH: multicast:              60260
+  CLASSIFIER ETH: PTP:                    56086
+  CLASSIFIER ETH: eCPRI:                  48981223
+  CLASSIFIER ETH: to OS:                  62910
+  CLASSIFIER ETH: dropped:                0
+  CLASSIFIER ETH: passed:                 49044133
+  CLASSIFIER ECPRI: prot rev unsupported: 0
+  CLASSIFIER ECPRI: concat unsupported:   0
+  CLASSIFIER ECPRI: msg type unsupported: 0
+  CLASSIFIER ECPRI: pld size err:         0
+  CLASSIFIER ECPRI: U-Plane:              43538835
+  CLASSIFIER ECPRI: C-Plane:              5442388
+  CLASSIFIER ECPRI: delay:                0
+  CLASSIFIER ECPRI: dropped:              0
+  CLASSIFIER ECPRI: passed:               48981223
+  CPLANE PARSER: ul early:                        0
+  CPLANE PARSER: ul late:                         4
+  CPLANE PARSER: ul on time:                      2093218
+  CPLANE PARSER: dl early:                        0
+  CPLANE PARSER: dl late:                         0
+  CPLANE PARSER: dl on time:                      3349166
+  CPLANE PARSER: timing dropped:                  4
+  CPLANE PARSER: timing passed:                   5442384
+  CPLANE PARSER: bad du port id:                  0
+  CPLANE PARSER: bad bandsector id:               0
+  CPLANE PARSER: bad cc id:                       0
+  CPLANE PARSER: bad ru port id:                  0
+  CPLANE PARSER: bad sequence id:                 0
+  CPLANE PARSER: bad e bit:                       0
+  CPLANE PARSER: bad subsequence id:              0
+  CPLANE PARSER: ecpri transport header dropped:  0
+  CPLANE PARSER: ecpri transport header passed:   5442384
+  CPLANE PARSER: bad payloadversion:              0
+  CPLANE PARSER: bad filterindex:                 0
+  CPLANE PARSER: bad subframeid:                  0
+  CPLANE PARSER: bad slotid:                      0
+  CPLANE PARSER: bad startsymbolid:               0
+  CPLANE PARSER: bad numberofsections:            0
+  CPLANE PARSER: bad sectiontype:                 0
+  CPLANE PARSER: bad timeoffset:                  0
+  CPLANE PARSER: bad fftsize:                     0
+  CPLANE PARSER: bad subcarrierspacing:           0
+  CPLANE PARSER: bad cplength:                    0
+  CPLANE PARSER: bad udiqwidth:                   0
+  CPLANE PARSER: radio aplication header dropped: 0
+  CPLANE PARSER: radio aplication header passed:  5442384
+  CPLANE PARSER: bad rb:                          0
+  CPLANE PARSER: bad startprbc:                   0
+  CPLANE PARSER: bad numprbc:                     0
+  CPLANE PARSER: bad remask:                      0
+  CPLANE PARSER: bad numsymbol:                   0
+  CPLANE PARSER: bad ef:                          0
+  CPLANE PARSER: bad freqoffset:                  0
+  CPLANE PARSER: common section fields dropped:   0
+  CPLANE PARSER: common section fields passed:    5442384
+  CPLANE PARSER: bad section to symbol map:       0
+  CPLANE PARSER: dropped:                         0
+  CPLANE PARSER: passed:                          5442384
+  UPLANE PARSER: sequence ID err:       0
+  UPLANE PARSER: IQ pld size err:       0
+  UPLANE PARSER: C-Plane match err:     7138
+  UPLANE PARSER: eAxC ID unsupported:   0
+  UPLANE PARSER: any value unsupported: 0
+  UPLANE PARSER: dropped:               7231
+  UPLANE PARSER: passed:                43531604
+  UPLANE ENCAPSULATOR 0: false drop error: 0
+  UPLANE ENCAPSULATOR 0: passed:           6698292
+  UPLANE ENCAPSULATOR 1: false drop error: 0
+  UPLANE ENCAPSULATOR 1: passed:           6698292
+  UPLANE ENCAPSULATOR 2: false drop error: 0
+  UPLANE ENCAPSULATOR 2: passed:           0
+  UPLANE ENCAPSULATOR 3: false drop error: 0
+  UPLANE ENCAPSULATOR 3: passed:           0
+  COMMON COMMON: symbol counter: 111095058
+  }
+  ```
+
+</details>
+
 
 #### VVDN LPRU
 
@@ -843,6 +1245,42 @@ sudo ./ru_emulator -c <path-to/protoru-OAI-B210-TDD-n78-40MHz-1x1-30kHz.yml>
 ```
 
 Finally, start the OAI gNB.
+
+#### WNC R1220
+
+**Version 1.9.0**
+
+The OAI configuration file [gnb.sa.band77.273prb.fhi72.4x4-wnc.conf](../targets/PROJECTS/GENERIC-NR-5GC/CONF/gnb.sa.band77.273prb.fhi72.4x4-wnc.conf) corresponds to:
+
+- TDD pattern `DDDDDDSUUU`, 5ms
+- Bandwidth 100MHz
+- 4TX4R
+
+##### RU configuration
+
+After switching on or rebooting the RU, you can check the RU PTP status with `show ptp clock` to make sure it's locked and run `show running-config` to check the current configuration.
+To enable RU transmission, use the `radio enable` command. Then verify the configuration with `show running-config`, which should reflect the enabled state:
+```
+radio 1
+  no shutdown
+```
+
+The required parameters to configure are:
+
+1. `center-frequency` →  3849990
+2. `transmit-power` →  24
+3. `lna-shutdown` →  **disabled**
+4. `transport-interface` →  configure the sub-interface (VLAN ID is defined during sub-interface creation)
+5. `transport-peer-mac` →  must match the DU MAC address
+6. `phase-compensation` →  **enabled**
+7. `bandwidth` →  100
+8. `sub-carrier` →  30
+9. `compress-oran-compliant` →  **enabled**
+
+**Note**
+  * Ensure that the VLAN configuration and MAC addressing are consistent with the DU setup.
+  * The RU must be PTP synchronized before starting the gNB.
+  * After reboot, the RU loads its `startup-config`. To save the current configuration, use `copy running-config startup-config`.
 
 ## Configure Network Interfaces and DPDK VFs
 
@@ -1495,7 +1933,9 @@ sudo ldconfig
 If you would like to install these libraries in the custom path, please replace `/usr/local` default path to e.g. `/opt/mplane-v2`.
 
 ## Benetel O-RU
-Note: RAN550/650 v1.2.2 and v1.4.1 have been successfully tested.
+Note: RAN550-1v2.1.0-M-0820797 has been successfully tested.
+
+We added a [CI M-plane pipeline](https://jenkins-oai.eurecom.fr/job/RAN-SA-FHI72-MPLANE-CN5G/) showcasing the M-plane integration.
 
 #### One time steps
 Connect to the RU as user `root`, enable the mplane service, and reboot:

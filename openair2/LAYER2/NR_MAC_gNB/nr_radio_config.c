@@ -3355,7 +3355,6 @@ static NR_BWP_UplinkDedicated_t *configure_initial_ul_bwp(const NR_ServingCellCo
 }
 
 static NR_BWP_DownlinkDedicated_t *configure_initial_dl_bwp(const NR_ServingCellConfigCommon_t *scc,
-                                                            const int pdsch_AntennaPorts,
                                                             uint64_t bitmap,
                                                             const NR_UE_NR_Capability_t *uecap,
                                                             const nr_mac_config_t *configuration)
@@ -3525,8 +3524,6 @@ static NR_SpCellConfig_t *get_initial_SpCellConfig(int uid,
                                                    const nr_mac_config_t *configuration,
                                                    int ssb_index)
 {
-  const int pdsch_AntennaPorts =
-      configuration->pdsch_AntennaPorts.N1 * configuration->pdsch_AntennaPorts.N2 * configuration->pdsch_AntennaPorts.XP;
   NR_SpCellConfig_t *SpCellConfig = calloc(1, sizeof(*SpCellConfig));
   SpCellConfig->servCellIndex = NULL;
   SpCellConfig->reconfigurationWithSync = NULL;
@@ -3564,7 +3561,7 @@ static NR_SpCellConfig_t *get_initial_SpCellConfig(int uid,
   asn1cCallocOne(uplinkConfig->firstActiveUplinkBWP_Id, first_active_bwp);
   if (first_active_bwp == 0) {
     uplinkConfig->initialUplinkBWP = configure_initial_ul_bwp(scc, configuration, maxMIMO_Layers, NULL, uid);
-    configDedicated->initialDownlinkBWP = configure_initial_dl_bwp(scc, pdsch_AntennaPorts, bitmap, NULL, configuration);
+    configDedicated->initialDownlinkBWP = configure_initial_dl_bwp(scc, bitmap, NULL, configuration);
   } else {
     configDedicated->downlinkBWP_ToAddModList = calloc(1, sizeof(*configDedicated->downlinkBWP_ToAddModList));
     NR_BWP_Downlink_t *bwp = config_downlinkBWP(scc, NULL, false, true, configuration);
@@ -3812,8 +3809,6 @@ NR_CellGroupConfig_t *update_cellGroupConfig_for_BWP_switch(NR_CellGroupConfig_t
   long ul_maxMIMO_Layers = set_ul_max_layers(configuration, uecap);
   local_config.first_active_bwp = new_bwp;
   uint64_t bitmap = get_ssb_bitmap(scc);
-  const int pdsch_AntennaPorts =
-    configuration->pdsch_AntennaPorts.N1 * configuration->pdsch_AntennaPorts.N2 * configuration->pdsch_AntennaPorts.XP;
   // add new BWP
   if (new_bwp == 0) {
     if (!configDedicated->initialDownlinkBWP)
@@ -3821,7 +3816,7 @@ NR_CellGroupConfig_t *update_cellGroupConfig_for_BWP_switch(NR_CellGroupConfig_t
     if (!uplinkConfig->initialUplinkBWP)
       uplinkConfig->initialUplinkBWP = calloc_or_fail(1, sizeof(*uplinkConfig->initialUplinkBWP));
     uplinkConfig->initialUplinkBWP = configure_initial_ul_bwp(scc, &local_config, ul_maxMIMO_Layers, uecap, uid);
-    configDedicated->initialDownlinkBWP = configure_initial_dl_bwp(scc, pdsch_AntennaPorts, bitmap, uecap, &local_config);
+    configDedicated->initialDownlinkBWP = configure_initial_dl_bwp(scc, bitmap, uecap, &local_config);
   } else {
     if (!configDedicated->downlinkBWP_ToAddModList)
       configDedicated->downlinkBWP_ToAddModList = calloc_or_fail(1, sizeof(*configDedicated->downlinkBWP_ToAddModList));

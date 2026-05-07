@@ -3,6 +3,7 @@
  */
 #include "nr_fapi.h"
 #include "nr_fapi_p7.h"
+#include "nr_fapi_p7_utils.h"
 #include "nr_nfapi_p7.h"
 #include "debug.h"
 
@@ -1805,7 +1806,7 @@ static uint8_t pack_nr_uci_pusch(void *tlv, uint8_t **ppWritePackedMsg, uint8_t 
       return 0;
     if (!push16(value->harq.harq_bit_len, ppWritePackedMsg, end))
       return 0;
-    const uint16_t harq_len = (value->harq.harq_bit_len / 8) + 1;
+    const uint16_t harq_len = nr_bits_to_bytes(value->harq.harq_bit_len);
     if (!pusharray8(value->harq.harq_payload, harq_len, harq_len, ppWritePackedMsg, end))
       return 0;
   }
@@ -1815,7 +1816,7 @@ static uint8_t pack_nr_uci_pusch(void *tlv, uint8_t **ppWritePackedMsg, uint8_t 
       return 0;
     if (!push16(value->csi_part1.csi_part1_bit_len, ppWritePackedMsg, end))
       return 0;
-    const uint16_t csi_len = value->csi_part1.csi_part1_bit_len / 8 + 1;
+    const uint16_t csi_len = nr_bits_to_bytes(value->csi_part1.csi_part1_bit_len);
     if (!pusharray8(value->csi_part1.csi_part1_payload, csi_len, csi_len, ppWritePackedMsg, end))
       return 0;
   }
@@ -1825,7 +1826,7 @@ static uint8_t pack_nr_uci_pusch(void *tlv, uint8_t **ppWritePackedMsg, uint8_t 
       return 0;
     if (!push16(value->csi_part2.csi_part2_bit_len, ppWritePackedMsg, end))
       return 0;
-    const uint16_t csi_len = value->csi_part2.csi_part2_bit_len / 8 + 1;
+    const uint16_t csi_len = nr_bits_to_bytes(value->csi_part2.csi_part2_bit_len);
     if (!pusharray8(value->csi_part2.csi_part2_payload, csi_len, csi_len, ppWritePackedMsg, end))
       return 0;
   }
@@ -1894,7 +1895,7 @@ static uint8_t pack_nr_uci_pucch_2_3_4(void *tlv, uint8_t **ppWritePackedMsg, ui
   if (value->pduBitmap & 0x01) { // SR
     if (!push16(value->sr.sr_bit_len, ppWritePackedMsg, end))
       return 0;
-    const uint16_t sr_len = value->sr.sr_bit_len / 8 + 1;
+    const uint16_t sr_len = nr_bits_to_bytes(value->sr.sr_bit_len);
     if (!pusharray8(value->sr.sr_payload, sr_len, sr_len, ppWritePackedMsg, end))
       return 0;
   }
@@ -1904,7 +1905,7 @@ static uint8_t pack_nr_uci_pucch_2_3_4(void *tlv, uint8_t **ppWritePackedMsg, ui
       return 0;
     if (!push16(value->harq.harq_bit_len, ppWritePackedMsg, end))
       return 0;
-    const uint16_t harq_len = value->harq.harq_bit_len / 8 + 1;
+    const uint16_t harq_len = nr_bits_to_bytes(value->harq.harq_bit_len);
     if (!pusharray8(value->harq.harq_payload, harq_len, harq_len, ppWritePackedMsg, end))
       return 0;
   }
@@ -1914,7 +1915,7 @@ static uint8_t pack_nr_uci_pucch_2_3_4(void *tlv, uint8_t **ppWritePackedMsg, ui
       return 0;
     if (!push16(value->csi_part1.csi_part1_bit_len, ppWritePackedMsg, end))
       return 0;
-    const uint16_t csi_len = value->csi_part1.csi_part1_bit_len / 8 + 1;
+    const uint16_t csi_len = nr_bits_to_bytes(value->csi_part1.csi_part1_bit_len);
     if (!pusharray8(value->csi_part1.csi_part1_payload, csi_len, csi_len, ppWritePackedMsg, end))
       return 0;
   }
@@ -1924,7 +1925,7 @@ static uint8_t pack_nr_uci_pucch_2_3_4(void *tlv, uint8_t **ppWritePackedMsg, ui
       return 0;
     if (!push16(value->csi_part2.csi_part2_bit_len, ppWritePackedMsg, end))
       return 0;
-    const uint16_t csi_len = value->csi_part2.csi_part2_bit_len / 8 + 1;
+    const uint16_t csi_len = nr_bits_to_bytes(value->csi_part2.csi_part2_bit_len);
     if (!pusharray8(value->csi_part2.csi_part2_payload, csi_len, csi_len, ppWritePackedMsg, end))
       return 0;
   }
@@ -2005,7 +2006,7 @@ static uint8_t unpack_nr_uci_pusch(nfapi_nr_uci_pusch_pdu_t *value, uint8_t **pp
       return 0;
     if (!pull16(ppReadPackedMsg, &value->harq.harq_bit_len, end))
       return 0;
-    const uint16_t harq_len = value->harq.harq_bit_len / 8 + 1;
+    const uint16_t harq_len = nr_bits_to_bytes(value->harq.harq_bit_len);
     value->harq.harq_payload = calloc(harq_len, sizeof(*value->harq.harq_payload));
 
     if (value->harq.harq_payload == NULL) {
@@ -2022,7 +2023,7 @@ static uint8_t unpack_nr_uci_pusch(nfapi_nr_uci_pusch_pdu_t *value, uint8_t **pp
       return 0;
     if (!pull16(ppReadPackedMsg, &value->csi_part1.csi_part1_bit_len, end))
       return 0;
-    const uint16_t csi_len = value->csi_part1.csi_part1_bit_len / 8 + 1;
+    const uint16_t csi_len = nr_bits_to_bytes(value->csi_part1.csi_part1_bit_len);
     value->csi_part1.csi_part1_payload = calloc(csi_len, sizeof(*value->csi_part1.csi_part1_payload));
 
     if (value->csi_part1.csi_part1_payload == NULL) {
@@ -2039,7 +2040,7 @@ static uint8_t unpack_nr_uci_pusch(nfapi_nr_uci_pusch_pdu_t *value, uint8_t **pp
       return 0;
     if (!pull16(ppReadPackedMsg, &value->csi_part2.csi_part2_bit_len, end))
       return 0;
-    const uint16_t csi_len = value->csi_part2.csi_part2_bit_len / 8 + 1;
+    const uint16_t csi_len = nr_bits_to_bytes(value->csi_part2.csi_part2_bit_len);
     value->csi_part2.csi_part2_payload = calloc(csi_len, sizeof(*value->csi_part2.csi_part2_payload));
 
     if (value->csi_part2.csi_part2_payload == NULL) {
@@ -2061,13 +2062,13 @@ static uint8_t unpack_nr_uci_pucch_0_1(nfapi_nr_uci_pucch_pdu_format_0_1_t *valu
         && pull8(ppReadPackedMsg, &value->ul_cqi, end) && pull16(ppReadPackedMsg, &value->timing_advance, end)
         && pull16(ppReadPackedMsg, &value->rssi, end)))
     return 0;
+
   if (value->pduBitmap & 0x01) { // SR
     if (!(pull8(ppReadPackedMsg, &value->sr.sr_indication, end) && pull8(ppReadPackedMsg, &value->sr.sr_confidence_level, end)))
       return 0;
   }
 
   if (((value->pduBitmap >> 1) & 0x01)) { // HARQ
-
     if (!(pull8(ppReadPackedMsg, &value->harq.num_harq, end) && pull8(ppReadPackedMsg, &value->harq.harq_confidence_level, end)))
       return 0;
     if (value->harq.num_harq > 0) {
@@ -2102,7 +2103,7 @@ static uint8_t unpack_nr_uci_pucch_2_3_4(nfapi_nr_uci_pucch_pdu_format_2_3_4_t *
   if (value->pduBitmap & 0x01) { // SR
     if (!pull16(ppReadPackedMsg, &value->sr.sr_bit_len, end))
       return 0;
-    const uint16_t sr_len = value->sr.sr_bit_len / 8 + 1;
+    const uint16_t sr_len = nr_bits_to_bytes(value->sr.sr_bit_len);
     value->sr.sr_payload = calloc(sr_len, sizeof(*value->sr.sr_payload));
 
     if (value->sr.sr_payload == NULL) {
@@ -2119,7 +2120,7 @@ static uint8_t unpack_nr_uci_pucch_2_3_4(nfapi_nr_uci_pucch_pdu_format_2_3_4_t *
       return 0;
     if (!pull16(ppReadPackedMsg, &value->harq.harq_bit_len, end))
       return 0;
-    const uint16_t harq_len = value->harq.harq_bit_len / 8 + 1;
+    const uint16_t harq_len = nr_bits_to_bytes(value->harq.harq_bit_len);
     value->harq.harq_payload = calloc(harq_len, sizeof(*value->harq.harq_payload));
 
     if (value->harq.harq_payload == NULL) {
@@ -2136,7 +2137,7 @@ static uint8_t unpack_nr_uci_pucch_2_3_4(nfapi_nr_uci_pucch_pdu_format_2_3_4_t *
       return 0;
     if (!pull16(ppReadPackedMsg, &value->csi_part1.csi_part1_bit_len, end))
       return 0;
-    const uint16_t csi_len = value->csi_part1.csi_part1_bit_len / 8 + 1;
+    const uint16_t csi_len = nr_bits_to_bytes(value->csi_part1.csi_part1_bit_len);
     value->csi_part1.csi_part1_payload = calloc(csi_len, sizeof(*value->csi_part1.csi_part1_payload));
 
     if (value->csi_part1.csi_part1_payload == NULL) {
@@ -2153,7 +2154,7 @@ static uint8_t unpack_nr_uci_pucch_2_3_4(nfapi_nr_uci_pucch_pdu_format_2_3_4_t *
       return 0;
     if (!pull16(ppReadPackedMsg, &value->csi_part2.csi_part2_bit_len, end))
       return 0;
-    const uint16_t csi_len = value->csi_part2.csi_part2_bit_len / 8 + 1;
+    const uint16_t csi_len = nr_bits_to_bytes(value->csi_part2.csi_part2_bit_len);
     value->csi_part2.csi_part2_payload = calloc(csi_len, sizeof(*value->csi_part2.csi_part2_payload));
 
     if (value->csi_part2.csi_part2_payload == NULL) {

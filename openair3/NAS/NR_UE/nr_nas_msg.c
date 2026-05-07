@@ -1675,6 +1675,9 @@ static void handle_pdu_session_accept(const nr_ue_nas_t *nas, uint8_t *pdu_buffe
     return;
   }
 
+  // Set QFI before starting UE interface thread to avoid early SDUs using 0-initialized QFI.
+  set_qfi(msg.qos_rules.rule->qfi, sm_header.pdu_session_id, instance);
+
   // process PDU Session: pass ID -1 to not append PDU ID to interface
   bool is_default = idx == 0;
   if (msg.pdu_type == PDU_SESSION_TYPE_ETHER) {
@@ -1684,8 +1687,6 @@ static void handle_pdu_session_accept(const nr_ue_nas_t *nas, uint8_t *pdu_buffe
   } else {
     LOG_W(NAS, "Unhandled PDU session type %d, ignoring PDU session ID %d\n", msg.pdu_type, sm_header.pdu_session_id);
   }
-
-  set_qfi(msg.qos_rules.rule->qfi, sm_header.pdu_session_id, instance);
 }
 
 /**

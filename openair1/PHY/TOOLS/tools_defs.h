@@ -30,6 +30,9 @@
 #define adds_int16(a,b) simde_mm_adds_epi16(a,b)
 #define mullo_int16(a,b) simde_mm_mullo_epi16(a,b)
 
+#define ALIGNARRAYSIZE(a, b) (((a + b - 1) / b) * b)
+#define ALNARS_32_8(a) ALIGNARRAYSIZE(a, 8)
+
 #ifdef __cplusplus
 extern "C" {
 #endif
