@@ -492,37 +492,6 @@ static void map_symbols(const nr_phy_pxsch_params_t p,
   }
 }
 
-// Function to lookup beta offset value from Table 9.3-2 in TS 38.213
-static double get_beta_offset_csi(const uint8_t beta_offset_idx)
-{
-  static const double beta_offset_values[19] = {1.125,
-                                                1.250,
-                                                1.375,
-                                                1.625,
-                                                1.750,
-                                                2.000,
-                                                2.250,
-                                                2.500,
-                                                2.875,
-                                                3.125,
-                                                3.500,
-                                                4.000,
-                                                5.000,
-                                                6.250,
-                                                8.000,
-                                                10.000,
-                                                12.625,
-                                                15.875,
-                                                20.000};
-
-  if (beta_offset_idx >= sizeofArray(beta_offset_values)) {
-    LOG_E(PHY, "Invalid beta_offset_index %d, using default value\n", beta_offset_idx);
-    return beta_offset_values[9];
-  }
-
-  return beta_offset_values[beta_offset_idx];
-}
-
 static uint32_t get_d_factor_re(const uint32_t a, const uint32_t b)
 {
   uint32_t d_factor_re;
@@ -537,98 +506,12 @@ static uint32_t get_d_factor_re(const uint32_t a, const uint32_t b)
   return d_factor_re;
 }
 
-// Function to lookup beta offset value from Table 9.3-1 in TS 38.213
-static double get_beta_offset_harq_ack(uint8_t beta_offset_index)
-{
-  static const double beta_offset_values[21] = {
-      1.000, // Index 0
-      2.000, // Index 1
-      2.500, // Index 2
-      3.125, // Index 3
-      4.000, // Index 4
-      5.000, // Index 5
-      6.250, // Index 6
-      8.000, // Index 7
-      10.000, // Index 8
-      12.625, // Index 9
-      15.875, // Index 10
-      20.000, // Index 11
-      31.000, // Index 12
-      50.000, // Index 13
-      80.000, // Index 14
-      126.000, // Index 15
-      0.6, // Index 16
-      0.4, // Index 17
-      0.2, // Index 18
-      0.1, // Index 19
-      0.05, // Index 20
-  };
-
-  if (beta_offset_index > 20) {
-    LOG_E(PHY, "Invalid beta_offset_index %d, using default value\n", beta_offset_index);
-    return 20.000; // Default value using index 11
-  }
-
-  return beta_offset_values[beta_offset_index];
-}
-
-static double get_alpha_scaling_value(uint8_t alpha_scaling)
-{
-  switch (alpha_scaling) {
-    case 0:
-      return 0.5;
-    case 1:
-      return 0.65;
-    case 2:
-      return 0.8;
-    case 3:
-      return 1.0;
-    default:
-      AssertFatal(false, "Invalid alpha_scaling value %d, valid range is 0-3", alpha_scaling);
-      return 1.0;
-  }
-}
-
-/*
- * This function gets the CRC size of UCI
- */
-static int get_crc_uci(const uint16_t ouci)
-{
-  int L = 0;
-  if (ouci > 19) {
-    L = 11;
-  } else if (ouci > 11) {
-    L = 6;
-  } else {
-    L = 0; // no ACK/NACK
-  }
-
-  return L;
-}
-
-static uint16_t get_Qd(const uint16_t oack,
-                       double beta,
-                       double alpha,
-                       const uint32_t sumKr,
-                       const uint32_t s1,
-                       const uint32_t s2,
-                       const uint32_t sub)
-{
-  if (oack == 0)
-    return 0;
-
-  uint16_t first_term = ceil(((double)oack + get_crc_uci(oack)) * (double)beta * s1 / sumKr);
-  uint16_t second_term = ceil(alpha * s2) - sub;
-
-  return (first_term < second_term) ? first_term : second_term;
-}
-
 /*
  * This function calculates the rate matching information for UCI multiplexing with PUSCH
  */
 static rate_match_info_uci_t calc_rate_match_info_uci(const nfapi_nr_ue_pusch_pdu_t *pusch_pdu,
+                                                      const nr_ptrs_info_t *ptrs_info,
                                                       const NR_UL_UE_HARQ_t *harq_process_ul_ue,
-                                                      const uint8_t nlqm,
                                                       unsigned int *G)
 {
   // get beta offset
@@ -640,86 +523,57 @@ static rate_match_info_uci_t calc_rate_match_info_uci(const nfapi_nr_ue_pusch_pd
   double alpha = get_alpha_scaling_value(alpha_scaling);
 
   // Calculate sumKr (total bits in all code blocks)
-  uint32_t sumKr = 0;
-  if (harq_process_ul_ue->C == 0) {
-    sumKr = 0;
-  } else if (harq_process_ul_ue->C == 1) {
-    sumKr = harq_process_ul_ue->K;
-  } else {
-    sumKr = harq_process_ul_ue->K * harq_process_ul_ue->C;
-  }
+  uint32_t sumKr = harq_process_ul_ue->K * harq_process_ul_ue->C;
 
-  // Calculate s1: total number of non-DMRS REs in allocation
-  uint16_t nb_rb = pusch_pdu->rb_size;
-  uint8_t start_symbol = pusch_pdu->start_symbol_index;
-  uint8_t number_of_symbols = pusch_pdu->nr_of_symbols;
-  uint16_t ul_dmrs_symb_pos = pusch_pdu->ul_dmrs_symb_pos;
+  int s1 = 0;
+  int s2 = 0;
+  get_s1_s2(&s1,
+            &s2,
+            pusch_pdu->rb_size,
+            pusch_pdu->nr_of_symbols,
+            pusch_pdu->start_symbol_index,
+            pusch_pdu->ul_dmrs_symb_pos,
+            ptrs_info->ptrs_symbols,
+            ptrs_info->n_ptrs);
 
-  uint32_t s1 = 0;
-  for (int l = start_symbol; l < start_symbol + number_of_symbols; l++) {
-    if (!((ul_dmrs_symb_pos >> l) & 0x01)) {
-      s1 += nb_rb * NR_NB_SC_PER_RB;
-    }
-  }
-
-  // Calculate s2: number of non-DMRS REs after first DMRS symbol
-  int first_dmrs_symbol = -1;
-  for (int l = start_symbol; l < start_symbol + number_of_symbols; l++) {
-    if ((ul_dmrs_symb_pos >> l) & 0x01) {
-      first_dmrs_symbol = l;
-      break;
-    }
-  }
-  int l0 = -1;
-  if (first_dmrs_symbol >= 0 && first_dmrs_symbol < start_symbol + number_of_symbols - 1) {
-    l0 = first_dmrs_symbol + 1;
-  }
-  uint32_t s2 = 0;
-  for (int l = l0; l < start_symbol + number_of_symbols; l++) {
-    if (!((ul_dmrs_symb_pos >> l) & 0x01)) {
-      s2 += nb_rb * NR_NB_SC_PER_RB;
-    }
-  }
-
-  uint16_t oack = pusch_pdu->pusch_uci.harq_ack_bit_length;
-  uint16_t oack_rvd = (oack <= 2) ? 2 : 0; // get the reserved bits when oACK <= 2 according to TS 38.212 section 6.2.7, step 1
 
   rate_match_info_uci_t rminfo = {0};
+  // if the number of HARQ-ACK information bits to be transmitted on PUSCH is 0, 1 or 2 bits
+  // the number of reserved resource elements for potential HARQ-ACK transmission is calculated using oack = 2
+  // according to TS 38.212 section 6.2.7, step 1
+  rminfo.O_ack = (pusch_pdu->pusch_uci.harq_ack_bit_length <= 2) ? 2 : pusch_pdu->pusch_uci.harq_ack_bit_length;
+  const int nlqm = pusch_pdu->nrOfLayers * pusch_pdu->qam_mod_order; // product of number of layers and modulation order
 
   // get the number of coded HARQ-ACK symbols and bits, TS 38.212 section 6.3.2.4.1.1
-  rminfo.Q_dash_ACK = get_Qd(oack, beta, alpha, sumKr, s1, s2, 0);
+  rminfo.Q_dash_ACK = get_Qd(rminfo.O_ack, beta, alpha, sumKr, s1, s2, 0);
   rminfo.E_uci_ACK = rminfo.Q_dash_ACK * nlqm;
-
-  if (oack_rvd > 0) {
-    rminfo.Q_dash_ACK_rvd = get_Qd(oack_rvd, beta, alpha, sumKr, s1, s2, 0);
-    rminfo.E_uci_ACK_rvd = rminfo.Q_dash_ACK_rvd * nlqm;
-  }
 
   // get beta offset for csi
   const double beta_csi1 = get_beta_offset_csi(pusch_pdu->pusch_uci.beta_offset_csi1);
 
   // get the number of coded CSI part 1 symbols and bits, TS 38.212 section 6.3.2.4.1.2
   const uint16_t ocsi1 = pusch_pdu->pusch_uci.csi_payload.p1_bits;
-  rminfo.Q_dash_CSI1 = get_Qd(ocsi1, beta_csi1, alpha, sumKr, s1, s1, rminfo.Q_dash_ACK);
+  int sub = rminfo.O_ack > 2 ? rminfo.Q_dash_ACK : rminfo.E_uci_ACK;
+  rminfo.Q_dash_CSI1 = get_Qd(ocsi1, beta_csi1, alpha, sumKr, s1, s1, sub);
   rminfo.E_uci_CSI1 = rminfo.Q_dash_CSI1 * nlqm;
 
   // get the number of coded CSI part 2 symbols and bits, TS 38.212 section 6.3.2.4.1.3
   const double beta_csi2 = get_beta_offset_csi(pusch_pdu->pusch_uci.beta_offset_csi2);
   const uint16_t ocsi2 = pusch_pdu->pusch_uci.csi_payload.p2_bits;
-  rminfo.Q_dash_CSI2 = get_Qd(ocsi2, beta_csi2, alpha, sumKr, s1, s1, rminfo.Q_dash_ACK + rminfo.Q_dash_CSI1);
+  sub = rminfo.Q_dash_CSI1 + (rminfo.O_ack > 2 ? rminfo.Q_dash_ACK : 0);
+  rminfo.Q_dash_CSI2 = get_Qd(ocsi2, beta_csi2, alpha, sumKr, s1, s1, sub);
   rminfo.E_uci_CSI2 = rminfo.Q_dash_CSI2 * nlqm;
 
   rminfo.G_ulsch = *G - (rminfo.E_uci_CSI1 + rminfo.E_uci_CSI2);
-  if (oack_rvd == 0) {
+  if (rminfo.O_ack > 2) {
     rminfo.G_ulsch -= rminfo.E_uci_ACK;
   }
 
   *G = rminfo.G_ulsch;
   LOG_D(PHY, "[UCI_RATE_MATCH] sumKr=%u, s1=%u, s2=%u, Final G_ulsch (output G): %u\n", sumKr, s1, s2, *G);
   LOG_D(PHY,
-        "[UCI_RATE_MATCH] rate matching info returned: E_uci_ACK=%u, E_uci_ACK_rvd=%u, E_uci_CSI1=%u, E_uci_CSI2=%u, G_ulsch=%u\n",
+        "[UCI_RATE_MATCH] rate matching info returned: E_uci_ACK=%u, E_uci_CSI1=%u, E_uci_CSI2=%u, G_ulsch=%u\n",
         rminfo.E_uci_ACK,
-        rminfo.E_uci_ACK_rvd,
         rminfo.E_uci_CSI1,
         rminfo.E_uci_CSI2,
         rminfo.G_ulsch);
@@ -728,12 +582,12 @@ static rate_match_info_uci_t calc_rate_match_info_uci(const nfapi_nr_ue_pusch_pd
 }
 
 static int initialize_mapping_resources(const nfapi_nr_ue_pusch_pdu_t *pusch_pdu,
+                                        const nr_ptrs_info_t *ptrs_info,
                                         uint32_t *m_ulsch_initial,
                                         uint32_t *m_uci_current)
 {
-  if (!pusch_pdu || !m_ulsch_initial || !m_uci_current)
+  if (!m_ulsch_initial || !m_uci_current)
     return -1;
-
   const uint8_t n_pusch_sym_all = pusch_pdu->nr_of_symbols;
   const uint16_t ul_dmrs_symb_pos = pusch_pdu->ul_dmrs_symb_pos;
   const uint8_t dmrs_type = pusch_pdu->dmrs_config_type;
@@ -744,48 +598,18 @@ static int initialize_mapping_resources(const nfapi_nr_ue_pusch_pdu_t *pusch_pdu
   // Initialize resources per symbol for ULSCH and UCI
   for (uint8_t i = 0; i < n_pusch_sym_all; i++) {
     uint8_t absolute_symbol_idx = pusch_pdu->start_symbol_index + i;
-
+    bool is_ptrs = (ptrs_info->ptrs_symbols >> absolute_symbol_idx) & 0x01;
+    int ptrs_overhead = is_ptrs ? (pusch_pdu->rb_size * ptrs_info->n_ptrs) : 0;
     if ((ul_dmrs_symb_pos >> absolute_symbol_idx) & 0x01) {
       // Calculate available data REs on DMRS symbols based on DMRS configuration
-
-      m_ulsch_initial[i] = pusch_pdu->rb_size * data_re_on_dmrs_sym_per_prb;
+      m_ulsch_initial[i] = pusch_pdu->rb_size * data_re_on_dmrs_sym_per_prb - ptrs_overhead;
       m_uci_current[i] = 0; // UCI is not mapped on DMRS symbols
-
     } else { // Not a DMRS symbol
-
-      m_ulsch_initial[i] = res_per_symbol_non_dmrs;
-      m_uci_current[i] = res_per_symbol_non_dmrs;
+      m_ulsch_initial[i] = res_per_symbol_non_dmrs - ptrs_overhead;
+      m_uci_current[i] = m_ulsch_initial[i];
     }
   }
-
   return 0;
-}
-
-static void get_first_uci_symbol(const uint8_t start_symbol,
-                                 const uint8_t num_symbols,
-                                 const uint16_t dmrs_map,
-                                 uint8_t *first_non_dmrs_sym,
-                                 uint8_t *dmrs_p1)
-{
-  // First non-DMRS symbol
-  const uint16_t last_sym = start_symbol + num_symbols;
-  for (uint_fast8_t s = start_symbol; s < last_sym; s++) {
-    if (!is_dmrs_symbol(s, dmrs_map)) {
-      *first_non_dmrs_sym = s;
-      break;
-    }
-  }
-
-  // Symbol after first consequtive DMRS symbol
-  const uint8_t first_dmrs_sym = get_next_dmrs_symbol_in_slot(dmrs_map, start_symbol, last_sym);
-  *dmrs_p1 = first_dmrs_sym + 1;
-  while (is_dmrs_symbol(*dmrs_p1, dmrs_map) && *dmrs_p1 < last_sym) {
-    (*dmrs_p1)++;
-  }
-
-  // Return relative symbol idx
-  *first_non_dmrs_sym -= start_symbol;
-  *dmrs_p1 -= start_symbol;
 }
 
 static inline bool skip_mapping_current_uci(const uci_on_pusch_bit_type_t template, const uci_on_pusch_bit_type_t uci_type_to_map)
@@ -917,14 +741,12 @@ static void map_overlapped_ack(uci_on_pusch_bit_type_t *template,
  */
 static void apply_template_to_codeword(uint8_t *codeword,
                                        const uci_on_pusch_bit_type_t *template,
+                                       rate_match_info_uci_t *rm_info,
                                        uint32_t codeword_len,
                                        const uint8_t *ulsch_bits,
                                        const uint64_t *cack,
                                        const uint64_t *csi1,
                                        const uint64_t *csi2,
-                                       uint16_t G_ack,
-                                       uint32_t G_csi1,
-                                       uint32_t G_csi2,
                                        uint32_t G_ulsch)
 {
   uint32_t ulsch_idx = 0;
@@ -935,7 +757,7 @@ static void apply_template_to_codeword(uint8_t *codeword,
   for (uint32_t i = 0; i < codeword_len; i++) {
     switch (template[i]) {
       case BIT_TYPE_ACK:
-        if (G_ack > 0 && ack_idx < G_ack) {
+        if (rm_info->E_uci_ACK > 0 && ack_idx < rm_info->E_uci_ACK) {
           uint32_t word_idx = ack_idx / 64;
           uint32_t bit_in_word_idx = ack_idx % 64;
           codeword[i] = (cack[word_idx] >> bit_in_word_idx) & 1;
@@ -944,7 +766,7 @@ static void apply_template_to_codeword(uint8_t *codeword,
         break;
 
       case BIT_TYPE_ACK_ULSCH:
-        if (G_ack > 0 && ack_idx < G_ack) {
+        if (rm_info->E_uci_ACK > 0 && ack_idx < rm_info->E_uci_ACK) {
           codeword[i] = ((const uint8_t *)cack)[ack_idx++];
           if (G_ulsch > 0 && ulsch_idx < G_ulsch) {
             ulsch_idx++;
@@ -953,7 +775,7 @@ static void apply_template_to_codeword(uint8_t *codeword,
         break;
 
       case BIT_TYPE_CSI1:
-        if (G_csi1 > 0 && csi1_idx < G_csi1) {
+        if (rm_info->E_uci_CSI1 > 0 && csi1_idx < rm_info->E_uci_CSI1) {
           uint32_t word_idx = csi1_idx / 64;
           uint32_t bit_in_word_idx = csi1_idx % 64;
           codeword[i] = (csi1[word_idx] >> bit_in_word_idx) & 1;
@@ -962,7 +784,7 @@ static void apply_template_to_codeword(uint8_t *codeword,
         break;
 
       case BIT_TYPE_CSI2:
-        if (G_csi2 > 0 && csi2_idx < G_csi2) {
+        if (rm_info->E_uci_CSI1 > 0 && csi2_idx < rm_info->E_uci_CSI1) {
           uint32_t word_idx = csi2_idx / 64;
           uint32_t bit_in_word_idx = csi2_idx % 64;
           codeword[i] = (csi2[word_idx] >> bit_in_word_idx) & 1;
@@ -988,12 +810,10 @@ static void apply_template_to_codeword(uint8_t *codeword,
  * This function implements the UCI multiplexing on PUSCH according to TS 38.212 section 6.2.7.
  */
 static uci_on_pusch_bit_type_t *nr_data_control_mapping(const nfapi_nr_ue_pusch_pdu_t *pusch_pdu,
+                                                        const nr_ptrs_info_t *ptrs_info,
                                                         uci_on_pusch_bit_type_t *template,
                                                         unsigned int G_ulsch,
-                                                        uint16_t G_ack,
-                                                        uint32_t G_ack_rvd,
-                                                        uint32_t G_csi1,
-                                                        uint32_t G_csi2,
+                                                        rate_match_info_uci_t *rm_info,
                                                         uint8_t *codeword,
                                                         uint32_t codeword_len,
                                                         const uint8_t *ulsch_bits,
@@ -1001,8 +821,9 @@ static uci_on_pusch_bit_type_t *nr_data_control_mapping(const nfapi_nr_ue_pusch_
                                                         const uint64_t *csi1,
                                                         const uint64_t *csi2)
 {
-  if (!pusch_pdu || !codeword || codeword_len == 0 || !template)
+  if (!codeword || codeword_len == 0 || !template)
     return NULL;
+
   const uint8_t n_symbols = pusch_pdu->nr_of_symbols;
   if (n_symbols == 0 || n_symbols > NR_SYMBOLS_PER_SLOT)
     return NULL;
@@ -1010,18 +831,18 @@ static uci_on_pusch_bit_type_t *nr_data_control_mapping(const nfapi_nr_ue_pusch_
   uint32_t m_ulsch_initial[NR_SYMBOLS_PER_SLOT] = {0};
   uint32_t m_uci_current[NR_SYMBOLS_PER_SLOT] = {0}; // This holds RE counts, not bit counts
 
-  if (initialize_mapping_resources(pusch_pdu, m_ulsch_initial, m_uci_current) != 0) {
+  if (initialize_mapping_resources(pusch_pdu, ptrs_info, m_ulsch_initial, m_uci_current) != 0) {
     LOG_E(PHY, "Failed to initialize mapping resources\n");
     return NULL;
   }
 
-  uint8_t first_non_dmrs_sym = 0;
-  uint8_t l1_c = 0;
-  get_first_uci_symbol(pusch_pdu->start_symbol_index,
-                       pusch_pdu->nr_of_symbols,
-                       pusch_pdu->ul_dmrs_symb_pos,
-                       &first_non_dmrs_sym,
-                       &l1_c);
+  int first_non_dmrs_sym = 0;
+  int l1_c = 0;
+  get_dmrs_uci_symbol_info(pusch_pdu->start_symbol_index,
+                           pusch_pdu->nr_of_symbols,
+                           pusch_pdu->ul_dmrs_symb_pos,
+                           &first_non_dmrs_sym,
+                           &l1_c);
 
   memset(template, 0, codeword_len * sizeof(uci_on_pusch_bit_type_t));
 
@@ -1034,9 +855,11 @@ static uci_on_pusch_bit_type_t *nr_data_control_mapping(const nfapi_nr_ue_pusch_
                                        .l1_c = l1_c,
                                        .m_uci_current = m_uci_current,
                                        .m_ulsch_initial = m_ulsch_initial};
-  if (G_ack_rvd > 0) {
+
+  int G_ack = rm_info->E_uci_ACK;
+  if (rm_info->O_ack == 2) {
     map_arg.uci_type_to_map = BIT_TYPE_ACK_RESERVED;
-    map_arg.G_uci = G_ack_rvd;
+    map_arg.G_uci = G_ack;
     map_arg.resv_ack_pos_symb = positions_by_sym;
     map_arg.resv_ack_count_symb = count_by_sym;
     map_uci_common(map_arg);
@@ -1048,20 +871,20 @@ static uci_on_pusch_bit_type_t *nr_data_control_mapping(const nfapi_nr_ue_pusch_
 
   // CSI part 1
   map_arg.uci_type_to_map = BIT_TYPE_CSI1;
-  map_arg.G_uci = G_csi1;
+  map_arg.G_uci = rm_info->E_uci_CSI1;
   map_arg.resv_ack_pos_symb = NULL;
   map_arg.resv_ack_count_symb = NULL;
   map_uci_common(map_arg);
   // CSI part 2
   map_arg.uci_type_to_map = BIT_TYPE_CSI2;
-  map_arg.G_uci = G_csi2;
+  map_arg.G_uci = rm_info->E_uci_CSI2;
   map_uci_common(map_arg);
 
-  if (G_ack > 0 && G_ack_rvd > 0) {
+  if (G_ack > 0 && rm_info->O_ack == 2) {
     map_overlapped_ack(template, G_ack, l1_c, n_symbols, positions_by_sym, count_by_sym);
   }
 
-  apply_template_to_codeword(codeword, template, codeword_len, ulsch_bits, cack, csi1, csi2, G_ack, G_csi1, G_csi2, G_ulsch);
+  apply_template_to_codeword(codeword, template, rm_info, codeword_len, ulsch_bits, cack, csi1, csi2, G_ulsch);
 
   return template;
 }
@@ -1118,17 +941,15 @@ void nr_ue_ulsch_procedures(PHY_VARS_NR_UE *UE,
 
   unsigned int K_ptrs = 0, k_RE_ref = 0;
   uint32_t unav_res = 0;
+  nr_ptrs_info_t ptrs_info = {0};
   if (pusch_pdu->pdu_bit_map & PUSCH_PDU_BITMAP_PUSCH_PTRS) {
     K_ptrs = pusch_pdu->pusch_ptrs.ptrs_freq_density;
     k_RE_ref = pusch_pdu->pusch_ptrs.ptrs_ports_list[0].ptrs_re_offset;
     uint8_t L_ptrs = 1 << pusch_pdu->pusch_ptrs.ptrs_time_density;
-
-    ulsch_ue->ptrs_symbols = 0;
-
-    set_ptrs_symb_idx(&ulsch_ue->ptrs_symbols, number_of_symbols, start_symbol, L_ptrs, ul_dmrs_symb_pos);
-    int n_ptrs = (nb_rb + K_ptrs - 1) / K_ptrs;
-    int ptrsSymbPerSlot = get_ptrs_symbols_in_slot(ulsch_ue->ptrs_symbols, start_symbol, number_of_symbols);
-    unav_res = n_ptrs * ptrsSymbPerSlot;
+    set_ptrs_symb_idx(&ptrs_info.ptrs_symbols, number_of_symbols, start_symbol, L_ptrs, ul_dmrs_symb_pos);
+    ptrs_info.n_ptrs = (nb_rb + K_ptrs - 1) / K_ptrs;
+    int ptrsSymbPerSlot = get_ptrs_symbols_in_slot(ptrs_info.ptrs_symbols, start_symbol, number_of_symbols);
+    unav_res = ptrs_info.n_ptrs * ptrsSymbPerSlot;
   }
 
   G[pusch_id] = nr_get_G(nb_rb, number_of_symbols, nb_dmrs_re_per_rb, number_dmrs_symbols, unav_res, mod_order, Nl);
@@ -1155,18 +976,17 @@ void nr_ue_ulsch_procedures(PHY_VARS_NR_UE *UE,
   /////////////////////////ULSCH coding/////////////////////////
 
   rate_match_info_uci_t rm_info = {0};
-  const uint8_t nl_qm = Nl * mod_order; // product of number of layers and modulation order
-  if(nr_ulsch_pre_encoding(UE, &phy_data->ulsch, frame, slot, G, 1, ULSCH_ids) != 0) {
+  if(nr_ulsch_pre_encoding(UE, ulsch_ue, frame, slot, G, 1, ULSCH_ids) != 0) {
     LOG_E(PHY, "Error pre-encoding\n");
     return;
   }
 
   bool uci_present = (pusch_pdu->pusch_uci.harq_ack_bit_length != 0) || (pusch_pdu->pusch_uci.csi_payload.p1_bits != 0);
   if (uci_present) {
-    rm_info = calc_rate_match_info_uci(pusch_pdu, harq_process_ul_ue, nl_qm, &G[pusch_id]);
+    rm_info = calc_rate_match_info_uci(pusch_pdu, &ptrs_info, harq_process_ul_ue, &G[pusch_id]);
   }
 
-  if (nr_ulsch_encoding(UE, &phy_data->ulsch, frame, slot, G, 1, ULSCH_ids) == -1) {
+  if (nr_ulsch_encoding(UE, ulsch_ue, frame, slot, G, 1, ULSCH_ids) == -1) {
     stop_meas_nr_ue_phy(UE, PUSCH_PROC_STATS);
     return;
   }
@@ -1198,11 +1018,10 @@ void nr_ue_ulsch_procedures(PHY_VARS_NR_UE *UE,
                     &b_ack[0]);
 
     LOG_D(PHY,
-          "[UCI_ON_PUSCH] G_ulsch=%u (updated G[pusch_id]), G_ack=%u (M_bit), G_ack_rvd=%u, total_len=%u "
+          "[UCI_ON_PUSCH] G_ulsch=%u (updated G[pusch_id]), G_ack=%u (M_bit), total_len=%u "
           "(G_initial_total_pusch_bits).\n",
           G[pusch_id],
           rm_info.E_uci_ACK,
-          rm_info.E_uci_ACK_rvd,
           G_initial_total_pusch_bits);
   }
 
@@ -1232,12 +1051,10 @@ void nr_ue_ulsch_procedures(PHY_VARS_NR_UE *UE,
     uint8_t temp_codeword[G_initial_total_pusch_bits];
     start_meas_nr_ue_phy(UE, UCI_ON_PUSCH_MAPPING);
     nr_data_control_mapping(pusch_pdu,
+                            &ptrs_info,
                             template_buffer,
                             G[pusch_id],
-                            rm_info.E_uci_ACK,
-                            rm_info.E_uci_ACK_rvd,
-                            rm_info.E_uci_CSI1,
-                            rm_info.E_uci_CSI2,
+                            &rm_info,
                             temp_codeword,
                             G_initial_total_pusch_bits,
                             harq_process_ul_ue->f,
@@ -1431,7 +1248,7 @@ void nr_ue_ulsch_procedures(PHY_VARS_NR_UE *UE,
                                     .Wt = Wt[l_prime[0]],
                                     .Wf = Wf,
                                     .dmrs_symb_pos = ul_dmrs_symb_pos,
-                                    .ptrs_symb_pos = ulsch_ue->ptrs_symbols,
+                                    .ptrs_symb_pos = ptrs_info.ptrs_symbols,
                                     .pdu_bit_map = pusch_pdu->pdu_bit_map,
                                     .transform_precoding = pusch_pdu->transform_precoding,
                                     .bwp_start = pusch_pdu->bwp_start,

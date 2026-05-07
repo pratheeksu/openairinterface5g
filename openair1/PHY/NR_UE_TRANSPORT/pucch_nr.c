@@ -535,6 +535,42 @@ static inline void nr_pucch2_3_4_scrambling(uint16_t M_bit, uint16_t rnti, uint1
 #endif
 }
 
+void nr_rate_matching_uci(uint16_t N, uint32_t E, uint64_t *b)
+{
+  uint64_t template_word = 0;
+  uint64_t pattern = b[0] & ((N == 64) ? ~0ULL : (1ULL << N) - 1);
+  uint32_t bits_in_last_word = E % 64;
+  if (N <= 64) {
+    uint32_t temp_len = E < 64 ? E : 64;
+    for (int i = 0; i < temp_len; i += N) {
+      uint64_t shift_pattern = pattern << i;
+      template_word |= shift_pattern;
+    }
+    uint32_t num_words = (E + 63) / 64;
+    for (uint32_t i = 0; i < num_words; i++)
+      b[i] = template_word;
+    if (bits_in_last_word > 0)
+      b[num_words - 1] &= (1ULL << bits_in_last_word) - 1;
+  } else {
+    uint32_t N_words = N / 64;
+    uint64_t temp_src[N_words];
+    memcpy(temp_src, b, N_words * sizeof(uint64_t));
+    uint32_t E_words = E / 64;
+    uint32_t words_written = 0;
+    while (words_written + N_words <= E_words) {
+      memcpy(&b[words_written], temp_src, N_words * sizeof(uint64_t));
+      words_written += N_words;
+    }
+    uint32_t remaining = E_words - words_written;
+    if (remaining > 0) {
+      memcpy(&b[words_written], temp_src, remaining * sizeof(uint64_t));
+      words_written += remaining;
+    }
+    if (bits_in_last_word > 0)
+      b[E_words] = temp_src[words_written % N_words] & ((1ULL << bits_in_last_word) - 1);
+  }
+}
+
 void nr_uci_encoding(uint64_t payload, uint8_t nr_bit, uint8_t nrofPRB, bool uci_on_pusch, uint16_t E, uint8_t Qm, uint64_t *b)
 {
   /*
@@ -595,9 +631,8 @@ void nr_uci_encoding(uint64_t payload, uint8_t nr_bit, uint8_t nrofPRB, bool uci
         }
       }
     }
-  }
-  // For A=2 case (two bits UCI)
-  else if (A == 2) {
+  } else if (A == 2) {
+    // For A=2 case (two bits UCI)
     uint8_t bit0 = (payload >> 0) & 1;
     uint8_t bit1 = (payload >> 1) & 1;
     uint8_t c2 = bit0 ^ bit1; // Parity bit (XOR of the two bits)
@@ -673,16 +708,11 @@ void nr_uci_encoding(uint64_t payload, uint8_t nr_bit, uint8_t nrofPRB, bool uci
   } else if (A >= 12) {
     // Encoder reversal
     payload = reverse_bits(payload, A);
-
-    polar_encoder_fast(&payload, b, 0,0,
-                       NR_POLAR_UCI_PUCCH_MESSAGE_TYPE, 
-                       A, 
-                       nrofPRB);
+    polar_encoder_fast(&payload, b, 0, 0, NR_POLAR_UCI_PUCCH_MESSAGE_TYPE, A, nrofPRB);
   }
 
   if (uci_on_pusch) {
     // Rate matching for HARQ ACK following 38.212 section 5.4.3
-    uint64_t output[8] = {0}; // Assuming max 512 bits (8 words of 64 bits)
     uint16_t N;
     if (nr_bit <= 2) {
       // For A=1 (BPSK), N=1. For A=2 (QPSK), N=3
@@ -694,36 +724,7 @@ void nr_uci_encoding(uint64_t payload, uint8_t nr_bit, uint8_t nrofPRB, bool uci
       // For polar-coded UCI, output depends on nrofPRB
       N = 16 * nrofPRB;
     }
-
-    if ((nr_bit == 1 || nr_bit == 2) && Qm > 1) {
-      LOG_D(PHY,
-            "[UCI_ENCODING_RM] Bypassing bit-wise rate matching for A=%d, Qm=%d. 'b' (length %d bytes) is assumed to be already "
-            "final.\n",
-            nr_bit,
-            Qm,
-            E);
-    } else {
-      if (N == 0) {
-        LOG_W(PHY, "HARQ-ACK rate matching with encoded_length=0 but E_uci_ack=%d\n", E);
-        return;
-      }
-
-      // Rate matching with single loop for both repetition and puncturing
-      for (int i = 0; i < E; i++) {
-        int src_bit = i % N; // Modulo for cyclic repetition
-        int src_word = src_bit / 64;
-        int src_bit_pos = src_bit % 64;
-        int dst_word = i / 64;
-        int dst_bit_pos = i % 64;
-
-        if ((b[src_word] >> src_bit_pos) & 1ULL)
-          output[dst_word] |= (1ULL << dst_bit_pos);
-      }
-
-      for (int i = 0; i < (E + 63) / 64; i++) {
-        b[i] = output[i];
-      }
-    }
+    nr_rate_matching_uci(N, E, b);
   }
 }
 //#if 0

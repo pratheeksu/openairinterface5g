@@ -58,8 +58,6 @@ typedef struct {
   nr_rnti_type_t rnti_type;
   /// Cell ID
   int     Nid_cell;
-  /// bit mask of PT-RS ofdm symbol indicies
-  uint16_t ptrs_symbols;
 } NR_UE_ULSCH_t;
 
 typedef struct {
@@ -116,17 +114,4 @@ typedef struct {
   // PTRS symbol index, to be updated every PTRS symbol within a slot.
   uint8_t ptrs_symbol_index;
 } NR_UE_DLSCH_t;
-
-typedef struct {
-  uint16_t Q_dash_ACK; // number of coded HARQ-ACK symbols
-  uint16_t E_uci_ACK; // number of coded HARQ-ACK bits
-  uint16_t Q_dash_ACK_rvd; // number of coded HARQ-ACK symbols reserved
-  uint16_t E_uci_ACK_rvd; // number of coded HARQ-ACK bits reserved
-  uint16_t Q_dash_CSI1; // number of coded CSI part 1 symbols
-  uint16_t E_uci_CSI1; // number of coded CSI part 1 bits
-  uint16_t Q_dash_CSI2; // number of coded CSI part 2 symbols
-  uint16_t E_uci_CSI2; // number of coded CSI part 2 bits
-  uint32_t G_ulsch; // bit capacity of ULSCH
-} rate_match_info_uci_t;
-
 #endif
