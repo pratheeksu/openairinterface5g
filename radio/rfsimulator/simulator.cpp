@@ -39,6 +39,9 @@ extern int get_currentchannels_type(const char *buf,
                                     int debug,
                                     webdatadef_t *tdata,
                                     telnet_printfunc_t prnt); // in random_channel.c
+#ifdef OAI_RFSIM_TAPS_CLIENT
+#include "../vrtsim/taps_client.h"
+#endif
 }
 #include <queue>
 #include <mutex>
@@ -71,6 +74,7 @@ typedef enum { SIMU_ROLE_SERVER = 1, SIMU_ROLE_CLIENT } simuRole;
 #define RFSIMU_FORGETFACT "forgetfact"
 #define RFSIMU_OFFSET "offset"
 #define RFSIMU_PROP_DELAY "prop_delay"
+#define RFSIMU_TAPS_SOCKET  "taps_socket"
 #define RFSIMU_WAIT_TIMEOUT "wait_timeout"
 #define RFSIMU_ENABLE_BEAMS "enable_beams"
 #define RFSIMU_NUM_CONCURRENT_BEAMS "num_concurrent_beams"
@@ -81,7 +85,8 @@ typedef enum { SIMU_ROLE_SERVER = 1, SIMU_ROLE_CLIENT } simuRole;
 #define RFSIM_CONFIG_HELP_OPTIONS                                                                  \
   " list of comma separated options to enable rf simulator functionalities. Available options: \n" \
   "        chanmod:   enable channel modelisation\n"                                               \
-  "        saviq:     enable saving written iqs to a file\n"
+  "        saviq:     enable saving written iqs to a file\n"                                       \
+  "        taps:      enable TAPS external channel emulation\n"
 
 #define simOpt PARAMFLAG_NOFREE | PARAMFLAG_CMDLINE_NOPREFIXENABLED
 #define simBool PARAMFLAG_BOOL | PARAMFLAG_NOFREE | PARAMFLAG_CMDLINE_NOPREFIXENABLED
@@ -101,6 +106,7 @@ typedef enum { SIMU_ROLE_SERVER = 1, SIMU_ROLE_CLIENT } simuRole;
   UINT64PARAM(RFSIMU_OFFSET,            "<channel offset in samps>\n",              simOpt, NULL,                             0L),                    \
   DOUBLEPARAM(RFSIMU_PROP_DELAY,        "<propagation delay in ms>\n",              simOpt, NULL,                             0.0),                   \
   INTPARAM(RFSIMU_WAIT_TIMEOUT,         "<wait timeout if no UE connected>\n",      simOpt, NULL,                             1),                     \
+  STRINGPARAM(RFSIMU_TAPS_SOCKET,       "<TAPS server socket address>\n",           simOpt, NULL,                             NULL),                  \
   BOOLPARAM(RFSIMU_ENABLE_BEAMS,        "<enable simplified beam simulation>\n",    simBool,NULL,                             0),                     \
   INTPARAM(RFSIMU_NUM_CONCURRENT_BEAMS, "<number of concurrent beams supported>\n", simOpt, NULL,                             1),                     \
   UINT64PARAM(RFSIMU_BEAM_MAP,          "<initial beam map>\n",                     simOpt, NULL,                             1),                     \
@@ -199,6 +205,10 @@ typedef struct {
   int wait_timeout;
   double prop_delay_ms;
   rfsim_beam_ctrl_t *beam_ctrl;
+#ifdef OAI_RFSIM_TAPS_CLIENT
+  char *taps_socket;
+  channel_desc_t *taps_channel_desc;
+#endif
 } rfsimulator_state_t;
 
 /**
@@ -341,9 +351,13 @@ static buffer_t *allocCirBuf(rfsimulator_state_t *bridge, int sock)
     return NULL;
   }
 
+#ifdef OAI_RFSIM_TAPS_CLIENT
+  if (bridge->channelmod > 0 && !(bridge->taps_socket && bridge->taps_socket[0] != '\0')) {
+#else
   if (bridge->channelmod > 0) {
+#endif
     // create channel simulation model for this mode reception
-    char modelname[30];
+    char modelname[30];  
     snprintf(modelname,
              sizeofArray(modelname),
              "rfsimu_channel_%s%d",
@@ -571,6 +585,15 @@ static void rfsimulator_readconfig(rfsimulator_state_t *rfsimulator)
                        rfsimulator->rx_freq,
                        rfsimulator->tx_bw);
       rfsimulator->channelmod = true;
+#ifdef OAI_RFSIM_TAPS_CLIENT
+    } else if (strcmp(rfsimuParam[p].strlistptr[i], "taps") == 0) {
+      int taps_idx = config_paramidx_fromname(rfsimuParams, sizeofArray(rfsimuParams), RFSIMU_TAPS_SOCKET);
+      if (rfsimuParam[taps_idx].strptr && *rfsimuParam[taps_idx].strptr)
+        rfsimulator->taps_socket = strdup(*rfsimuParam[taps_idx].strptr);
+      AssertFatal(rfsimulator->taps_socket && rfsimulator->taps_socket[0] != '\0',
+                  "RFSIM: 'taps' option requires --rfsimulator.taps_socket <url>\n");
+      rfsimulator->channelmod = 1;
+#endif
     } else {
       fprintf(stderr, "unknown rfsimulator option: %s\n", rfsimuParam[p].strlistptr[i]);
       exit(-1);
@@ -1298,7 +1321,45 @@ static void rfsimulator_read_internal(rfsimulator_state_t *t,
       //  it seems legacy behavior is: never in UL, each frame in DL
       if (reGenerateChannel)
         random_channel(ptr->channel_model, 0);
-
+    #ifdef OAI_RFSIM_TAPS_CLIENT
+      channel_desc_t *taps_cd = t->taps_channel_desc;
+      if (taps_cd != NULL && taps_cd->ch_ps != NULL && taps_cd->channel_length > 0) {
+        if (!channel_modelling) {
+          memset(temp_array, 0, sizeof(temp_array));
+          channel_modelling = true;
+        }
+        const int nb_tx  = ptr->nbAnt;
+        const int ch_len = taps_cd->channel_length;
+        std::vector<std::vector<c16_t>> raw(nb_tx, std::vector<c16_t>(nsamps + ch_len - 1, {0, 0}));
+        c16_t *raw_p[nb_tx];
+        for (int a = 0; a < nb_tx; a++) raw_p[a] = raw[a].data();
+        combine_received_beams(t,
+                               ptr->received_packets,
+                               timestamp - (ch_len - 1),
+                               nb_tx,
+                               nsamps + ch_len - 1,
+                               rx_beam_id,
+                               raw_p);
+        for (int aarx = 0; aarx < nbAnt; aarx++) {
+          int nb_rx = (taps_cd->nb_rx > 0) ? taps_cd->nb_rx : nbAnt;
+          int local_aarx = aarx % nb_rx;
+          for (int aatx = 0; aatx < nb_tx; aatx++) {
+            struct complexf *h = taps_cd->ch_ps[local_aarx + nb_rx * aatx];
+            if (!h) continue;
+            for (int i = 0; i < nsamps; i++) {
+              float acc_r = 0.0f, acc_i = 0.0f;
+              for (int l = 0; l < ch_len; l++) {
+                c16_t s = raw[aatx][(ch_len - 1) + i - l];
+                acc_r += s.r * h[l].r - s.i * h[l].i;
+                acc_i += s.i * h[l].r + s.r * h[l].i;
+              }
+              temp_array[aarx][i].r += acc_r;
+              temp_array[aarx][i].i += acc_i;
+            }
+          }
+        }
+      } else
+    #endif    
       if (ptr->channel_model != NULL) { // apply a channel model
         if (!channel_modelling) {
           memset(temp_array, 0, sizeof(temp_array));
@@ -1552,6 +1613,10 @@ static void rfsimulator_end(openair0_device_t *device)
   clear_beam_queue(&s->beam_ctrl->tx, INT64_MAX);
   clear_beam_queue(&s->beam_ctrl->rx, INT64_MAX);
   delete s->beam_ctrl;
+#ifdef OAI_RFSIM_TAPS_CLIENT
+  if (s->taps_socket && s->taps_socket[0] != '\0')
+    taps_client_stop();
+#endif
   close(s->epollfd);
   free(s);
 }
@@ -1601,6 +1666,15 @@ extern "C" __attribute__((__visibility__("default"))) int device_init(openair0_d
   rfsimulator->tx_bw = openair0_cfg->tx_bw;
   rfsimulator->beam_ctrl = new rfsim_beam_ctrl_t;
   rfsimulator_readconfig(rfsimulator);
+#ifdef OAI_RFSIM_TAPS_CLIENT
+  if (rfsimulator->taps_socket && rfsimulator->taps_socket[0] != '\0') {
+    taps_client_connect(0,
+                        rfsimulator->taps_socket,
+                        rfsimulator->tx_num_channels,
+                        rfsimulator->rx_num_channels,
+                        &rfsimulator->taps_channel_desc);
+  }
+#endif
   if (rfsimulator->prop_delay_ms > 0.0)
     rfsimulator->chan_offset = ceil(rfsimulator->sample_rate * rfsimulator->prop_delay_ms / 1000);
   if (rfsimulator->chan_offset != 0) {
