@@ -541,7 +541,11 @@ int main(int argc, char *argv[])
                 0, // pdu_bit_map
                 0, // PTRS_BITMAP,
                 n_rx);
+      int sigenergy = 0;
 
+      for (int aarx = 0; aarx < n_rx; aarx++) {
+        sigenergy += signal_energy((int32_t *)rxdata[aarx] + slot_offset, slot_length);
+      }
       //----------- OFDM Demodulation and RX rotation--------------------------
       nr_ofdm_demod_and_rx_rotation(rxdata,
                                     gNB->common_vars.rxdataF[0],
@@ -550,7 +554,8 @@ int main(int argc, char *argv[])
                                     slot,
                                     slot_offsetF,
                                     link_type_ul,
-                                    was_symbol_used);
+                                    was_symbol_used,
+				    dB_fixed(sigenergy/n_rx));
 
       //----------- UE RX SRS procedures ---------------------
 

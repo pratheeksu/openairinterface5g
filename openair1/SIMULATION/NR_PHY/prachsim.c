@@ -736,11 +736,11 @@ int main(int argc, char **argv){
         }
 
         int sigenergy = 0;
-        ru->dft_in_levdB = dB_fixed(sigenergy);
 
         for (int aarx = 0; aarx < frame_parms->nb_antennas_rx; aarx++) {
           sigenergy += signal_energy((int32_t *)ru->common.rxdata[aarx] + rx_prach_start, frame_parms->samples_per_subframe);
         }
+        ru->dft_in_levdB = dB_fixed(sigenergy/frame_parms->nb_antennas_rx);
         for (l = 0; l < frame_parms->symbols_per_slot; l++) {
           for (aa = 0; aa < frame_parms->nb_antennas_rx; aa++) {
             nr_symbol_fep_ul(frame_parms,
@@ -773,7 +773,7 @@ int main(int argc, char **argv){
                              .Xu = gNB->X_u,
                              .rx_prach = &gNB->rx_prach,
                              .prach_buf = (void *)(in + 1)};
-        rx_nr_prach_ru(in, ru->common.rxdata, ru->nr_frame_parms, ru->N_TA_offset);
+        rx_nr_prach_ru(in, ru->common.rxdata, ru->nr_frame_parms, ru->N_TA_offset, ru->dft_in_levdB);
         if (n_frames == 1)
           LOG_I(PHY,
                 "ncs %d,num_seq %d\n",
