@@ -795,22 +795,17 @@ NR_MeasConfig_t *nr_rrc_get_measconfig(const gNB_RRC_INST *rrc, uint64_t nr_cell
         seq_arr_push_back(&neigh_seq, neighbourCell, sizeof(nr_neighbour_cell_t));
         const nr_a3_event_t *a3Event = get_a3_configuration((gNB_RRC_INST *)rrc, neighbourCell->physicalCellId);
         if (!a3Event) {
-          /* no A3 event configured for this neighbour, let's try the default one, if it exists */
-          if (default_a3_added) {
-            /* default A3 exists and is already added, use it for this neighbour */
-            neigh_a3_id[i] = 3;
-            continue;
+          /* no A3 event configured for this neighbour, use the default one, if it exists and not already configured */
+          neigh_a3_id[i] = -1;
+          if (!default_a3_added) {
+            /* try to get the default A3 config */
+            a3Event = get_a3_configuration((gNB_RRC_INST *)rrc, -1);
+            if (a3Event) {
+              default_a3_added = true;
+              /* default A3 report config ID is 3 */
+              neigh_a3_id[i] = 3;
+            }
           }
-          /* try to get the default A3 config */
-          a3Event = get_a3_configuration((gNB_RRC_INST *)rrc, -1);
-          if (!a3Event) {
-            /* no default A3 config found, so no A3 config for this neighbour */
-            neigh_a3_id[i] = -1;
-            continue;
-          }
-          default_a3_added = true;
-          /* default A3 report config ID is 3 */
-          neigh_a3_id[i] = 3;
         } else {
           /* specific A3 report config ID are 4, 5, ... */
           neigh_a3_id[i] = i + 4;
