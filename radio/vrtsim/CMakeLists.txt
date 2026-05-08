@@ -24,7 +24,6 @@ target_link_libraries(vrtsim
 )
 if (CUDA_ENABLE)
   target_compile_definitions(vrtsim PRIVATE CUDA_ENABLE)
-  target_compile_definitions(vrtsim PRIVATE CUDA_ENABLE)
 endif()
 
 # Optional taps client
