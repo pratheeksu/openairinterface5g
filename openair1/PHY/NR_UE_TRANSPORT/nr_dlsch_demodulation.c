@@ -514,7 +514,7 @@ static void nr_determin(int size,
                   nb_rb,
                   ((rtx & 1) == 1 ? -1 : 1) * ((ctx & 1) == 1 ? -1 : 1) * sign,
                   shift0);
-      mult_complex_vectors(a44[ctx][rtx], outtemp, rtx == 0 ? ad_bc : outtemp1, sizeofArray(outtemp1), shift0);
+      mult_cpx_vector(a44[ctx][rtx], outtemp, rtx == 0 ? ad_bc : outtemp1, sizeofArray(outtemp1), shift0);
 
       if (rtx != 0)
         nr_a_sum_b(ad_bc, outtemp1, nb_rb);
@@ -715,10 +715,11 @@ static void nr_dlsch_mmse(uint32_t rx_size_symbol,
                           uint32_t noise_var)
 {
   uint32_t nb_rb_0 = (length + 11) / 12;
-  c16_t determ_fin[12 * nb_rb_0] __attribute__((aligned(32)));
+  uint32_t nb_re_avx2 = ALNARS_32_8(12 * nb_rb_0);
+  c16_t determ_fin[nb_re_avx2] __attribute__((aligned(32)));
 
   ///Allocate H^*H matrix elements and sub elements
-  c16_t conjH_H_elements_data[n_rx][nl][nl][12 * nb_rb_0];
+  c16_t conjH_H_elements_data[n_rx][nl][nl][nb_re_avx2] __attribute__((aligned(32)));
   memset(conjH_H_elements_data, 0, sizeof(conjH_H_elements_data));
   c16_t *conjH_H_elements[n_rx][nl][nl];
   for (int aarx = 0; aarx < n_rx; aarx++)
@@ -758,7 +759,7 @@ static void nr_dlsch_mmse(uint32_t rx_size_symbol,
   //Compute the inverse and determinant of the H^*H matrix
   //Allocate the inverse matrix
   c16_t *inv_H_h_H[nl][nl];
-  c16_t inv_H_h_H_data[nl][nl][12 * nb_rb_0];
+  c16_t inv_H_h_H_data[nl][nl][nb_re_avx2] __attribute__((aligned(32)));
   memset(inv_H_h_H_data, 0, sizeof(inv_H_h_H_data));
   for (int rtx = 0; rtx < nl; rtx++)
     for (int ctx = 0; ctx < nl; ctx++)
@@ -774,9 +775,9 @@ static void nr_dlsch_mmse(uint32_t rx_size_symbol,
                     shift - (fp_flag == 1 ? 1 : 0)); // the out put is Q15
 
   // multiply Matrix inversion pf H_h_H by the rx signal vector
-  c16_t outtemp[12 * nb_rb_0] __attribute__((aligned(32)));
+  c16_t outtemp[nb_re_avx2] __attribute__((aligned(32)));
   //Allocate rxdataF for zforcing out
-  c16_t rxdataF_zforcing[nl][12 * nb_rb_0];
+  c16_t rxdataF_zforcing[nl][nb_re_avx2];
   memset(rxdataF_zforcing, 0, sizeof(rxdataF_zforcing));
 
   for (int rtx = 0; rtx < nl; rtx++) {//Output Layers row
@@ -785,11 +786,7 @@ static void nr_dlsch_mmse(uint32_t rx_size_symbol,
       // printf("Computing r_%d c_%d\n",rtx,ctx);
       // print_shorts(" H_h_H=",(int16_t*)&conjH_H_elements[ctx*nl+rtx][0][0]);
       // print_shorts(" Inv_H_h_H=",(int16_t*)&inv_H_h_H[ctx*nl+rtx][0]);
-      mult_complex_vectors(inv_H_h_H[ctx][rtx],
-                           rxdataF_comp[symbol][ctx][0],
-                           outtemp,
-                           sizeofArray(outtemp),
-                           shift - (fp_flag == 1 ? 1 : 0));
+      mult_cpx_vector(inv_H_h_H[ctx][rtx], rxdataF_comp[symbol][ctx][0], outtemp, length, shift - (fp_flag == 1 ? 1 : 0));
       nr_a_sum_b(rxdataF_zforcing[rtx], outtemp, nb_rb_0); // a = a + b
     }
 #ifdef DEBUG_DLSCH_DEMOD

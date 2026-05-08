@@ -177,7 +177,7 @@ typedef struct NR_DL_FRAME_PARMS_s {
   c16_t symbol_rotation[3][224];
   /// sequence used to compensate the phase rotation due to timeshifted OFDM symbols
   /// First dimenstion is for different CP lengths
-  c16_t timeshift_symbol_rotation[4096*2] __attribute__ ((aligned (16)));
+  c16_t timeshift_symbol_rotation[4096 * 2] __attribute__((aligned(32)));
   /// Table used to apply the delay compensation in DL/UL
   c16_t delay_table[2 * MAX_DELAY_COMP + 1][NR_MAX_OFDM_SYMBOL_SIZE];
   /// Table used to apply the delay compensation in PUCCH2

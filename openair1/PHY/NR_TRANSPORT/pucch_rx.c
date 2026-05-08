@@ -1295,7 +1295,7 @@ void nr_decode_pucch2(PHY_VARS_gNB *gNB,
     {
       c16_t rdmrs_gold[nb_re_dmrs] __attribute__((aligned(32)));
       for (int aa = 0; aa < Prx; aa++) {
-        mult_complex_vectors(rdmrs_ext[aa], pil_dmrs, rdmrs_gold, nb_re_dmrs, 0);
+        mult_cpx_vector(rdmrs_ext[aa], pil_dmrs, rdmrs_gold, nb_re_dmrs, 0);
         c16_t *ch_ls_ptr = ch_ls;
         c16_t *end = ch_ls_ptr + 128;
         for (int i = 0; i < nb_re_dmrs; i++)
@@ -1312,7 +1312,7 @@ void nr_decode_pucch2(PHY_VARS_gNB *gNB,
       int delay_idx = get_delay_idx(delay.est_delay, MAX_DELAY_COMP);
       c16_t *delay_table = frame_parms->delay_table128[delay_idx];
       for (int aa = 0; aa < Prx; aa++)
-        mult_complex_vectors(rp[aa][symb], delay_table, rp[aa][symb], nb_re_pucch, 8);
+        mult_cpx_vector(rp[aa][symb], delay_table, rp[aa][symb], nb_re_pucch, 8);
     }
     
     // extract again DMRS, and signal, after delay compensation
@@ -1342,7 +1342,7 @@ void nr_decode_pucch2(PHY_VARS_gNB *gNB,
 #endif
     c16_t rdmrs_gold[Prx][nb_re_dmrs] __attribute__((aligned(32)));
     for (int aa = 0; aa < Prx; aa++)
-      mult_complex_vectors(rdmrs_ext[aa], pil_dmrs, rdmrs_gold[aa], nb_re_dmrs, 0);
+      mult_cpx_vector(rdmrs_ext[aa], pil_dmrs, rdmrs_gold[aa], nb_re_dmrs, 0);
     for (int aa = 0; aa < Prx; aa++) {
       c16_t *pil_ptr = pil_dmrs;
       for (int group = 0; group < ngroup; group++) {

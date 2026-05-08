@@ -10,6 +10,7 @@
 
 #define ALIGNARRAYSIZE(a, b) (((a + b - 1) / b) * b)
 #define ALNARS_16_4(a) ALIGNARRAYSIZE(a, 4)
+#define ALNARS_32_8(a) ALIGNARRAYSIZE(a, 8)
 
 typedef struct complexd {
   double r;

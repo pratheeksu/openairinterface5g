@@ -56,7 +56,7 @@ void remove_7_5_kHz(RU_t *ru,uint8_t slot)
     c16_t *rxptr = rxdata[aa]+slot_offset;
     c16_t *rxptr_7_5kHz = rxdata_7_5kHz[aa]+slot_offset2;
     // apply 7.5 kHz
-    mult_complex_vectors((c16_t*)kHz7_5,rxptr,rxptr_7_5kHz,len, 15);
+    mult_cpx_vector((c16_t*)kHz7_5,rxptr,rxptr_7_5kHz,len, 15);
     // undo 7.5 kHz offset for symbol 3 in case RU is slave (for OTA synchronization)
     if (ru->is_slave == 1 && slot == 2){
       int offset=3*frame_parms->ofdm_symbol_size+2*frame_parms->nb_prefix_samples+frame_parms->nb_prefix_samples0;

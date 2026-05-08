@@ -243,7 +243,7 @@ void sl_generate_and_map_psbch(c16_t *txF,
 #endif
 
       if (m % 4 == 0) {
-        txF[offset] = c16xmulConstShift(psbch_dmrs[dmrs_index], scaling_factor, 15);
+        txF[offset] = c16mulRealShift(psbch_dmrs[dmrs_index], scaling_factor, 15);
 
 #ifdef SL_DEBUG
         printf("txF[%d]:%d,%d, psbch_dmrs[%d]:%d,%d ",
@@ -258,7 +258,7 @@ void sl_generate_and_map_psbch(c16_t *txF,
         dmrs_index++;
 
       } else {
-        txF[offset] = c16xmulConstShift(psbch_modsym[index], scaling_factor, 15);
+        txF[offset] = c16mulRealShift(psbch_modsym[index], scaling_factor, 15);
 
 #ifdef SL_DEBUG
         printf("txF[%d]:%d,%d, psbch_modsym[%d]:%d,%d\n",

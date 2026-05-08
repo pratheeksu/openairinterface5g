@@ -311,7 +311,7 @@ int32_t generate_nr_prach(PHY_VARS_NR_UE *ue, uint8_t gNB_id, int frame, uint8_t
     for (int offset = 0, offset2 = 0; offset < N_ZC; offset++, offset2 += preamble_shift) {
       if (offset2 >= N_ZC)
         offset2 -= N_ZC;
-      const c16_t Xu_t = c16xmulConstShift(Xu[offset], amp, 15);
+      const c16_t Xu_t = c16mulRealShift(Xu[offset], amp, 15);
       const double w = 2 * M_PI * (double)offset2 / N_ZC;
       const c16_t ru = {.r = (int16_t)(floor(32767.0 * cos(w))), .i = (int16_t)(floor(32767.0 * sin(w)))};
       const c16_t p = c16mulShift(Xu_t, ru, 15);

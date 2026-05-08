@@ -520,13 +520,13 @@ void nr_fo_compensation(double fo_Hz, int samples_per_ms, int sample_offset, con
   }
   const c16_t rot_vec = get_sin_cos(CHUNK * phase_inc);
   while (size > CHUNK) {
-    mult_complex_vectors(rxdata_in, rot, rxdata_out, CHUNK, 14);
+    mult_cpx_vector(rxdata_in, rot, rxdata_out, CHUNK, 14);
     rotate_cpx_vector(rot, &rot_vec, rot, CHUNK, 14);
     rxdata_in += CHUNK;
     rxdata_out += CHUNK;
     size -= CHUNK;
   }
-  mult_complex_vectors(rxdata_in, rot, rxdata_out, size, 14);
+  mult_cpx_vector(rxdata_in, rot, rxdata_out, size, 14);
 #else
   // This code path computes the complex rotation values for the complete OFDM symbol using get_sin_cos().
   // This is more accurate, but also slower than the code path above.
@@ -535,7 +535,7 @@ void nr_fo_compensation(double fo_Hz, int samples_per_ms, int sample_offset, con
     rot[i] = get_sin_cos(phase);
     phase += phase_inc;
   }
-  mult_complex_vectors(rxdata_in, rot, rxdata_out, size, 14);
+  mult_cpx_vector(rxdata_in, rot, rxdata_out, size, 14);
 #endif
 }
 
