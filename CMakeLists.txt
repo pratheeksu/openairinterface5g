@@ -3,6 +3,7 @@
 cmake_minimum_required (VERSION 3.19)
 project (OpenAirInterface LANGUAGES C CXX)
 set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(OAI_VERSION 2.4.0)
 
 option(CUDA_ENABLE "Enable CUDA accelerated channel simulation" OFF)
@@ -228,9 +229,7 @@ endif()
 
 set(CMAKE_C_FLAGS
   "${C_FLAGS_PROCESSOR} ${commonOpts} -std=gnu11 -funroll-loops ${CMAKE_C_FLAGS}")
-set(CMAKE_CXX_FLAGS
-  "${C_FLAGS_PROCESSOR}  ${commonOpts} -std=c++11 ${CMAKE_CXX_FLAGS}")
-
+set(CMAKE_CXX_FLAGS "${C_FLAGS_PROCESSOR} ${commonOpts} ${CMAKE_CXX_FLAGS}")
 
 add_boolean_option(SANITIZE_ADDRESS OFF "enable the address sanitizer (ASan)" ON)
 if (SANITIZE_ADDRESS)
