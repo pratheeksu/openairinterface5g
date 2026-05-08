@@ -755,6 +755,7 @@ __attribute__((always_inline)) static inline void transpose16_ooff_simd256(simde
   // y[off] = [x1 x5 x9 x13 x17 x21 x25 x29]
   // y[2*off] = [x2 x6 x10 x14 x18 x22 x26 x30]
   // y[3*off] = [x3 x7 x11 x15 x19 x23 x27 x31]
+  simde__m256i *y2 = y;
 #ifndef OAI_DFT_AVX512VL_PERMUTE
   register simde__m256i ytmp0, ytmp1, ytmp2, ytmp3, ytmp4, ytmp5, ytmp6, ytmp7;
   simde__m256i const perm_mask = simde_mm256_set_epi32(7, 3, 5, 1, 6, 2, 4, 0);
