@@ -20,6 +20,7 @@
 #include "PHY/NR_REFSIG/nr_refsig.h"
 #include "PHY/TOOLS/tools_defs.h"
 #include "nr-uesoftmodem.h"
+#include "nfapi/open-nFAPI/nfapi/public_inc/fapi_nr_ue_interface.h"
 
 //#define DEBUG_INITIAL_SYNCH
 #define DUMP_PBCH_CH_ESTIMATES 0
@@ -156,107 +157,112 @@ bool nr_search_ssb_common(nr_ssb_search_params_t *params)
   c16_t(*pssTime)[pssTime_sz] = (c16_t(*)[pssTime_sz])params->pssTime;
 
   // Perform PSS search
-  int nid2 = -1;
-  int freq_offset_pss = 0;
-  int pss_peak = 0;
-  int pss_avg = 0;
-  const int sync_pos = pss_synchro_nr((const c16_t **)params->rxdata,
-                                      fp,
-                                      pssTime,
-                                      params->search_frame_id,
-                                      params->fo_flag,
-                                      params->target_nid_cell,
-                                      &nid2,
-                                      &freq_offset_pss,
-                                      &pss_peak,
-                                      &pss_avg);
+  nr_pss_info_t pss_info = pss_synchro_nr((const c16_t **)params->rxdata,
+                                          fp,
+                                          pssTime,
+                                          params->search_frame_id,
+                                          params->fo_flag,
+                                          params->target_nid_cell,
+                                          params->search_start,
+                                          params->search_length);
 
-  if (params->pss_peak)
-    *params->pss_peak = pss_peak;
-  if (params->pss_avg)
-    *params->pss_avg = pss_avg;
-  if (params->freq_offset_pss)
-    *params->freq_offset_pss = freq_offset_pss;
+  // This is the frequency offset that will be applied in the compensation,
+  // and it takes into account the values already applied previously during the loop.
+  int f_off_to_comp = 0;
 
-  if (sync_pos < fp->nb_prefix_samples || nid2 < 0) {
-    return false;
-  }
+  for (int p = 0; p < NUMBER_PSS_SEQUENCE; p++) {
+    const nr_pss_elem_info_t *pss_elem_info = &pss_info.pss_elem_info[p];
+    if (!pss_elem_info->pss_found)
+      continue;
 
-  const int ssb_offset = sync_pos - fp->nb_prefix_samples;
-  if (params->ssb_offset)
-    *params->ssb_offset = ssb_offset;
+    int nid2 = pss_elem_info->nid2;
+    int freq_offset_pss = pss_elem_info->f_off;
+    int pss_peak = pss_elem_info->pss_peak_dB;
+    int pss_avg = pss_elem_info->pss_avg;
+    int sync_pos = pss_elem_info->peak_position;
+
+    if (params->pss_peak)
+      *params->pss_peak = pss_peak;
+    if (params->pss_avg)
+      *params->pss_avg = pss_avg;
+    if (params->freq_offset_pss)
+      *params->freq_offset_pss = freq_offset_pss;
+
+    const int ssb_offset = sync_pos - fp->nb_prefix_samples;
+    if (params->ssb_offset)
+      *params->ssb_offset = ssb_offset;
 
 #ifdef DEBUG_INITIAL_SYNCH
-  LOG_I(PHY, "Initial sync : Estimated PSS position %d, Nid2 %d, ssb offset %d\n", sync_pos, nid2, ssb_offset);
+    LOG_I(PHY, "Initial sync : Estimated PSS position %d, Nid2 %d, ssb offset %d\n", sync_pos, nid2, ssb_offset);
 #endif
 
-  // Check that SSB fits within buffer
-  if (ssb_offset + NR_N_SYMBOLS_SSB * (fp->ofdm_symbol_size + fp->nb_prefix_samples) >= params->rxdata_size) {
-    LOG_D(PHY,
-          "SSB extends beyond buffer boundary (sync_pos %d, ssb_offset %d, buffer_size %d)\n",
-          sync_pos,
-          ssb_offset,
-          params->rxdata_size);
-    return false;
+    // Check that SSB fits within buffer
+    if (ssb_offset + NR_N_SYMBOLS_SSB * (fp->ofdm_symbol_size + fp->nb_prefix_samples) >= params->rxdata_size) {
+      LOG_D(PHY,
+            "SSB extends beyond buffer boundary (sync_pos %d, ssb_offset %d, buffer_size %d)\n",
+            sync_pos,
+            ssb_offset,
+            params->rxdata_size);
+      return false;
+    }
+
+    // Apply frequency offset compensation if requested
+    if (params->apply_freq_offset && freq_offset_pss != 0) {
+      f_off_to_comp += freq_offset_pss;
+      compensate_freq_offset(params->rxdata, fp, f_off_to_comp, params->search_frame_id);
+      f_off_to_comp *= -1;
+    }
+
+    // Extract SSB symbols to frequency domain
+    // Symbol ordering: 0=PSS, 1=PBCH, 2=SSS, 3=PBCH
+    c16_t(*rxdataF)[NR_N_SYMBOLS_SSB][fp->nb_antennas_rx][fp->ofdm_symbol_size] =
+        (c16_t(*)[NR_N_SYMBOLS_SSB][fp->nb_antennas_rx][fp->ofdm_symbol_size])params->rxdataF;
+    __attribute__((aligned(32))) c16_t rxdataF_tmp[fp->nb_antennas_rx][fp->samples_per_slot_wCP];
+    for (int i = 0; i < NR_N_SYMBOLS_SSB; i++) {
+      const int sample_offset = params->search_frame_id * fp->samples_per_frame + ssb_offset;
+      nr_slot_fep(NULL, fp, 0, i, rxdataF_tmp, link_type_dl, sample_offset, (c16_t **)params->rxdata);
+      // TODO: In later commit, call the modified symbol demod function and remove the following memcpy.
+      for (int aarx = 0; aarx < fp->nb_antennas_rx; aarx++)
+        memcpy((*rxdataF)[i][aarx], &rxdataF_tmp[aarx][i * fp->ofdm_symbol_size], sizeof(c16_t) * fp->ofdm_symbol_size);
+    }
+
+    // Perform SSS detection
+    int detected_nid_cell = -1;
+    int32_t sss_metric = 0;
+    uint8_t sss_phase = 0;
+    int freq_offset_sss = 0;
+
+    bool sss_detected = rx_sss_nr(fp,
+                                  nid2,
+                                  params->target_nid_cell,
+                                  freq_offset_pss,
+                                  params->ssb_start_subcarrier,
+                                  &detected_nid_cell,
+                                  &sss_metric,
+                                  &sss_phase,
+                                  &freq_offset_sss,
+                                  *rxdataF,
+                                  params->exclude_nid_cells,
+                                  params->num_exclude_nid_cells);
+
+    if (params->sss_metric)
+      *params->sss_metric = sss_metric;
+    if (params->sss_phase)
+      *params->sss_phase = sss_phase;
+    if (params->freq_offset_sss)
+      *params->freq_offset_sss = freq_offset_sss;
+
+    if (!sss_detected || detected_nid_cell < 0) {
+      continue;
+    }
+
+    if (params->detected_nid_cell)
+      *params->detected_nid_cell = detected_nid_cell;
+
+    return true;
   }
 
-  // Apply frequency offset compensation if requested
-  if (params->apply_freq_offset && freq_offset_pss != 0) {
-    compensate_freq_offset(params->rxdata, fp, freq_offset_pss, params->search_frame_id);
-  }
-
-  // Extract SSB symbols to frequency domain
-  // Symbol ordering: 0=PSS, 1=PBCH, 2=SSS, 3=PBCH
-  c16_t(*rxdataF)[NR_N_SYMBOLS_SSB][fp->nb_antennas_rx][fp->ofdm_symbol_size] =
-      (c16_t(*)[NR_N_SYMBOLS_SSB][fp->nb_antennas_rx][fp->ofdm_symbol_size])params->rxdataF;
-
-  __attribute__((aligned(32))) c16_t rxdataF_tmp[fp->nb_antennas_rx][fp->samples_per_slot_wCP];
-
-  for (int i = 0; i < NR_N_SYMBOLS_SSB; i++) {
-    const int sample_offset = params->search_frame_id * fp->samples_per_frame + ssb_offset;
-    nr_slot_fep(NULL, fp, 0, i, rxdataF_tmp, link_type_dl, sample_offset, (c16_t **)params->rxdata);
-    // TODO: In later commit, call the modified symbol demod function and remove the following memcpy.
-    for (int aarx = 0; aarx < fp->nb_antennas_rx; aarx++)
-      memcpy((*rxdataF)[i][aarx], &rxdataF_tmp[aarx][i * fp->ofdm_symbol_size], sizeof(c16_t) * fp->ofdm_symbol_size);
-  }
-
-  // Perform SSS detection
-  int detected_nid_cell = -1;
-  int32_t sss_metric = 0;
-  uint8_t sss_phase = 0;
-  int freq_offset_sss = 0;
-
-  bool sss_detected = rx_sss_nr(fp,
-                                nid2,
-                                params->target_nid_cell,
-                                freq_offset_pss,
-                                params->ssb_start_subcarrier,
-                                &detected_nid_cell,
-                                &sss_metric,
-                                &sss_phase,
-                                &freq_offset_sss,
-                                *rxdataF);
-
-  if (params->sss_metric)
-    *params->sss_metric = sss_metric;
-  if (params->sss_phase)
-    *params->sss_phase = sss_phase;
-  if (params->freq_offset_sss)
-    *params->freq_offset_sss = freq_offset_sss;
-
-  if (!sss_detected || detected_nid_cell < 0) {
-    return false;
-  }
-
-  // Check if we should exclude the serving cell
-  if (params->exclude_nid_cell >= 0 && detected_nid_cell == params->exclude_nid_cell) {
-    return false;
-  }
-
-  if (params->detected_nid_cell)
-    *params->detected_nid_cell = detected_nid_cell;
-
-  return true;
+  return false;
 }
 
 void nr_scan_ssb(void *arg)
@@ -305,7 +311,8 @@ void nr_scan_ssb(void *arg)
         .rxdata_size = fp->samples_per_frame,
         .ssb_start_subcarrier = ssbInfo->gscnInfo.ssbFirstSC,
         .target_nid_cell = ssbInfo->targetNidCell,
-        .exclude_nid_cell = -1, // No exclusion for initial sync
+        .exclude_nid_cells = NULL, // No exclusion for initial sync
+        .num_exclude_nid_cells = 0,
         .apply_freq_offset = ssbInfo->foFlag,
         .search_frame_id = frame_id,
         .fo_flag = ssbInfo->foFlag,
@@ -319,6 +326,8 @@ void nr_scan_ssb(void *arg)
         .sss_phase = &sss_phase,
         .pss_peak = &ssbInfo->pssCorrPeakPower,
         .pss_avg = &ssbInfo->pssCorrAvgPower,
+        .search_start = -1,
+        .search_length = -1
     };
 
     ssbInfo->syncRes.frame_id = frame_id;

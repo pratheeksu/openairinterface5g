@@ -46,7 +46,7 @@
 #define MAX_MEAS_CONFIG 64
 #define MAX_MEAS_ID 64
 #define MAX_QUANTITY_CONFIG 2
-#define NUMBER_OF_NEIGHBORING_CELLS_MAX 1
+#define NUMBER_OF_NEIGHBORING_CELLS_MAX 8
 
 typedef enum {
   nr_SecondaryCellGroupConfig_r15=0,
@@ -169,21 +169,25 @@ typedef enum {
 
 typedef enum { RB_NOT_PRESENT, RB_ESTABLISHED, RB_SUSPENDED } NR_RB_status_t;
 
-typedef struct l3_measurements_s {
-  float ssb_filter_coeff_rsrp;
-  float csi_RS_filter_coeff_rsrp;
-  meas_t serving_cell;
-  meas_t neighboring_cell[NUMBER_OF_NEIGHBORING_CELLS_MAX];
-  long trigger_to_measid;
+typedef struct meas_report_params_s {
   long trigger_quantity;
   long rs_type;
   int reports_sent;
   int max_reports;
   long report_interval_ms;
   bool neighbor_cell_valid;
+  bool report_rsrp;
   NR_timer_t TA2;
   NR_timer_t TA3;
   NR_timer_t periodic_report_timer;
+} meas_report_params_t;
+
+typedef struct l3_measurements_s {
+  float ssb_filter_coeff_rsrp;
+  float csi_RS_filter_coeff_rsrp;
+  meas_t serving_cell;
+  meas_t neighboring_cell[NUMBER_OF_NEIGHBORING_CELLS_MAX];
+  meas_report_params_t meas_report[MAX_MEAS_ID];
 } l3_measurements_t;
 
 typedef struct rrcPerNB {

@@ -175,6 +175,17 @@ static void pss_sss_extract_nr(
   }
 }
 
+static bool skip_pci(int Nid1, int Nid2, const uint16_t *exclude_nid_cells, int num_exclude_nid_cells)
+{
+  int current_pci = Nid2 + (3 * Nid1);
+  for (int i = 0; i < num_exclude_nid_cells; i++) {
+    if (current_pci == exclude_nid_cells[i]) {
+      return true;
+    }
+  }
+  return false;
+}
+
 /*******************************************************************
  *
  * NAME :         rx_sss_nr
@@ -196,7 +207,9 @@ bool rx_sss_nr(const NR_DL_FRAME_PARMS *frame_parms,
                int32_t *tot_metric,
                uint8_t *phase_max,
                int *freq_offset_sss,
-               c16_t rxdataF[NR_N_SYMBOLS_SSB][frame_parms->nb_antennas_rx][frame_parms->ofdm_symbol_size])
+               c16_t rxdataF[NR_N_SYMBOLS_SSB][frame_parms->nb_antennas_rx][frame_parms->ofdm_symbol_size],
+               const uint16_t *exclude_nid_cells,
+               int num_exclude_nid_cells)
 {
   c16_t pss_ext[frame_parms->nb_antennas_rx][LENGTH_PSS_NR];
   c16_t sss_ext[frame_parms->nb_antennas_rx][LENGTH_SSS_NR];
@@ -239,6 +252,9 @@ bool rx_sss_nr(const NR_DL_FRAME_PARMS *frame_parms,
     const c64_t rot =
         (c64_t){round(cos(M_PI / 3 / 15 * (phase_to_try[idx])) * 32767), round(sin(M_PI / 3 / 15 * (phase_to_try[idx])) * 32767)};
     for (int n1 = Nid1_start; n1 < Nid1_end; n1++) { // all possible Nid1 values
+      // Skip this Nid1 if the corresponding PCI is in the exclusion list
+      if (skip_pci(n1, Nid2, exclude_nid_cells, num_exclude_nid_cells))
+        continue;
       int64_t metric = 0;
       int16_t *d = d_sss[Nid2][n1];
       for (int i = 0; i < LENGTH_SSS_NR; i++) {

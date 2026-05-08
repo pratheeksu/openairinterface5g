@@ -165,6 +165,9 @@ void init_nr_ue_vars(PHY_VARS_NR_UE *ue, uint8_t UE_id)
   // intialize transport
   init_nr_ue_transport(ue);
 
+  // Initialization of measurement variables
+  init_phy_nr_measurements(ue);
+
   ue->ta_frame = -1;
   ue->ta_slot = -1;
 }

@@ -947,7 +947,7 @@ uint32_t angle(struct complex16 perrror);
 unsigned char factor2(unsigned int x);
 
 int8_t dB_fixed(uint32_t x);
-int8_t dB_fixed64(uint64_t x);
+int dB_fixed64(uint64_t x);
 int8_t dB_fixed2(uint32_t x,uint32_t y);
 int16_t dB_fixed_times10(uint32_t x);
 int16_t dB_fixed_x10(uint32_t x);

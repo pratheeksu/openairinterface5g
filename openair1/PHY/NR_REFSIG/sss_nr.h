@@ -55,6 +55,8 @@ bool rx_sss_nr(const NR_DL_FRAME_PARMS *frame_parms,
                int32_t *tot_metric,
                uint8_t *phase_max,
                int *freq_offset_sss,
-               c16_t rxdataF[NR_N_SYMBOLS_SSB][frame_parms->nb_antennas_rx][frame_parms->ofdm_symbol_size]);
+               c16_t rxdataF[NR_N_SYMBOLS_SSB][frame_parms->nb_antennas_rx][frame_parms->ofdm_symbol_size],
+               const uint16_t *exclude_nid_cells,
+               int num_exclude_nid_cells);
 #endif /* SSS_NR_H */
 
