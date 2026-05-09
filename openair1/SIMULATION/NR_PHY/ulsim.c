@@ -1560,6 +1560,11 @@ int main(int argc, char *argv[])
         for (int i = 0; i < 14; i++) {
           was_symbol_used[i] = true;
         }
+	int sigenergy = 0;
+
+        for (int aarx = 0; aarx < gNB->frame_parms.nb_antennas_rx; aarx++) {
+           sigenergy += signal_energy((int32_t *)rxdata[aarx] + slot_offset, slot_length);
+        }
         nr_ofdm_demod_and_rx_rotation(rxdata,
                                       gNB->common_vars.rxdataF[0],
                                       &gNB->frame_parms,
@@ -1567,7 +1572,8 @@ int main(int argc, char *argv[])
                                       slot,
                                       offset,
                                       link_type_ul,
-                                      was_symbol_used);
+                                      was_symbol_used,
+				      dB_fixed(sigenergy/gNB->frame_parms.nb_antennas_rx));
 
         ul_proc_error = phy_procedures_gNB_uespec_RX(gNB, frame, slot, &UL_INFO);
 
