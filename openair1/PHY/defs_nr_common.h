@@ -48,7 +48,7 @@
 #define MAX_NUM_NR_SRS_AP 4
 #define NUMBER_OF_NR_RU_PRACH_OCCASIONS_MAX 12
 
-#define MAX_DELAY_COMP 20
+#define MAX_DELAY_COMP 160
 
 #define PBCH_MAX_RE_PER_SYMBOL (20 * 12)
 
@@ -178,10 +178,10 @@ typedef struct NR_DL_FRAME_PARMS_s {
   /// sequence used to compensate the phase rotation due to timeshifted OFDM symbols
   /// First dimenstion is for different CP lengths
   c16_t timeshift_symbol_rotation[4096*2] __attribute__ ((aligned (16)));
-  /// Table used to apply the delay compensation in DL/UL
-  c16_t delay_table[2 * MAX_DELAY_COMP + 1][NR_MAX_OFDM_SYMBOL_SIZE];
-  /// Table used to apply the delay compensation in PUCCH2
-  c16_t delay_table128[2 * MAX_DELAY_COMP + 1][128];
+  /// Table used to apply the delay compensation in DL/UL (dynamically allocated)
+  c16_t (*delay_table)[NR_MAX_OFDM_SYMBOL_SIZE];
+  /// Table used to apply the delay compensation in PUCCH2 (dynamically allocated)
+  c16_t (*delay_table128)[128];
   /// Power used by SSB in order to estimate signal strength and path loss
   int ss_PBCH_BlockPower;
 

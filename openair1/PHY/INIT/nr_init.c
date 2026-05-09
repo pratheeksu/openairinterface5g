@@ -123,6 +123,9 @@ void phy_init_nr_gNB(PHY_VARS_gNB *gNB)
   AssertFatal(ret_loader == 0, "error loading LDPC library\n");
 
   gNB->max_nb_pdsch = MAX_MOBILES_PER_GNB;
+  fp->delay_table = calloc(2 * MAX_DELAY_COMP + 1, sizeof(*fp->delay_table));
+  fp->delay_table128 = calloc(2 * MAX_DELAY_COMP + 1, sizeof(*fp->delay_table128));
+  AssertFatal(fp->delay_table && fp->delay_table128, "Failed to allocate delay tables\n");
   init_delay_table(fp->ofdm_symbol_size, MAX_DELAY_COMP, NR_MAX_OFDM_SYMBOL_SIZE, fp->delay_table);
   init_delay_table(128, MAX_DELAY_COMP, 128, fp->delay_table128);
 
@@ -250,6 +253,9 @@ void phy_free_nr_gNB(PHY_VARS_gNB *gNB)
 
   free_nrLDPC_coding_interface(&gNB->nrLDPC_coding_interface);
 
+  NR_DL_FRAME_PARMS *fp = &gNB->frame_parms;
+  free_and_zero(fp->delay_table);
+  free_and_zero(fp->delay_table128);
 }
 
 void nr_phy_config_request_sim(PHY_VARS_gNB *gNB,

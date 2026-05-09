@@ -316,6 +316,11 @@ void term_nr_ue_signal(PHY_VARS_NR_UE *ue)
     free_and_zero(ue->prs_vars[idx]);
   }
 
+  free(ue->frame_parms.delay_table);
+  ue->frame_parms.delay_table = NULL;
+  free(ue->frame_parms.delay_table128);
+  ue->frame_parms.delay_table128 = NULL;
+
   sl_ue_free(ue);
 }
 
@@ -466,6 +471,9 @@ void clean_UE_harq(PHY_VARS_NR_UE *UE)
 
 void phy_init_nr_top(PHY_VARS_NR_UE *ue) {
   NR_DL_FRAME_PARMS *frame_parms = &ue->frame_parms;
+  frame_parms->delay_table = calloc(2 * MAX_DELAY_COMP + 1, sizeof(*frame_parms->delay_table));
+  frame_parms->delay_table128 = calloc(2 * MAX_DELAY_COMP + 1, sizeof(*frame_parms->delay_table128));
+  AssertFatal(frame_parms->delay_table && frame_parms->delay_table128, "Failed to allocate delay tables\n");
   init_delay_table(frame_parms->ofdm_symbol_size, MAX_DELAY_COMP, NR_MAX_OFDM_SYMBOL_SIZE, frame_parms->delay_table);
   crcTableInit();
   init_byte2m128i();

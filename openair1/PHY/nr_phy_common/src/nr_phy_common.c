@@ -368,7 +368,30 @@ void nr_est_delay(int ofdm_symbol_size, const c16_t *ls_est, c16_t *ch_estimates
   // estimated delay, and causing the delay compensation to worsen the result instead of improving it. After analyzing several
   // peaks, and doing many tests, a PEAK_DETECT_THRESHOLD = 15 is an adequate value, to apply delay compensation only when there is
   // clearly a peak
-  delay->est_delay = mean_val > 0 && max_val / mean_val > PEAK_DETECT_THRESHOLD ? max_pos - sync_pos : 0;
+  if (mean_val == 0 || max_val / mean_val <= PEAK_DETECT_THRESHOLD) {
+    delay->est_delay = 0;
+    return;
+  }
+
+  // In multipath channels, the strongest tap may be a late reflection rather than the
+  // first arrival. Aligning to a late tap shifts the FFT window so early paths fall
+  // before the CP, worsening ISI. Instead, find the first significant tap (-6 dB
+  // relative to the peak in power) which keeps the most multipath energy inside the CP.
+  // TODO: could scan from max_pos - scan_range to max_pos instead of -scan_range to
+  // +scan_range since the first path is always <= peak delay
+  const int threshold = max_val >> 2;
+  const int scan_range = MAX_DELAY_COMP < ofdm_symbol_size / 2 ? MAX_DELAY_COMP : ofdm_symbol_size / 2 - 1;
+  int first_sig_delay = max_pos;
+  for (int d = -scan_range; d <= scan_range; d++) {
+    int idx = d < 0 ? d + ofdm_symbol_size : d;
+    int power = c16amp2(ch_estimates_time[idx]) >> 1;
+    if (power > threshold) {
+      first_sig_delay = d;
+      break;
+    }
+  }
+
+  delay->est_delay = first_sig_delay - sync_pos;
 }
 
 unsigned int nr_get_tx_amp(int power_dBm, int power_max_dBm, int total_nb_rb, int nb_rb)
