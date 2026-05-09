@@ -113,8 +113,15 @@ int nr_slot_fep(PHY_VARS_NR_UE *ue,
     }
   }
   time_stats_t* dft_stats = NULL;
+  int sigenergy = 0;
   if (ue) dft_stats = &ue->phy_cpu_stats.cpu_time_stats[RX_DFT_STATS];
-  nr_symbol_fep(frame_parms, slot, symbol, linktype, rxdata_symb_ptr, rxdataF_symb_ptr, dft_stats,ue->dft_in_levdB);
+  else {
+     for (unsigned char aa = 0; aa < frame_parms->nb_antennas_rx; aa++) {
+        sigenergy += signal_energy((int32_t *)rxdata_symb_ptr[aa], frame_parms->ofdm_symbol_size);
+     }
+  }
+  
+  nr_symbol_fep(frame_parms, slot, symbol, linktype, rxdata_symb_ptr, rxdataF_symb_ptr, dft_stats,ue ? ue->dft_in_levdB : dB_fixed(sigenergy/frame_parms->nb_antennas_rx));
   return 0;
 }
 
