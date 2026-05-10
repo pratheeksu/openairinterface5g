@@ -422,6 +422,10 @@ nr_initial_sync_t nr_initial_sync(UE_nr_rxtx_proc_t *proc,
             ssbInfo->gscnInfo.ssRef,
             ssbInfo->pssCorrPeakPower,
             ssbInfo->pssCorrAvgPower);
+      ue->dft_in_levdB = -ssbInfo->adjust_rxgain + TARGET_RX_POWER; 
+      LOG_I(NR_PHY,
+	    "setting initial dft_in_lev to %d\n",
+	    ue->dft_in_levdB);
       // take the first cell detected
       if (!res)
         res = ssbInfo;
