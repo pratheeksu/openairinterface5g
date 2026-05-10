@@ -1807,39 +1807,45 @@ static void nr_ue_pucch_scheduler(NR_UE_MAC_INST_t *mac, frame_t frame, int slot
     // scheduling PUCCH prepared in advance for MSG4
     RA_PUCCH_SCHED_t *ra_pucch = mac->ra.ra_pucch;
     if (ra_pucch->sched_frame == frame && ra_pucch->sched_slot == slot) {
-      pucch[0] = ra_pucch->pucch_sched;
-      num_res++;
+      fapi_nr_ul_config_request_pdu_t *pdu = lockGet_ul_config(mac, frame, slot, FAPI_NR_UL_CONFIG_TYPE_PUCCH);
+      if (!pdu) {
+        LOG_E(NR_MAC, "Error in pucch allocation\n");
+        return;
+      }
+      pdu->pucch_config_pdu = ra_pucch->pucch_pdu;
       free_and_zero(mac->ra.ra_pucch);
-    }
-  } else {
-    // SR
-    if (mac->state == UE_CONNECTED && trigger_periodic_scheduling_request(mac, &pucch[0], frame, slot)) {
-      num_res++;
-      // TODO check if the PUCCH resource for the SR transmission occasion overlap with a UL-SCH resource
-    }
-
-    // CSI
-    int csi_res = 0;
-    if (mac->state == UE_CONNECTED)
-      csi_res = nr_get_csi_measurements(mac, frame, slot, &pucch[num_res].csi_payload, &pucch[num_res].pucch_resource, false);
-    if (csi_res > 0) {
-      num_res += csi_res;
-    }
-
-    // ACKNACK
-    bool any_harq = get_downlink_ack(mac, frame, slot, &pucch[num_res]);
-    if (any_harq)
-      num_res++;
-
-    if (num_res == 0)
+      release_ul_config(pdu, false);
       return;
-    // do no transmit pucch if only SR scheduled and it is negative
-    if (num_res == 1 && pucch[0].n_sr > 0 && pucch[0].sr_payload == 0)
-      return;
-
-    if (num_res > 1)
-      multiplex_pucch_resource(mac, pucch, num_res);
+    }
   }
+
+  // SR
+  if (mac->state == UE_CONNECTED && trigger_periodic_scheduling_request(mac, &pucch[0], frame, slot)) {
+    num_res++;
+    // TODO check if the PUCCH resource for the SR transmission occasion overlap with a UL-SCH resource
+  }
+
+  // CSI
+  int csi_res = 0;
+  if (mac->state == UE_CONNECTED)
+    csi_res = nr_get_csi_measurements(mac, frame, slot, &pucch[num_res].csi_payload, &pucch[num_res].pucch_resource, false);
+  if (csi_res > 0) {
+    num_res += csi_res;
+  }
+
+  // ACKNACK
+  bool any_harq = get_downlink_ack(mac, frame, slot, &pucch[num_res]);
+  if (any_harq)
+    num_res++;
+
+  if (num_res == 0)
+    return;
+  // do no transmit pucch if only SR scheduled and it is negative
+  if (num_res == 1 && pucch[0].n_sr > 0 && pucch[0].sr_payload == 0)
+    return;
+
+  if (num_res > 1)
+    multiplex_pucch_resource(mac, pucch, num_res);
 
   for (int j = 0; j < num_res; j++) {
     if (pucch[j].n_harq + pucch[j].n_sr + pucch[j].csi_payload.p1_bits != 0) {

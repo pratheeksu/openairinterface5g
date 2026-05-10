@@ -1211,9 +1211,10 @@ void prepare_msg4_msgb_feedback(NR_UE_MAC_INST_t *mac, int pid, int ack_nack)
 
   RA_config_t *ra = &mac->ra;
   ra->ra_pucch = calloc_or_fail(1, sizeof(*ra->ra_pucch));
-  ra->ra_pucch->pucch_sched = pucch;
   ra->ra_pucch->sched_frame = sched_frame;
   ra->ra_pucch->sched_slot = sched_slot;
+  int ret = nr_ue_configure_pucch(mac, sched_slot, sched_frame, ra->t_crnti, &pucch, &ra->ra_pucch->pucch_pdu);
+  AssertFatal(ret == 0, "Couldn't configure PUCCH for MSG4\n");
 }
 
 void reset_ra(NR_UE_MAC_INST_t *nr_mac, bool free_prach)
