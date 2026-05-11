@@ -1235,6 +1235,9 @@ typedef struct gNB_MAC_INST_s {
   nr_ul_mcs_select_fn ul_mcs_select;
   nr_ul_rb_alloc_fn ul_rb_alloc;
 
+  /// Optional state persistence for scheduling policies.
+  void *sched_stateful_data;
+
   nr_mac_config_t radio_config;
   nr_rlc_configuration_t rlc_config;
 
