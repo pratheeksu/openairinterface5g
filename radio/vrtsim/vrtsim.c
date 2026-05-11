@@ -193,9 +193,7 @@ static void load_channel_model(vrtsim_state_t *vrtsim_state)
   char *model_name = vrtsim_state->role == ROLE_CLIENT ? "client_tx_channel_model" : "server_tx_channel_model";
   vrtsim_state->channel_desc[0] = find_channel_desc_fromname(model_name);
   channel_desc_t *channel_desc = vrtsim_state->channel_desc[0];
-  AssertFatal(channel_desc != NULL,
-              "Could not find model name %s. Make sure it is present in the config file\n",
-              model_name);
+  AssertFatal(channel_desc != NULL, "Could not find model name %s. Make sure it is present in the config file\n", model_name);
   LOG_A(HW,
         "Channel model %s parameters: path_loss_dB=%.2f, nb_tx=%d, nb_rx=%d, channel_length=%d\n",
         model_name,
@@ -316,7 +314,9 @@ static client_info_t client_read_info(char *descriptor_file)
 static void parse_ue_config(vrtsim_state_t *vrtsim_state)
 {
   AssertFatal(vrtsim_state->num_ues > 0 && vrtsim_state->num_ues <= MAX_NUM_UES,
-              "num_ues=%d out of range (1..%d)\n", vrtsim_state->num_ues, MAX_NUM_UES);
+              "num_ues=%d out of range (1..%d)\n",
+              vrtsim_state->num_ues,
+              MAX_NUM_UES);
 
   for (int i = 0; i < vrtsim_state->num_ues; i++) {
     char prefix[64];
@@ -328,6 +328,7 @@ static void parse_ue_config(vrtsim_state_t *vrtsim_state)
     double speed_mps = vrtsim_state->cirdb_speed_mps;
     double aoa_deg = vrtsim_state->cirdb_aoa_deg;
 
+    // clang-format off
     paramdef_t ue_params[] = {
       {"antennas",  "Antenna config e.g. \"1x2\"", 0, .strptr = &antennas,  .defstrval = NULL,                           TYPE_STRING, 0},
       {"model_id",  "TDL model id 0..4",           0, .iptr   = &model_id,  .defintval = vrtsim_state->cirdb_model_id,   TYPE_INT,    0},
@@ -335,17 +336,18 @@ static void parse_ue_config(vrtsim_state_t *vrtsim_state)
       {"speed_mps", "Speed in m/s",                 0, .dblptr = &speed_mps, .defdblval = vrtsim_state->cirdb_speed_mps,  TYPE_DOUBLE, 0},
       {"aoa_deg",   "LOS AoA in degrees (TDL-D/E only)", 0, .dblptr = &aoa_deg, .defdblval = vrtsim_state->cirdb_aoa_deg, TYPE_DOUBLE, 0},
     };
+    // clang-format on
 
     config_get(config_get_if(), ue_params, sizeofArray(ue_params), prefix);
 
     if (antennas != NULL) {
       int tx_ant, rx_ant;
       AssertFatal(sscanf(antennas, "%dx%d", &tx_ant, &rx_ant) == 2,
-                  "Invalid antenna format '%s' for UE %d, use e.g. '1x2'\n", antennas, i);
-      AssertFatal(tx_ant > 0 && tx_ant <= MAX_NUM_ANTENNAS_TX,
-                  "Invalid TX antenna count %d for UE %d\n", tx_ant, i);
-      AssertFatal(rx_ant > 0 && rx_ant <= MAX_NUM_ANTENNAS_TX,
-                  "Invalid RX antenna count %d for UE %d\n", rx_ant, i);
+                  "Invalid antenna format '%s' for UE %d, use e.g. '1x2'\n",
+                  antennas,
+                  i);
+      AssertFatal(tx_ant > 0 && tx_ant <= MAX_NUM_ANTENNAS_TX, "Invalid TX antenna count %d for UE %d\n", tx_ant, i);
+      AssertFatal(rx_ant > 0 && rx_ant <= MAX_NUM_ANTENNAS_TX, "Invalid RX antenna count %d for UE %d\n", rx_ant, i);
       vrtsim_state->ue_conf[i].tx_ant = tx_ant;
       vrtsim_state->ue_conf[i].rx_ant = rx_ant;
     } else {
@@ -353,23 +355,25 @@ static void parse_ue_config(vrtsim_state_t *vrtsim_state)
       vrtsim_state->ue_conf[i].rx_ant = 1;
     }
 
-    AssertFatal(model_id >= 0 && model_id <= 4,
-                "Invalid model_id %d for UE %d (must be 0-4)\n", model_id, i);
-    AssertFatal(ds_ns > 0,
-                "Invalid ds_ns %.1f for UE %d (must be > 0)\n", ds_ns, i);
-    AssertFatal(speed_mps >= 0,
-                "Invalid speed_mps %.1f for UE %d (must be >= 0)\n", speed_mps, i);
+    AssertFatal(model_id >= 0 && model_id <= 4, "Invalid model_id %d for UE %d (must be 0-4)\n", model_id, i);
+    AssertFatal(ds_ns > 0, "Invalid ds_ns %.1f for UE %d (must be > 0)\n", ds_ns, i);
+    AssertFatal(speed_mps >= 0, "Invalid speed_mps %.1f for UE %d (must be >= 0)\n", speed_mps, i);
 
-    vrtsim_state->ue_conf[i].cir_conf.model_id  = model_id;
-    vrtsim_state->ue_conf[i].cir_conf.ds_ns     = ds_ns;
+    vrtsim_state->ue_conf[i].cir_conf.model_id = model_id;
+    vrtsim_state->ue_conf[i].cir_conf.ds_ns = ds_ns;
     vrtsim_state->ue_conf[i].cir_conf.speed_mps = speed_mps;
-    vrtsim_state->ue_conf[i].cir_conf.aoa_deg   = aoa_deg;
+    vrtsim_state->ue_conf[i].cir_conf.aoa_deg = aoa_deg;
 
-    LOG_I(HW, "VRTSIM: UE %d - %dx%d antennas, Model %d (TDL-%c), DS %.1fns, Speed %.1fm/s, AoA %.1fdeg\n",
+    LOG_I(HW,
+          "VRTSIM: UE %d - %dx%d antennas, Model %d (TDL-%c), DS %.1fns, Speed %.1fm/s, AoA %.1fdeg\n",
           i,
           vrtsim_state->ue_conf[i].tx_ant,
           vrtsim_state->ue_conf[i].rx_ant,
-          model_id, 'A' + model_id, ds_ns, speed_mps, aoa_deg);
+          model_id,
+          'A' + model_id,
+          ds_ns,
+          speed_mps,
+          aoa_deg);
   }
 }
 
@@ -408,8 +412,7 @@ static int vrtsim_connect(openair0_device_t *device)
     for (int i = 0; i < vrtsim_state->num_ues; i++) {
       num_tx_streams += vrtsim_state->ue_conf[i].rx_ant;
     }
-    vrtsim_state->channel =
-        shm_td_iq_channel_create(DEFAULT_CHANNEL_NAME, num_tx_streams, num_rx_streams);
+    vrtsim_state->channel = shm_td_iq_channel_create(DEFAULT_CHANNEL_NAME, num_tx_streams, num_rx_streams);
     LOG_A(HW, "vrtsim created a shm_td_iq_channel with config tx: %d rx: %d\n", num_tx_streams, num_rx_streams);
     // Exchange peer info
 
@@ -458,7 +461,6 @@ static int vrtsim_connect(openair0_device_t *device)
       vrtsim_state->cirdb_ds_ns = vrtsim_state->ue.cir_conf.ds_ns;
       vrtsim_state->cirdb_speed_mps = vrtsim_state->ue.cir_conf.speed_mps;
       vrtsim_state->cirdb_aoa_deg = vrtsim_state->ue.cir_conf.aoa_deg;
-
 
       LOG_I(HW,
             "VRTSIM: UE %d channel - Model %d (TDL-%c), DS %.1fns, Speed %.1fm/s, AoA %.1fdeg\n",
@@ -548,12 +550,25 @@ static int vrtsim_connect(openair0_device_t *device)
           AssertFatal(cd != NULL, "CIRDB failed to create channel_desc for UE %d\n", u);
           AssertFatal(cd->nb_tx == device->openair0_cfg[0].tx_num_channels,
                       "CIRDB shape mismatch UE%d: nb_tx=%d expected %d\n",
-                      u, cd->nb_tx, device->openair0_cfg[0].tx_num_channels);
-          LOG_I(HW, "VRTSIM: UE %d channel_desc=%p ch_ps=%p ch=%p nb_tx=%d nb_rx=%d\n",
-                u, cd, cd->ch_ps, cd->ch, cd->nb_tx, cd->nb_rx);
-          LOG_I(HW, "VRTSIM: UE %d CIRDB - Model %d (TDL-%c), antennas %dx%d, nb_rx=%d\n",
-                u, ue_sel.want_model_id, 'A' + ue_sel.want_model_id,
-                device->openair0_cfg[0].tx_num_channels, vrtsim_state->ue_conf[u].rx_ant, cd->nb_rx);
+                      u,
+                      cd->nb_tx,
+                      device->openair0_cfg[0].tx_num_channels);
+          LOG_I(HW,
+                "VRTSIM: UE %d channel_desc=%p ch_ps=%p ch=%p nb_tx=%d nb_rx=%d\n",
+                u,
+                cd,
+                cd->ch_ps,
+                cd->ch,
+                cd->nb_tx,
+                cd->nb_rx);
+          LOG_I(HW,
+                "VRTSIM: UE %d CIRDB - Model %d (TDL-%c), antennas %dx%d, nb_rx=%d\n",
+                u,
+                ue_sel.want_model_id,
+                'A' + ue_sel.want_model_id,
+                device->openair0_cfg[0].tx_num_channels,
+                vrtsim_state->ue_conf[u].rx_ant,
+                cd->nb_rx);
         }
         LOG_A(HW, "VRTSIM: Multi-UE channel taps via CIR DB\n");
       } else {
@@ -576,11 +591,7 @@ static int vrtsim_connect(openair0_device_t *device)
   return 0;
 }
 
-static int vrtsim_write_internal(vrtsim_state_t *vrtsim_state,
-                                 openair0_timestamp_t timestamp,
-                                 c16_t *samples,
-                                 int nsamps,
-                                 int aarx)
+static int vrtsim_write_internal(vrtsim_state_t *vrtsim_state, openair0_timestamp_t timestamp, c16_t *samples, int nsamps, int aarx)
 {
   tx_timing_t *tx_timing = &vrtsim_state->tx_timing;
 
@@ -678,7 +689,7 @@ static int vrtsim_write_with_chanmod(vrtsim_state_t *vrtsim_state,
     }
     size_t saved_samples_input_len = channel_length - 1;
 
-  #ifdef CUDA_ENABLE
+#ifdef CUDA_ENABLE
     cuda_channel_pipeline(vrtsim_state->channel_pipeline_context,
                           (const cf_t **)channel_impulse_response_p,
                           (const c16_t **)saved_samples_ptr,
@@ -692,21 +703,21 @@ static int vrtsim_write_with_chanmod(vrtsim_state_t *vrtsim_state,
                           nb_tx,
                           nb_rx,
                           noise_power);
-  #else
+#else
     channel_pipeline(&vrtsim_state->tpool,
-                    (const cf_t **)channel_impulse_response_p,
-                    (const c16_t **)saved_samples_ptr,
-                    (const c16_t **)input_ptr,
-                    saved_samples_input_len,
-                    output_ptr,
-                    NULL,
-                    nsamps,
-                    nsamps,
-                    channel_length,
-                    nb_tx,
-                    nb_rx,
-                    noise_power);
-  #endif
+                     (const cf_t **)channel_impulse_response_p,
+                     (const c16_t **)saved_samples_ptr,
+                     (const c16_t **)input_ptr,
+                     saved_samples_input_len,
+                     output_ptr,
+                     NULL,
+                     nsamps,
+                     nsamps,
+                     channel_length,
+                     nb_tx,
+                     nb_rx,
+                     noise_power);
+#endif
 
     for (int aarx = 0; aarx < nb_rx; aarx++) {
       vrtsim_write_internal(vrtsim_state, timestamp, output[aarx], nsamps, rx_antenna_offset + aarx);
@@ -825,18 +836,14 @@ static int vrtsim_read(openair0_device_t *device, openair0_timestamp_t *ptimesta
         for (int aarx = 0; aarx < nbAnt; aarx++) {
           int stream = u * nbAnt + aarx;
           sample_t buffer[nsamps];
-          int ret = shm_td_iq_channel_rx(vrtsim_state->channel,
-                                         vrtsim_state->last_received_sample,
-                                         nsamps,
-                                         stream,
-                                         buffer);
+          int ret = shm_td_iq_channel_rx(vrtsim_state->channel, vrtsim_state->last_received_sample, nsamps, stream, buffer);
           if (ret == CHANNEL_ERROR_TOO_LATE) {
             vrtsim_state->rx_samples_late += nsamps;
           } else if (ret == CHANNEL_ERROR_TOO_EARLY) {
             vrtsim_state->rx_early += 1;
           }
           int16_t *out = (int16_t *)samplesVoid[aarx];
-          int16_t *in  = (int16_t *)buffer;
+          int16_t *in = (int16_t *)buffer;
           for (int i = 0; i < nsamps * 2; i++) {
             int32_t sum = (int32_t)out[i] + (int32_t)in[i];
             out[i] = (int16_t)((sum > 32767) ? 32767 : (sum < -32768) ? -32768 : sum);
