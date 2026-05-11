@@ -2460,6 +2460,30 @@ void nr_ulsch_preprocessor(gNB_MAC_INST *nr_mac, post_process_pusch_t *pp_pusch)
   }
 
   fsn_t *next = &nr_mac->ul_next;
+  int slots_per_frame = nr_mac->frame_structure.numb_slots_frame;
+
+  /* Step 1: Collect candidates once — the candidate set does not depend on which
+   * UL slot we target (TDA/k2). nr_ul_schedule mutates the array, so we memcpy
+   * a fresh copy for each iteration. */
+  fsn_t first_ul = fsn_get_max(*next, min_next);
+  while (!is_ul_slot(first_ul.s, fs))
+    first_ul = fsn_add_delta(first_ul, 1);
+  int first_k2 = fsn_get_diff(first_ul, current) - koffset;
+  int first_sched_frame = (frame + (slot + first_k2 + koffset) / slots_per_frame) % MAX_FRAME_NUMBER;
+  int first_sched_slot = (slot + first_k2 + koffset) % slots_per_frame;
+
+  nr_ul_candidate_t base_candidates[MAX_MOBILES_PER_GNB] = {0};
+  int n_cand = collect_ul_candidates(nr_mac,
+                                     nr_mac->UE_info.connected_ue_list,
+                                     base_candidates,
+                                     MAX_MOBILES_PER_GNB,
+                                     frame,
+                                     slot,
+                                     first_sched_frame,
+                                     first_sched_slot);
+  if (n_cand == 0 && !last_dl)
+    return;
+
   while (max_dci > 0) {
     /* go to the next UL slot, skipping DL if necessary */
     *next = fsn_get_max(*next, min_next);
@@ -2473,29 +2497,16 @@ void nr_ulsch_preprocessor(gNB_MAC_INST *nr_mac, post_process_pusch_t *pp_pusch)
      * "cell-specific", i.e., the UE will add it on the computation. */
     int k2 = fsn_get_diff(*next, current) - koffset;
     DevAssert(k2 > 0);
-    int slots_per_frame = nr_mac->frame_structure.numb_slots_frame;
     int sched_frame = (frame + (slot + k2 + koffset) / slots_per_frame) % MAX_FRAME_NUMBER;
     int sched_slot = (slot + k2 + koffset) % slots_per_frame;
 
     /* Check that at least one TDA can reach this slot, if not, no future slot is reachable either */
-    {
-      const NR_tda_info_t *tda_check = NULL;
-      if (get_num_ul_tda(nr_mac, sched_slot, k2, &tda_check) == 0)
-        break;
-    }
-
-    /* Step 1: Collect candidates (before TDA selection, collect doesn't depend on TDA) */
-    nr_ul_candidate_t candidates[MAX_MOBILES_PER_GNB] = {0};
-    int n_cand = collect_ul_candidates(nr_mac,
-                                       nr_mac->UE_info.connected_ue_list,
-                                       candidates,
-                                       MAX_MOBILES_PER_GNB,
-                                       frame,
-                                       slot,
-                                       sched_frame,
-                                       sched_slot);
-    if (n_cand == 0 && !last_dl)
+    const NR_tda_info_t *tda_check = NULL;
+    if (get_num_ul_tda(nr_mac, sched_slot, k2, &tda_check) == 0)
       break;
+
+    nr_ul_candidate_t candidates[MAX_MOBILES_PER_GNB];
+    memcpy(candidates, base_candidates, n_cand * sizeof(*candidates));
 
     nr_mac->mac_stats.ul.total_prb_aggregate += bw;
     int len[num_beams];
