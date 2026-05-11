@@ -269,7 +269,22 @@ void nr_dlsim_preprocessor(gNB_MAC_INST *nr_mac, post_process_pdsch_t *pp_pdsch)
   AssertFatal(sched_pdsch.mcs >= 0, "invalid mcs %d\n", sched_pdsch.mcs);
   AssertFatal(current_BWP->mcsTableIdx >= 0 && current_BWP->mcsTableIdx <= 2, "invalid mcsTableIdx %d\n", current_BWP->mcsTableIdx);
 
-  post_process_dlsch(nr_mac, pp_pdsch, UE_info, &sched_pdsch);
+  nr_dl_candidate_t candidate = {
+      .UE = UE_info,
+      .rnti = UE_info->rnti,
+      .is_retx = sched_ctrl->harq_processes[sched_pdsch.dl_harq_pid].round > 0,
+      .retx_harq_pid = sched_pdsch.dl_harq_pid,
+      .pending_bytes = sched_ctrl->num_total_bytes,
+      .mcs_table = current_BWP->mcsTableIdx,
+      .bwp_start = sched_pdsch.bwp_info.bwpStart,
+      .bwp_size = sched_pdsch.bwp_info.bwpSize,
+  };
+  for (int i = 0; i < seq_arr_size(&sched_ctrl->lc_config); ++i) {
+    const nr_lc_config_t *c = seq_arr_at(&sched_ctrl->lc_config, i);
+    candidate.pending_bytes_per_lcid[c->lcid] = sched_ctrl->rlc_status[c->lcid].bytes_in_buffer;
+  }
+
+  post_process_dlsch(nr_mac, pp_pdsch, UE_info, &sched_pdsch, &candidate);
 }
 
 nrUE_params_t nrUE_params;

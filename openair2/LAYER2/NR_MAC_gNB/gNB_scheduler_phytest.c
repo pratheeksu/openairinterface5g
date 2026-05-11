@@ -50,6 +50,8 @@ void nr_preprocessor_phytest(gNB_MAC_INST *mac, post_process_pdsch_t *pp_pdsch)
   if (!is_xlsch_in_slot(dlsch_slot_bitmap, dlsch_slot_modval, slot_period))
     return;
   NR_UE_info_t *UE = mac->UE_info.connected_ue_list[0];
+  if (UE == NULL)
+    return;
   NR_ServingCellConfigCommon_t *scc = mac->common_channels[0].ServingCellConfigCommon;
   NR_UE_sched_ctrl_t *sched_ctrl = &UE->UE_sched_ctrl;
   NR_UE_DL_BWP_t *dl_bwp = &UE->current_DL_BWP;
@@ -176,7 +178,19 @@ void nr_preprocessor_phytest(gNB_MAC_INST *mac, post_process_pdsch_t *pp_pdsch)
                                        target_dl_Nl)
                         >> 3;
 
-  post_process_dlsch(mac, pp_pdsch, UE, &sched_pdsch);
+  nr_dl_candidate_t candidate = {
+      .UE = UE,
+      .rnti = rnti,
+      .is_retx = sched_pdsch.dl_harq_pid >= 0,
+      .retx_harq_pid = sched_pdsch.dl_harq_pid,
+      .pending_bytes = sched_ctrl->num_total_bytes,
+      .mcs_table = dl_bwp->mcsTableIdx,
+      .bwp_start = sched_pdsch.bwp_info.bwpStart,
+      .bwp_size = sched_pdsch.bwp_info.bwpSize,
+  };
+  candidate.pending_bytes_per_lcid[lcid] = sched_ctrl->rlc_status[lcid].bytes_in_buffer;
+
+  post_process_dlsch(mac, pp_pdsch, UE, &sched_pdsch, &candidate);
 
   /* mark the corresponding RBs as used */
   for (int rb = 0; rb < sched_pdsch.rbSize; rb++)

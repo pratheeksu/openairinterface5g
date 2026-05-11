@@ -501,6 +501,10 @@ static void evaluate_sinr_report(NR_UE_info_t *UE,
   sched_ctrl->dl_max_mcs = get_mcs_from_SINRx10(mcs_table, sinr_report->r[0].SINRx10, nrOfLayers);
 
   LOG_D(MAC, "Reported SSB-SINR = %01f, dl_max_mcs %d\n", sinr_report->r[0].SINRx10 / 10.0, sched_ctrl->dl_max_mcs);
+
+  for (RSRP_report_t *r = sinr_report->r; r < sinr_report->r + sinr_report->nb; r++)
+    if (r->resource_id < MAX_NUM_OF_SSB)
+      UE->beam_sinr[r->resource_id] = r->SINRx10;
 }
 
 static void evaluate_rsrp_report(NR_UE_info_t *UE,
@@ -574,6 +578,10 @@ static void evaluate_rsrp_report(NR_UE_info_t *UE,
   // including ssb rsrp in mac stats
   stats->cumul_rsrp += rsrp_report->r[0].RSRP;
   stats->num_rsrp_meas++;
+
+  for (RSRP_report_t *r = rsrp_report->r; r < rsrp_report->r + rsrp_report->nb; r++)
+    if (r->resource_id < MAX_NUM_OF_SSB)
+      UE->beam_rsrp[r->resource_id] = r->RSRP;
 }
 
 static void evaluate_cri_report(uint8_t *payload, uint8_t cri_bitlen, int cumul_bits, NR_UE_sched_ctrl_t *sched_ctrl)
