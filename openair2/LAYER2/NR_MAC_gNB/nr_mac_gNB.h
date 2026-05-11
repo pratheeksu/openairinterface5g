@@ -1035,23 +1035,17 @@ struct nr_ul_candidate {
   const int16_t *beam_sinr; ///< per-SSB L1-SINR×10; same indexing. INT16_MIN = no data.
 
   /* ── gNB decisions (written by the named pipeline stage) ───────────────── */
-  /* ul_ri_tpmi_select: rank and precoding */
-  int alloc_nrOfLayers; ///< decided rank; default from SRS feedback
-  int alloc_tpmi; ///< decided TPMI; default from SRS feedback
-  /* ul_tda_select: time-domain allocation */
-  int alloc_tda; ///< TDA index
-  NR_tda_info_t alloc_tda_info; ///< resolved TDA info
-  uint16_t alloc_slbitmap; ///< symbol bitmap derived from alloc_tda_info
+  /* Use NR_sched_pusch_t for fields shared with HARQ/dispatch (mcs, rbStart,
+   * rbSize, nrOfLayers, tpmi, tda, tda_info).
+   * Remaining dispatch-only fields (R, Qm, tb_size, dmrs_info, bwp_info) are
+   * filled at dispatch time.  Mirrors DL sched_pdsch pattern. */
+  NR_sched_pusch_t sched_pusch;
+  uint16_t alloc_slbitmap; ///< symbol bitmap derived from sched_pusch.tda_info
   /* ul_beam_select: beam assignment (DCI slot + PUSCH slot) */
   int alloc_dci_beam_idx; ///< beam idx for the DCI slot; -1 = failed
   int alloc_beam_idx; ///< beam idx for the scheduled PUSCH slot; -1 = failed
   bool alloc_dci_beam_new; ///< true if dci_beam was newly allocated
   bool alloc_sched_beam_new; ///< true if sched_beam was newly allocated
-  /* ul_mcs_select: MCS from BLER/SINR */
-  int alloc_mcs; ///< MCS target; SINR-based (harq_round_max==1) or BLER-based
-  /* ul_rb_alloc: frequency-domain assignment */
-  int alloc_rbStart; ///< allocated RB start (within BWP)
-  int alloc_rbSize; ///< number of RBs allocated
   /* commit_ul_alloc: CCE validation */
   int alloc_cce_index;
   int alloc_aggregation_level;
@@ -1079,19 +1073,19 @@ typedef int (*nr_ul_beam_select_fn)(NR_beam_info_t *beam_info,
                                     slot_t sched_slot,
                                     int slots_per_frame);
 
-/// UL RI/TPMI selection: sets alloc_nrOfLayers and alloc_tpmi per candidate from SRS feedback.
+/// UL RI/TPMI selection: sets sched_pusch.nrOfLayers and tpmi per candidate from SRS feedback.
 /// Default: reads from srs_feedback (current OAI behavior).
 /// Custom: joint rank/TPMI search from H matrix, ML-based, etc.
 typedef void (*nr_ul_ri_tpmi_select_fn)(gNB_MAC_INST *mac, nr_ul_candidate_t *cands, int n_cand);
 
 /// UL TDA selection: picks TDA per candidate (default: same TDA for all), validates retx
 /// feasibility, drops infeasible cands (compact). Returns surviving cand count.
-/// Each surviving cand has alloc_tda/alloc_tda_info/alloc_slbitmap populated. Retx cands have retx_rbSize set.
+/// Each surviving cand has sched_pusch.time_domain_allocation/tda_info and alloc_slbitmap populated. Retx cands have retx_rbSize set.
 typedef int (
     *nr_ul_tda_select_fn)(gNB_MAC_INST *mac, nr_ul_candidate_t *cands, int n_cand, frame_t sched_frame, slot_t sched_slot, int k2);
 
-/// MCS selection: sets alloc_mcs from BLER/SINR state for every candidate.
-/// Runs after beam_select so alloc_nrOfLayers (for SINR lookup) and beam info are available.
+/// MCS selection: sets sched_pusch.mcs from BLER/SINR state for every candidate.
+/// Runs after beam_select so sched_pusch.nrOfLayers (for SINR lookup) and beam info are available.
 /// Also persists the decision to ul_bler_stats.mcs for continuity across slots.
 typedef void (*nr_ul_mcs_select_fn)(const gNB_MAC_INST *mac, nr_ul_candidate_t *candidates, int n_candidates);
 

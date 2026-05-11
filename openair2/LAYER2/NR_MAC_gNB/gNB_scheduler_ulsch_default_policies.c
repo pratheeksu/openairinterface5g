@@ -25,8 +25,8 @@ void nr_ul_ri_tpmi_select_default(gNB_MAC_INST *mac, nr_ul_candidate_t *cands, i
   FOR_EACH_CANDIDATE(cand, cands, n_cand) {
     NR_UE_sched_ctrl_t *sched_ctrl = &cand->UE->UE_sched_ctrl;
     NR_UE_UL_BWP_t *current_BWP = &cand->UE->current_UL_BWP;
-    cand->alloc_nrOfLayers = (current_BWP->dci_format == NR_UL_DCI_FORMAT_0_0) ? 1 : sched_ctrl->srs_feedback.ul_ri + 1;
-    cand->alloc_tpmi = sched_ctrl->srs_feedback.tpmi;
+    cand->sched_pusch.nrOfLayers = (current_BWP->dci_format == NR_UL_DCI_FORMAT_0_0) ? 1 : sched_ctrl->srs_feedback.ul_ri + 1;
+    cand->sched_pusch.tpmi = sched_ctrl->srs_feedback.tpmi;
   }
 }
 
@@ -67,8 +67,8 @@ int nr_ul_tda_select_default(gNB_MAC_INST *mac,
       ptrdiff_t offset = orig - tda_list;
       if (offset >= 0 && offset < n_tda) {
         /* Original TDA is valid — reuse it directly */
-        cand->alloc_tda = retInfo->time_domain_allocation;
-        cand->alloc_tda_info = *orig;
+        cand->sched_pusch.time_domain_allocation = retInfo->time_domain_allocation;
+        cand->sched_pusch.tda_info = *orig;
         cand->alloc_slbitmap = SL_to_bitmap(orig->startSymbolIndex, orig->nrOfSymbols);
         cand->retx_rbSize = retInfo->rbSize;
         n_valid++;
@@ -83,15 +83,15 @@ int nr_ul_tda_select_default(gNB_MAC_INST *mac,
         cand->skipped = true;
         continue;
       }
-      cand->alloc_tda = tda;
-      cand->alloc_tda_info = *best;
+      cand->sched_pusch.time_domain_allocation = tda;
+      cand->sched_pusch.tda_info = *best;
       cand->alloc_slbitmap = SL_to_bitmap(best->startSymbolIndex, best->nrOfSymbols);
       cand->retx_rbSize = needed;
     } else {
       int tda = seq_arr_dist(&mac->ul_tda, seq_arr_front(&mac->ul_tda), best);
       AssertFatal(tda >= 0 && tda < 16, "illegal TDA index %d\n", tda);
-      cand->alloc_tda = tda;
-      cand->alloc_tda_info = *best;
+      cand->sched_pusch.time_domain_allocation = tda;
+      cand->sched_pusch.tda_info = *best;
       cand->alloc_slbitmap = SL_to_bitmap(best->startSymbolIndex, best->nrOfSymbols);
     }
     n_valid++;
@@ -104,8 +104,8 @@ static int compare_ul_pf_ptrs(const void *a, const void *b)
   const nr_ul_candidate_t *ca = *(const nr_ul_candidate_t *const *)a;
   const nr_ul_candidate_t *cb = *(const nr_ul_candidate_t *const *)b;
   /* retx first (INFINITY weight), then highest PF weight */
-  float wa = ca->is_retx ? INFINITY : ul_pf_weight(ca->current_mcs, ca->mcs_table, ca->alloc_nrOfLayers, ca->avg_throughput);
-  float wb = cb->is_retx ? INFINITY : ul_pf_weight(cb->current_mcs, cb->mcs_table, cb->alloc_nrOfLayers, cb->avg_throughput);
+  float wa = ca->is_retx ? INFINITY : ul_pf_weight(ca->current_mcs, ca->mcs_table, ca->sched_pusch.nrOfLayers, ca->avg_throughput);
+  float wb = cb->is_retx ? INFINITY : ul_pf_weight(cb->current_mcs, cb->mcs_table, cb->sched_pusch.nrOfLayers, cb->avg_throughput);
   return (wa < wb) - (wa > wb);
 }
 
@@ -165,7 +165,7 @@ void nr_ul_mcs_select_default(const gNB_MAC_INST *mac, nr_ul_candidate_t *candid
     if (cand->is_retx) {
       mcs = cand->current_mcs;
     } else if (bo->harq_round_max == 1) {
-      mcs = get_mcs_from_SINRx10(cand->mcs_table, cand->snrx10, cand->alloc_nrOfLayers);
+      mcs = get_mcs_from_SINRx10(cand->mcs_table, cand->snrx10, cand->sched_pusch.nrOfLayers);
       mcs = max(bo->min_mcs, min(bo->max_mcs, min(cand->max_mcs, mcs)));
     } else if (!cand->bler_updated) {
       mcs = cand->current_mcs;
@@ -178,7 +178,7 @@ void nr_ul_mcs_select_default(const gNB_MAC_INST *mac, nr_ul_candidate_t *candid
                                    bo->upper,
                                    cand->last_num_sched);
     }
-    cand->alloc_mcs = mcs;
+    cand->sched_pusch.mcs = mcs;
     if (!cand->is_retx)
       cand->UE->UE_sched_ctrl.ul_bler_stats.mcs = mcs;
   }
@@ -188,9 +188,9 @@ static int compare_ul_pf_rb_ptrs(const void *a, const void *b)
 {
   const nr_ul_candidate_t *ca = *(const nr_ul_candidate_t *const *)a;
   const nr_ul_candidate_t *cb = *(const nr_ul_candidate_t *const *)b;
-  /* retx first, then highest PF weight (uses alloc_mcs, which is set by mcs_select) */
-  float wa = ca->is_retx ? INFINITY : ul_pf_weight(ca->alloc_mcs, ca->mcs_table, ca->alloc_nrOfLayers, ca->avg_throughput);
-  float wb = cb->is_retx ? INFINITY : ul_pf_weight(cb->alloc_mcs, cb->mcs_table, cb->alloc_nrOfLayers, cb->avg_throughput);
+  /* retx first, then highest PF weight (uses sched_pusch.mcs, which is set by mcs_select) */
+  float wa = ca->is_retx ? INFINITY : ul_pf_weight(ca->sched_pusch.mcs, ca->mcs_table, ca->sched_pusch.nrOfLayers, ca->avg_throughput);
+  float wb = cb->is_retx ? INFINITY : ul_pf_weight(cb->sched_pusch.mcs, cb->mcs_table, cb->sched_pusch.nrOfLayers, cb->avg_throughput);
   return (wa < wb) - (wa > wb);
 }
 
@@ -223,7 +223,7 @@ int nr_ul_proportional_fair(const nr_ul_sched_params_t *params, nr_ul_candidate_
     if (block_len < cand->retx_rbSize)
       continue;
 
-    COMMIT_UL_ALLOC(params, idx_map[j], cand, rbStart, cand->retx_rbSize, cand->alloc_mcs, sched_indices, n_scheduled);
+    COMMIT_UL_ALLOC(params, idx_map[j], cand, rbStart, cand->retx_rbSize, cand->sched_pusch.mcs, sched_indices, n_scheduled);
   }
 
   /* Phase 2: Inactive UEs (no BSR data, need scheduling for TA/SR) */
@@ -238,7 +238,7 @@ int nr_ul_proportional_fair(const nr_ul_sched_params_t *params, nr_ul_candidate_
     if (block_len < min_rb)
       continue;
 
-    COMMIT_UL_ALLOC(params, idx_map[j], cand, rbStart, min_rb, cand->alloc_mcs, sched_indices, n_scheduled);
+    COMMIT_UL_ALLOC(params, idx_map[j], cand, rbStart, min_rb, cand->sched_pusch.mcs, sched_indices, n_scheduled);
   }
 
   /* Phase 3: New data UEs — PF priority order, largest free block */
@@ -254,7 +254,7 @@ int nr_ul_proportional_fair(const nr_ul_sched_params_t *params, nr_ul_candidate_
       continue;
 
     uint16_t rbSize = block_len;
-    uint8_t mcs = cand->alloc_mcs;
+    uint8_t mcs = cand->sched_pusch.mcs;
 
     if (cand->pcmax != 0 || cand->ph != 0) {
       nr_ul_phr_advice_t advice;
@@ -265,15 +265,15 @@ int nr_ul_proportional_fair(const nr_ul_sched_params_t *params, nr_ul_candidate_
     }
 
     NR_UE_UL_BWP_t *current_BWP = &cand->UE->current_UL_BWP;
-    NR_pusch_dmrs_t dmrs_info = get_ul_dmrs_params(params->scc, current_BWP, &cand->alloc_tda_info, cand->alloc_nrOfLayers);
+    NR_pusch_dmrs_t dmrs_info = get_ul_dmrs_params(params->scc, current_BWP, &cand->sched_pusch.tda_info, cand->sched_pusch.nrOfLayers);
     uint16_t Rt;
     uint8_t Qt;
     update_ul_ue_R_Qm(mcs, current_BWP->mcs_table, current_BWP->pusch_Config, &Rt, &Qt);
     uint32_t tb_size;
     uint16_t final_rbSize;
     nr_find_nb_rb(Qt, Rt, current_BWP->transform_precoding,
-                  cand->alloc_nrOfLayers,
-                  cand->alloc_tda_info.nrOfSymbols,
+                  cand->sched_pusch.nrOfLayers,
+                  cand->sched_pusch.tda_info.nrOfSymbols,
                   dmrs_info.N_PRB_DMRS * dmrs_info.num_dmrs_symb,
                   cand->pending_bytes,
                   min_rb, rbSize, &tb_size, &final_rbSize);

@@ -1726,15 +1726,15 @@ static int apply_ul_retransmission(gNB_MAC_INST *nrmac,
 
   bool reuse_tda = (retInfo->time_domain_allocation == tda && nrOfLayers == retInfo->nrOfLayers);
   if (reuse_tda) {
-    new_sched.rbStart = cand->alloc_rbStart;
+    new_sched.rbStart = cand->sched_pusch.rbStart;
   } else {
     /* TDA changed vs original retx: recompute DMRS and TB size for new TDA */
     NR_pusch_dmrs_t dmrs_info = get_ul_dmrs_params(scc, current_BWP, tda_info, nrOfLayers);
-    new_sched.rbSize = cand->alloc_rbSize;
-    new_sched.rbStart = cand->alloc_rbStart;
+    new_sched.rbSize = cand->sched_pusch.rbSize;
+    new_sched.rbStart = cand->sched_pusch.rbStart;
     new_sched.tb_size = nr_compute_tbs(retInfo->Qm,
                                        retInfo->R,
-                                       cand->alloc_rbSize,
+                                       cand->sched_pusch.rbSize,
                                        tda_info->nrOfSymbols,
                                        dmrs_info.N_PRB_DMRS * dmrs_info.num_dmrs_symb,
                                        0,
@@ -1765,8 +1765,9 @@ static int apply_ul_retransmission(gNB_MAC_INST *nrmac,
   return new_sched.rbSize;
 }
 
-/* Apply a new-transmission allocation. Builds NR_sched_pusch_t from cand alloc fields,
- * computes TBS, calls post_process_ulsch, marks VRB map.
+/* Apply a new-transmission allocation. Starts from cand->sched_pusch (mcs, rbStart,
+ * rbSize, nrOfLayers already set by pipeline stages), fills remaining fields (R, Qm,
+ * tb_size, dmrs_info, bwp_info), calls post_process_ulsch, marks VRB map.
  * CCE and PDCCH VRB map are already handled by commit_ul_alloc.
  * Returns rbSize used. */
 static int apply_ul_new_transmission(gNB_MAC_INST *nrmac,
@@ -1784,24 +1785,19 @@ static int apply_ul_new_transmission(gNB_MAC_INST *nrmac,
   NR_UE_info_t *UE = cand->UE;
   NR_UE_UL_BWP_t *current_BWP = &UE->current_UL_BWP;
 
-  NR_sched_pusch_t sched = {
-      .frame = sched_frame,
-      .slot = sched_slot,
-      .rbStart = cand->alloc_rbStart,
-      .mcs = cand->alloc_mcs,
-      .ul_harq_pid = -1,
-      .nrOfLayers = cand->alloc_nrOfLayers,
-      .time_domain_allocation = tda,
-      .tda_info = *tda_info,
-      .dmrs_info = get_ul_dmrs_params(scc, current_BWP, tda_info, cand->alloc_nrOfLayers),
-      .bwp_info = bi,
-  };
-
-  /* MCS write-back to BLER tracker done by ul_mcs_select pipeline stage */
+  /* Start from candidate's sched_pusch (mcs, rbStart, rbSize, nrOfLayers, tpmi,
+   * time_domain_allocation, tda_info already set by pipeline stages).
+   * Fill remaining dispatch fields: R, Qm, tb_size, dmrs_info, bwp_info. */
+  NR_sched_pusch_t sched = cand->sched_pusch;
+  sched.frame = sched_frame;
+  sched.slot = sched_slot;
+  sched.ul_harq_pid = -1;
+  sched.time_domain_allocation = tda;
+  sched.tda_info = *tda_info;
+  sched.dmrs_info = get_ul_dmrs_params(scc, current_BWP, tda_info, sched.nrOfLayers);
+  sched.bwp_info = bi;
 
   update_ul_ue_R_Qm(sched.mcs, current_BWP->mcs_table, current_BWP->pusch_Config, &sched.R, &sched.Qm);
-
-  sched.rbSize = cand->alloc_rbSize;
   sched.tb_size = nr_compute_tbs(sched.Qm,
                                  sched.R,
                                  sched.rbSize,
@@ -1968,14 +1964,14 @@ static int nr_ul_schedule(gNB_MAC_INST *nrmac,
     uint16_t *rballoc_mask = &nrmac->common_channels[CC_id].vrb_map_UL[beam_idx][buf_index * MAX_BWP_SIZE];
     bwp_info_t bi = get_pusch_bwp_start_size(UE);
 
-    /* Use per-candidate TDA — each candidate carries its own alloc_tda/alloc_tda_info */
+    /* Use per-candidate TDA — each candidate carries its own sched_pusch.time_domain_allocation/tda_info */
     int rbSize_used;
     if (cand->is_retx) {
-      rbSize_used = apply_ul_retransmission(nrmac, pp_pusch, cand, scc, cand->alloc_tda, &cand->alloc_tda_info, rballoc_mask, bi, sched_frame, sched_slot);
+      rbSize_used = apply_ul_retransmission(nrmac, pp_pusch, cand, scc, cand->sched_pusch.time_domain_allocation, &cand->sched_pusch.tda_info, rballoc_mask, bi, sched_frame, sched_slot);
     } else {
-      uint16_t cand_slbitmap = SL_to_bitmap(cand->alloc_tda_info.startSymbolIndex, cand->alloc_tda_info.nrOfSymbols);
+      uint16_t cand_slbitmap = SL_to_bitmap(cand->sched_pusch.tda_info.startSymbolIndex, cand->sched_pusch.tda_info.nrOfSymbols);
       rbSize_used =
-          apply_ul_new_transmission(nrmac, pp_pusch, cand, scc, cand->alloc_tda, &cand->alloc_tda_info, rballoc_mask, cand_slbitmap, bi, sched_frame, sched_slot);
+          apply_ul_new_transmission(nrmac, pp_pusch, cand, scc, cand->sched_pusch.time_domain_allocation, &cand->sched_pusch.tda_info, rballoc_mask, cand_slbitmap, bi, sched_frame, sched_slot);
     }
 
     n_rb_sched[beam_idx] -= rbSize_used;
@@ -2347,7 +2343,7 @@ static int collect_ul_candidates(gNB_MAC_INST *mac,
     cand.alloc_beam_idx = -1;
     cand.bwp_start = bi.bwpStart;
     cand.bwp_size = bi.bwpSize;
-    /* alloc_nrOfLayers and alloc_tpmi are set by ul_ri_tpmi_select after collect */
+    /* sched_pusch.nrOfLayers and sched_pusch.tpmi are set by ul_ri_tpmi_select after collect */
     cand.mcs_table = current_BWP->mcs_table;
     cand.avg_throughput = UE->ul_thr_ue;
     cand.ph = sched_ctrl->ph;
@@ -2555,15 +2551,15 @@ bool nr_ul_check_phr(const nr_ul_sched_params_t *params,
 {
   NR_UE_UL_BWP_t *current_BWP = &cand->UE->current_UL_BWP;
   bool hasDeltaMCS = current_BWP->pusch_Config && current_BWP->pusch_Config->pusch_PowerControl->deltaMCS;
-  NR_pusch_dmrs_t dmrs_info = get_ul_dmrs_params(params->scc, current_BWP, &cand->alloc_tda_info, cand->alloc_nrOfLayers);
+  NR_pusch_dmrs_t dmrs_info = get_ul_dmrs_params(params->scc, current_BWP, &cand->sched_pusch.tda_info, cand->sched_pusch.nrOfLayers);
   int n_dmrs = dmrs_info.N_PRB_DMRS * dmrs_info.num_dmrs_symb;
 
   /* Transient NR_sched_pusch_t scratchpad, feeds compute_ph_mcs_factor() which
      reads mcs / tda_info / nrOfLayers / dmrs_info / tb_size off the struct. */
   NR_sched_pusch_t pot = {0};
-  pot.tda_info = cand->alloc_tda_info;
+  pot.tda_info = cand->sched_pusch.tda_info;
   pot.dmrs_info = dmrs_info;
-  pot.nrOfLayers = cand->alloc_nrOfLayers;
+  pot.nrOfLayers = cand->sched_pusch.nrOfLayers;
   pot.rbSize = rbSize;
   pot.mcs = mcs;
 
@@ -2666,7 +2662,7 @@ bool commit_ul_alloc(const nr_ul_sched_params_t *params, nr_ul_candidate_t *cand
 
   /* Mark VRB map for this candidate's beam */
   uint16_t *vrb_map = params->vrb_map_UL[cand->alloc_beam_idx];
-  for (int rb = 0; rb < cand->alloc_rbSize; rb++)
-    vrb_map[cand->alloc_rbStart + cand->bwp_start + rb] |= cand->alloc_slbitmap;
+  for (int rb = 0; rb < cand->sched_pusch.rbSize; rb++)
+    vrb_map[cand->sched_pusch.rbStart + cand->bwp_start + rb] |= cand->alloc_slbitmap;
   return true;
 }

@@ -458,16 +458,16 @@ bool commit_alloc(const nr_dl_sched_params_t *params, nr_dl_candidate_t *cand);
 
 // Use inside the policy loops: sets RB/MCS on candidate, validates CCE/PUCCH,
 // records index; continues on failure, returns on max_num_ue.
-#define COMMIT_ALLOC(params, idx, cand, rbStart, rbSize, mcs, sched_indices, n_sched) \
-  do {                                                                                \
-    (cand)->sched_pdsch.rbStart = (rbStart);                                          \
-    (cand)->sched_pdsch.rbSize = (rbSize);                                            \
-    (cand)->sched_pdsch.mcs = (mcs);                                                  \
-    if (!commit_alloc(params, cand))                                                  \
-      continue;                                                                       \
-    (sched_indices)[(n_sched)++] = (idx);                                             \
-    if ((n_sched) >= (params)->max_num_ue)                                            \
-      return (n_sched);                                                               \
+#define COMMIT_ALLOC(params, idx, cand, rb_start_, rb_size_, mcs_, sched_indices, n_sched) \
+  do {                                                                                    \
+    (cand)->sched_pdsch.rbStart = (rb_start_);                                            \
+    (cand)->sched_pdsch.rbSize = (rb_size_);                                              \
+    (cand)->sched_pdsch.mcs = (mcs_);                                                     \
+    if (!commit_alloc(params, cand))                                                      \
+      continue;                                                                           \
+    (sched_indices)[(n_sched)++] = (idx);                                                 \
+    if ((n_sched) >= (params)->max_num_ue)                                                \
+      return (n_sched);                                                                   \
   } while (0)
 
 int ul_buffer_index(int frame, int slot, int slots_per_frame, int size);
@@ -549,16 +549,16 @@ bool commit_ul_alloc(const nr_ul_sched_params_t *params, nr_ul_candidate_t *cand
 
 /* Use inside policy loops: writes alloc fields, validates CCE, packs dense index,
    continues on failure, returns n_sched on max_num_ue. */
-#define COMMIT_UL_ALLOC(params, idx, cand, rbStart, rbSize, mcs, sched_indices, n_sched) \
-  do {                                                                                   \
-    (cand)->alloc_rbStart = (rbStart);                                                   \
-    (cand)->alloc_rbSize = (rbSize);                                                     \
-    (cand)->alloc_mcs = (mcs);                                                           \
-    if (!commit_ul_alloc(params, cand))                                                  \
-      continue;                                                                          \
-    (sched_indices)[(n_sched)++] = (idx);                                                \
-    if ((n_sched) >= (params)->max_num_ue)                                               \
-      return (n_sched);                                                                  \
+#define COMMIT_UL_ALLOC(params, idx, cand, rb_start_, rb_size_, mcs_, sched_indices, n_sched) \
+  do {                                                                                      \
+    (cand)->sched_pusch.rbStart = (rb_start_);                                              \
+    (cand)->sched_pusch.rbSize = (rb_size_);                                                \
+    (cand)->sched_pusch.mcs = (mcs_);                                                       \
+    if (!commit_ul_alloc(params, cand))                                                     \
+      continue;                                                                             \
+    (sched_indices)[(n_sched)++] = (idx);                                                   \
+    if ((n_sched) >= (params)->max_num_ue)                                                  \
+      return (n_sched);                                                                     \
   } while (0)
 
 bool nr_ul_check_phr(const nr_ul_sched_params_t *params,
