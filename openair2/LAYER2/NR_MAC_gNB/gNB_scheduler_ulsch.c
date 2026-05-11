@@ -656,44 +656,23 @@ static void handle_nr_ul_harq(gNB_MAC_INST *nrmac, NR_UE_info_t *UE, rnti_t rnti
   NR_UE_sched_ctrl_t *sched_ctrl = &UE->UE_sched_ctrl;
   int8_t harq_pid = sched_ctrl->feedback_ul_harq.head;
   LOG_D(NR_MAC, "Comparing crc harq_id vs feedback harq_pid = %d %d\n", crc_harq_id, harq_pid);
+  while (crc_harq_id != harq_pid || harq_pid < 0) {
+    LOG_W(NR_MAC, "Unexpected ULSCH HARQ PID %d (have %d) for RNTI 0x%04x\n", crc_harq_id, harq_pid, rnti);
+    if (harq_pid < 0)
+      return;
 
-  bool matched_pending_harq = false;
-  if (crc_harq_id != harq_pid) {
-    bool pending = false;
-    for (int id = harq_pid; id >= 0; id = sched_ctrl->feedback_ul_harq.next[id]) {
-      if (id == crc_harq_id) {
-        pending = true;
-        break;
-      }
-    }
-    if (pending) {
-      LOG_W(NR_MAC, "Out-of-order ULSCH HARQ PID %d (head %d) for RNTI 0x%04x\n", crc_harq_id, harq_pid, rnti);
-      harq_pid = crc_harq_id;
-      remove_nr_list(&sched_ctrl->feedback_ul_harq, harq_pid);
-      matched_pending_harq = true;
-    }
-  }
-
-  if (!matched_pending_harq) {
-    while (crc_harq_id != harq_pid || harq_pid < 0) {
-      LOG_W(NR_MAC, "Unexpected ULSCH HARQ PID %d (have %d) for RNTI 0x%04x\n", crc_harq_id, harq_pid, rnti);
-      if (harq_pid < 0)
-        return;
-
-      remove_front_nr_list(&sched_ctrl->feedback_ul_harq);
-      sched_ctrl->ul_harq_processes[harq_pid].is_waiting = false;
-
-      if(sched_ctrl->ul_harq_processes[harq_pid].round >= nrmac->ul_bler.harq_round_max - 1) {
-        abort_nr_ul_harq(UE, harq_pid);
-      } else {
-        sched_ctrl->ul_harq_processes[harq_pid].round++;
-        add_tail_nr_list(&sched_ctrl->retrans_ul_harq, harq_pid);
-      }
-      harq_pid = sched_ctrl->feedback_ul_harq.head;
-    }
     remove_front_nr_list(&sched_ctrl->feedback_ul_harq);
-  }
+    sched_ctrl->ul_harq_processes[harq_pid].is_waiting = false;
 
+    if(sched_ctrl->ul_harq_processes[harq_pid].round >= nrmac->ul_bler.harq_round_max - 1) {
+      abort_nr_ul_harq(UE, harq_pid);
+    } else {
+      sched_ctrl->ul_harq_processes[harq_pid].round++;
+      add_tail_nr_list(&sched_ctrl->retrans_ul_harq, harq_pid);
+    }
+    harq_pid = sched_ctrl->feedback_ul_harq.head;
+  }
+  remove_front_nr_list(&sched_ctrl->feedback_ul_harq);
   NR_UE_ul_harq_t *harq = &sched_ctrl->ul_harq_processes[harq_pid];
   DevAssert(harq->is_waiting);
   harq->feedback_slot = -1;
