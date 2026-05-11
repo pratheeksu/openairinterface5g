@@ -985,7 +985,7 @@ int nr_rx_pdsch(PHY_VARS_NR_UE *ue,
 
   NR_DL_UE_HARQ_t *dlsch0_harq, *dlsch1_harq = NULL;
   dlsch0_harq = &ue->dl_harq_processes[0][harq_pid];
-  if (NR_MAX_NB_LAYERS>4)
+  if (NR_MAX_NB_LAYERS > 4)
     dlsch1_harq = &ue->dl_harq_processes[1][harq_pid];
 
   if (dlsch0_harq && dlsch1_harq){

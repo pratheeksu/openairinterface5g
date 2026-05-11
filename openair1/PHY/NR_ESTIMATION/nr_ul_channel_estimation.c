@@ -446,11 +446,11 @@ static void nr_pusch_antenna_processing(void *arg)
   completed_task_ans(rdata->ans);
 }
 
-
 int nr_pusch_channel_estimation(PHY_VARS_gNB *gNB,
                                 unsigned char Ns,
                                 int nl,
                                 unsigned short p,
+                                uint8_t lp,
                                 unsigned char symbol,
                                 NR_gNB_PUSCH *pusch_vars,
                                 int beam_nb,
@@ -486,7 +486,7 @@ int nr_pusch_channel_estimation(PHY_VARS_gNB *gNB,
                      gold,
                      pilot,
                      (1000 + p),
-                     0,
+                     lp % 2,
                      nb_rb_pusch,
                      (pusch_pdu->bwp_start + pusch_pdu->rb_start) * NR_NB_SC_PER_RB,
                      pusch_pdu->dmrs_config_type,

@@ -207,7 +207,7 @@ nfapi_nr_pm_list_t init_DL_MIMO_codebook(gNB_MAC_INST *gNB, nr_pdsch_AntennaPort
   int O2 = N2 > 1 ? 4 : 1; //Vertical beam oversampling (1 or 4)
   int O1 = num_antenna_ports > 2 ? 4 : 1; //Horizontal beam oversampling (1 or 4)
 
-  int max_mimo_layers = (num_antenna_ports < NR_MAX_NB_LAYERS) ? num_antenna_ports : NR_MAX_NB_LAYERS;
+  int max_mimo_layers = min(num_antenna_ports, NR_MAX_NB_LAYERS);
   AssertFatal(max_mimo_layers <= 4, "Max number of layers supported is 4\n");
   AssertFatal(num_antenna_ports < 16, "Max number of antenna ports supported is currently 16\n");
 

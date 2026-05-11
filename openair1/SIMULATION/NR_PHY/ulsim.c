@@ -287,6 +287,7 @@ int main(int argc, char *argv[])
   SCM_t channel_model = AWGN;  //Rayleigh1_anticorr;
   corr_level_t corr_level = CORR_LEVEL_LOW;
   uint16_t N_RB_DL = 106, N_RB_UL = 106, mu = 1;
+  uint8_t length_dmrs = pusch_len1;
 
   // unsigned char frame_type = 0;
   int loglvl = OAILOG_WARNING;
@@ -364,7 +365,7 @@ int main(int argc, char *argv[])
   void *d_channel_coeffs_gpu = NULL;
 #endif
 
-  while ((c = getopt(argc, argv, "--:O:a:b:c:d:ef:g:h:i:jk:m:n:o::p:q:r:s:t:u:v:w:y:z:A:C:F:G:H:I:M:N:PR:S:T:U:L:ZW:E:X:Y:"))
+  while ((c = getopt(argc, argv, "--:O:a:b:c:d:ef:g:h:i:jk:l:m:n:o::p:q:r:s:t:u:v:w:y:z:A:C:F:G:H:I:M:N:PR:S:T:U:L:ZW:E:X:Y:"))
          != -1) {
     /* ignore long options starting with '--', option '-O' and their arguments that are handled by configmodule */
     /* with this opstring getopt returns 1 for non-option arguments, refer to 'man 3 getopt' */
@@ -470,6 +471,12 @@ int main(int argc, char *argv[])
       threequarter_fs = 1;
       break;
 
+    case 'l':
+      length_dmrs = atoi(optarg);
+      AssertFatal(length_dmrs == 1 || length_dmrs == 2, "Illegal PUSCH DMRS length %d\n", length_dmrs);
+      printf("PUSCH DMRS length %d\n", length_dmrs);
+      break;
+
     case 'm':
       Imcs = atoi(optarg);
       break;
@@ -490,6 +497,9 @@ int main(int argc, char *argv[])
 
     case 'W':
       precod_nbr_layers = atoi(optarg);
+      AssertFatal(precod_nbr_layers > 0 && precod_nbr_layers <= 4,
+                  "Number of layers per UE %d should be less than or equal to 4\n",
+                  precod_nbr_layers);
       break;
 
     case 'n':
@@ -670,6 +680,7 @@ int main(int argc, char *argv[])
       printf("-i Change channel estimation technique. Arguments list: Number of arguments=2, Frequency domain {0:Linear interpolation, 1:PRB based averaging}, Time domain {0:Estimates of last DMRS symbol, 1:Average of DMRS symbols}. e.g. -i 1,0\n");
       printf("-j Save signal buffers in binary format.");
       printf("-k 3/4 sampling\n");
+      printf("-l PUSCH DMRS length: 1 or 2\n");
       printf("-m MCS value\n");
       printf("-n Number of trials to simulate\n");
       printf("-o Enable UCI on PUSCH. Optionally accepts input file (without space). This feature is not yet available in gNB so only used to verify with MATLAB generated vector\n");
@@ -706,6 +717,12 @@ int main(int argc, char *argv[])
 
     }
   }
+
+  AssertFatal(precod_nbr_layers <= min(n_tx, n_rx),
+              "Number of layers %d cannot be more than min(n_tx %d, n_rx %d)\n",
+              precod_nbr_layers,
+              n_tx,
+              n_rx);
 
   logInit();
   set_glog(loglvl);
@@ -992,7 +1009,6 @@ int main(int argc, char *argv[])
     num_dmrs_cdm_grps_no_data = dmrs_arg[3];
   }
 
-  uint8_t  length_dmrs = pusch_len1;
   uint16_t l_prime_mask = get_l_prime(nb_symb_sch, mapping_type, add_pos, length_dmrs, start_symbol, NR_MIB__dmrs_TypeA_Position_pos2);
   int number_dmrs_symbols = count_bits64_with_mask(l_prime_mask, start_symbol, nb_symb_sch);
   uint8_t  nb_re_dmrs = (dmrs_config_type == pusch_dmrs_type1) ? 6 : 4;
