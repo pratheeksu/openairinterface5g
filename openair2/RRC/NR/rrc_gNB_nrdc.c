@@ -1141,11 +1141,32 @@ bool nrdc_handle_f1_context_release_complete(gNB_RRC_INST *rrc, gNB_RRC_UE_t *ue
   return true;
 }
 
+static bool is_ue_releasable(gNB_RRC_UE_t *ue)
+{
+  if (ue->nrdc == NULL)
+    return false;
+
+  nrdc_ue_state_t *nrdc = ue->nrdc;
+
+  if (nrdc->state == NRDC_NONE
+      || nrdc->state == ACTIVATE_NRDC_WAIT_FOR_CAPABILITIES
+      || nrdc->state == ACTIVATE_NRDC_WAIT_FOR_A4_RECONFIGURATION_COMPLETE
+      || nrdc->state == ACTIVATE_NRDC_WAIT_FOR_SCG_MEASUREMENT
+      || nrdc->state == NRDC_DEACTIVATED)
+    return false;
+
+  return true;
+}
+
 void nrdc_scg_ue_release(gNB_RRC_INST *rrc, gNB_RRC_UE_t *ue)
 {
   if (ue->nrdc == NULL)
     return;
   nrdc_ue_state_t *nrdc = ue->nrdc;
+
+  /* if the UE is not fully configured yet, do nothing */
+  if (!is_ue_releasable(ue))
+    return;
 
   LOG_I(NR_RRC, "NR-DC: release/deactivate SCG for UE %d\n", ue->rrc_ue_id);
 
