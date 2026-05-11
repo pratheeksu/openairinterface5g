@@ -1403,9 +1403,9 @@ int nr_rx_pdsch(PHY_VARS_NR_UE *ue,
     T_INT(frame % 1024),
     T_INT(nr_slot_rx),
     T_INT(nb_rb_pdsch),
-    T_INT(fp->N_RB_UL),
+    T_INT(fp->N_RB_DL),
     T_INT(fp->symbols_per_slot),
-    T_BUFFER(&rxdataF_comp[gNB_id][0], 2 * fp->N_RB_UL * 12 * fp->symbols_per_slot * 2));
+    T_BUFFER(&rxdataF_comp[gNB_id][0], 2 * fp->N_RB_DL * 12 * fp->symbols_per_slot * 2));
 #endif
 
   if (ue->phy_sim_pdsch_rxdataF_comp)
