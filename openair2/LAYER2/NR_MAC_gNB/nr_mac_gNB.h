@@ -910,26 +910,17 @@ struct nr_dl_candidate {
   const int16_t *beam_sinr; ///< per-SSB L1-SINR×10; same indexing. INT16_MIN = no data
 
   /* ── gNB decisions (written by the named pipeline stage) ───────────────── */
-  /* dl_ri_pmi_select: rank and precoding */
-  int alloc_nrOfLayers; ///< decided rank; default = csi_ri + 1
-  int alloc_pm_index; ///< decided precoding matrix; default = csi_pm_index
-  /* dl_tda_select: time-domain allocation */
-  int alloc_tda; ///< TDA index
-  NR_tda_info_t alloc_tda_info; ///< resolved TDA info (per-UE BWP/SS/coreset)
-  uint16_t alloc_slbitmap; ///< symbol bitmap derived from alloc_tda_info
+  /* Use NR_sched_pdsch_t for fields shared with HARQ/dispatch (mcs, rbStart,
+   * rbSize, nrOfLayers, pm_index, tda, tda_info, pucch_allocation).*/
+  NR_sched_pdsch_t sched_pdsch;
+  uint16_t alloc_slbitmap; ///< symbol bitmap derived from sched_pdsch.tda_info
   /* dl_beam_select: beam selection */
   int alloc_beam_dir; ///< beam direction index (initialised from UE->UE_beam_index; may be overridden)
   int alloc_beam_idx; ///< hardware beam structure index, set by beam_allocation_procedure
   bool alloc_new_beam; ///< true if beam alloc claimed a fresh slot (release via reset_beam_status if unscheduled)
-  /* dl_mcs_select: MCS from BLER (may use alloc_beam_dir for beam-aware adaptation) */
-  uint8_t alloc_mcs; ///< MCS target; default = BLER-adapted current_mcs
-  /* dl_rb_alloc: frequency-domain assignment */
-  int alloc_rbStart; ///< allocated RB start (within BWP)
-  int alloc_rbSize; ///< number of RBs allocated
   /* commit_alloc: CCE/PUCCH validation */
   int alloc_cce_index; ///< CCE index for PDCCH
   int alloc_aggregation_level; ///< PDCCH aggregation level
-  int alloc_pucch_allocation; ///< PUCCH slot index, -1 if feedback disabled
   NR_sched_pdcch_t alloc_sched_pdcch; ///< PDCCH scheduling info
 };
 
@@ -945,7 +936,7 @@ typedef void (*nr_pp_impl_ul)(gNB_MAC_INST *nr_mac, post_process_pusch_t *pp_pus
 /// Custom implementations may use SRS reciprocity to override the UE's reported RI/PMI.
 typedef void (*nr_dl_ri_pmi_select_fn)(const gNB_MAC_INST *mac, nr_dl_candidate_t *candidates, int n_candidates);
 
-/// MCS adaptation: sets alloc_mcs from BLER state for every candidate.
+/// MCS adaptation: sets sched_pdsch.mcs from BLER state for every candidate.
 /// Called for all candidates (including those that won't get scheduled) so
 /// BLER-based MCS ramps even for UEs that fail CCE. Also persists the
 /// decision to dl_bler_stats.mcs for continuity across slots.
@@ -969,7 +960,7 @@ typedef int (
 
 /// Scheduling policy: decides PRB + MCS for candidates across all beams.
 /// The beam loop is inside the policy so it can do cross-beam scheduling (e.g. MU-MIMO).
-/// Writes alloc_rbStart/rbSize/mcs/cce/pucch fields on scheduled candidates.
+/// Writes sched_pdsch.rbStart/rbSize/mcs and cce/pucch fields on scheduled candidates.
 /// Returns number of scheduled UEs; sched_indices[0..ret-1] hold their indices.
 typedef int (*nr_dl_rb_alloc_fn)(const nr_dl_sched_params_t *params,
                                  nr_dl_candidate_t *candidates,

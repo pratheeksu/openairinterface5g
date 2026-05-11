@@ -460,9 +460,9 @@ bool commit_alloc(const nr_dl_sched_params_t *params, nr_dl_candidate_t *cand);
 // records index; continues on failure, returns on max_num_ue.
 #define COMMIT_ALLOC(params, idx, cand, rbStart, rbSize, mcs, sched_indices, n_sched) \
   do {                                                                                \
-    (cand)->alloc_rbStart = (rbStart);                                                \
-    (cand)->alloc_rbSize = (rbSize);                                                  \
-    (cand)->alloc_mcs = (mcs);                                                        \
+    (cand)->sched_pdsch.rbStart = (rbStart);                                          \
+    (cand)->sched_pdsch.rbSize = (rbSize);                                            \
+    (cand)->sched_pdsch.mcs = (mcs);                                                  \
     if (!commit_alloc(params, cand))                                                  \
       continue;                                                                       \
     (sched_indices)[(n_sched)++] = (idx);                                             \

@@ -35,12 +35,12 @@ void nr_dl_ri_pmi_select_default(const gNB_MAC_INST *mac, nr_dl_candidate_t *can
     NR_UE_sched_ctrl_t *sched_ctrl = &cand->UE->UE_sched_ctrl;
     NR_UE_DL_BWP_t *dl_bwp = &cand->UE->current_DL_BWP;
     if (cand->is_retx) {
-      cand->alloc_nrOfLayers = sched_ctrl->harq_processes[cand->retx_harq_pid].sched_pdsch.nrOfLayers;
-      cand->alloc_pm_index =
-          get_pm_index(mac, cand->UE, dl_bwp->dci_format, cand->alloc_nrOfLayers, mac->radio_config.pdsch_AntennaPorts.XP);
+      cand->sched_pdsch.nrOfLayers = sched_ctrl->harq_processes[cand->retx_harq_pid].sched_pdsch.nrOfLayers;
+      cand->sched_pdsch.pm_index =
+          get_pm_index(mac, cand->UE, dl_bwp->dci_format, cand->sched_pdsch.nrOfLayers, mac->radio_config.pdsch_AntennaPorts.XP);
     } else {
-      cand->alloc_nrOfLayers = cand->csi_ri + 1;
-      cand->alloc_pm_index = cand->csi_pm_index;
+      cand->sched_pdsch.nrOfLayers = cand->csi_ri + 1;
+      cand->sched_pdsch.pm_index = cand->csi_pm_index;
     }
   }
 }
@@ -75,8 +75,8 @@ int nr_dl_tda_select_default(const gNB_MAC_INST *mac, nr_dl_candidate_t *candida
       continue;
     }
 
-    cand->alloc_tda = tda;
-    cand->alloc_tda_info = tda_info;
+    cand->sched_pdsch.time_domain_allocation = tda;
+    cand->sched_pdsch.tda_info = tda_info;
     cand->alloc_slbitmap = SL_to_bitmap(tda_info.startSymbolIndex, tda_info.nrOfSymbols);
     n_valid++;
   }
@@ -88,8 +88,8 @@ static int compare_dl_pf_ptrs(const void *a, const void *b)
   const nr_dl_candidate_t *ca = *(const nr_dl_candidate_t *const *)a;
   const nr_dl_candidate_t *cb = *(const nr_dl_candidate_t *const *)b;
   /* retx first (INFINITY weight), then highest PF weight */
-  float wa = ca->is_retx ? INFINITY : dl_pf_weight(ca->current_mcs, ca->mcs_table, ca->alloc_nrOfLayers, ca->avg_throughput);
-  float wb = cb->is_retx ? INFINITY : dl_pf_weight(cb->current_mcs, cb->mcs_table, cb->alloc_nrOfLayers, cb->avg_throughput);
+  float wa = ca->is_retx ? INFINITY : dl_pf_weight(ca->current_mcs, ca->mcs_table, ca->sched_pdsch.nrOfLayers, ca->avg_throughput);
+  float wb = cb->is_retx ? INFINITY : dl_pf_weight(cb->current_mcs, cb->mcs_table, cb->sched_pdsch.nrOfLayers, cb->avg_throughput);
   return (wa < wb) - (wa > wb);
 }
 
@@ -145,7 +145,7 @@ void nr_dl_mcs_select_default(const gNB_MAC_INST *mac, nr_dl_candidate_t *candid
                                    bo->upper,
                                    cand->last_num_sched);
     }
-    cand->alloc_mcs = mcs;
+    cand->sched_pdsch.mcs = mcs;
     /* Persist for all candidates — BLER-based MCS ramps even for UEs the
      * policy rejects this slot (failed CCE, no free RBs, etc.). */
     if (!cand->is_retx)
@@ -157,9 +157,9 @@ static int compare_dl_pf_rb_ptrs(const void *a, const void *b)
 {
   const nr_dl_candidate_t *ca = *(const nr_dl_candidate_t *const *)a;
   const nr_dl_candidate_t *cb = *(const nr_dl_candidate_t *const *)b;
-  /* retx first, then highest PF weight (uses alloc_mcs, which is set by mcs_select) */
-  float wa = ca->is_retx ? INFINITY : dl_pf_weight(ca->alloc_mcs, ca->mcs_table, ca->alloc_nrOfLayers, ca->avg_throughput);
-  float wb = cb->is_retx ? INFINITY : dl_pf_weight(cb->alloc_mcs, cb->mcs_table, cb->alloc_nrOfLayers, cb->avg_throughput);
+  /* retx first, then highest PF weight (uses sched_pdsch.mcs, which is set by mcs_select) */
+  float wa = ca->is_retx ? INFINITY : dl_pf_weight(ca->sched_pdsch.mcs, ca->mcs_table, ca->sched_pdsch.nrOfLayers, ca->avg_throughput);
+  float wb = cb->is_retx ? INFINITY : dl_pf_weight(cb->sched_pdsch.mcs, cb->mcs_table, cb->sched_pdsch.nrOfLayers, cb->avg_throughput);
   return (wa < wb) - (wa > wb);
 }
 
@@ -193,7 +193,7 @@ int nr_dl_proportional_fair(const nr_dl_sched_params_t *params, nr_dl_candidate_
                       vrb_map, cand->alloc_slbitmap, &rbStart, &rbSize))
       continue;
 
-    COMMIT_ALLOC(params, idx_map[j], cand, rbStart, needed_rbs, cand->alloc_mcs, sched_indices, n_scheduled);
+    COMMIT_ALLOC(params, idx_map[j], cand, rbStart, needed_rbs, cand->sched_pdsch.mcs, sched_indices, n_scheduled);
   }
 
   /* Phase 2: No-data UEs (TA command or beam switch MAC CE, no RLC data) */
@@ -208,7 +208,7 @@ int nr_dl_proportional_fair(const nr_dl_sched_params_t *params, nr_dl_candidate_
                       vrb_map, cand->alloc_slbitmap, &rbStart, &rbSize))
       continue;
 
-    COMMIT_ALLOC(params, idx_map[j], cand, rbStart, min_rbSize, cand->alloc_mcs, sched_indices, n_scheduled);
+    COMMIT_ALLOC(params, idx_map[j], cand, rbStart, min_rbSize, cand->sched_pdsch.mcs, sched_indices, n_scheduled);
   }
 
   /* Phase 3: New data UEs — PF priority order, largest free block */
@@ -223,18 +223,18 @@ int nr_dl_proportional_fair(const nr_dl_sched_params_t *params, nr_dl_candidate_
     if (max_rbSize < min_rbSize)
       continue;
 
-    int mcs = cand->alloc_mcs;
+    int mcs = cand->sched_pdsch.mcs;
     uint8_t Qm = nr_get_Qm_dl(mcs, cand->mcs_table);
     uint16_t R = nr_get_code_rate_dl(mcs, cand->mcs_table);
     NR_pdsch_dmrs_t dmrs = get_dl_dmrs_params(params->mac->common_channels->ServingCellConfigCommon,
                                               &cand->UE->current_DL_BWP,
-                                              &cand->alloc_tda_info,
-                                              cand->alloc_nrOfLayers);
+                                              &cand->sched_pdsch.tda_info,
+                                              cand->sched_pdsch.nrOfLayers);
     const int oh = 3 * 4 + (cand->UE->UE_sched_ctrl.ta_apply ? 2 : 0);
     uint32_t tbs;
     uint16_t rbSize;
-    nr_find_nb_rb(Qm, R, 1, cand->alloc_nrOfLayers,
-                  cand->alloc_tda_info.nrOfSymbols,
+    nr_find_nb_rb(Qm, R, 1, cand->sched_pdsch.nrOfLayers,
+                  cand->sched_pdsch.tda_info.nrOfSymbols,
                   dmrs.N_PRB_DMRS * dmrs.N_DMRS_SLOT,
                   cand->pending_bytes + oh,
                   min_rbSize, max_rbSize, &tbs, &rbSize);

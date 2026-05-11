@@ -521,7 +521,7 @@ static int collect_dl_candidates(gNB_MAC_INST *mac,
           .beam_rsrp = UE->beam_rsrp,
           .beam_sinr = UE->beam_sinr,
           /* alloc decisions — zeroed here, written by pipeline stages */
-          .alloc_nrOfLayers = 0,
+          .sched_pdsch = {0},
           .alloc_beam_dir = UE->UE_beam_index,
           .alloc_beam_idx = 0,
           .alloc_new_beam = false,
@@ -565,7 +565,7 @@ static int collect_dl_candidates(gNB_MAC_INST *mac,
           .beam_rsrp = UE->beam_rsrp,
           .beam_sinr = UE->beam_sinr,
           /* alloc decisions — zeroed here, written by pipeline stages */
-          .alloc_nrOfLayers = 0,
+          .sched_pdsch = {0},
           .alloc_beam_dir = UE->UE_beam_index,
           .alloc_beam_idx = 0,
           .alloc_new_beam = false,
@@ -634,12 +634,12 @@ bool nr_dl_validate_cce_pucch(const nr_dl_sched_params_t *params, nr_dl_candidat
 
   cand->alloc_cce_index = CCEIndex;
   cand->alloc_aggregation_level = agg_level;
-  cand->alloc_pucch_allocation = pucch_alloc;
+  cand->sched_pdsch.pucch_allocation = pucch_alloc;
   cand->alloc_sched_pdcch = sched_pdcch;
   return true;
 }
 
-// Validate CCE/PUCCH and mark VRBs for a candidate whose alloc_rbStart/rbSize/mcs
+// Validate CCE/PUCCH and mark VRBs for a candidate whose sched_pdsch.rbStart/rbSize/mcs
 // have already been set. Returns false if validation fails (UE should be skipped).
 bool commit_alloc(const nr_dl_sched_params_t *params, nr_dl_candidate_t *cand)
 {
@@ -657,8 +657,8 @@ bool commit_alloc(const nr_dl_sched_params_t *params, nr_dl_candidate_t *cand)
                      beam);
 
   uint16_t *vrb_map = params->vrb_map[beam];
-  for (int rb = 0; rb < cand->alloc_rbSize; rb++)
-    vrb_map[cand->alloc_rbStart + rb + cand->bwp_start] |= cand->alloc_slbitmap;
+  for (int rb = 0; rb < cand->sched_pdsch.rbSize; rb++)
+    vrb_map[cand->sched_pdsch.rbStart + rb + cand->bwp_start] |= cand->alloc_slbitmap;
 
   return true;
 }
@@ -682,7 +682,7 @@ static void nr_dl_schedule(gNB_MAC_INST *mac,
   if (n == 0)
     return;
 
-  /* Step 2: RI/PMI selection — sets alloc_nrOfLayers and alloc_pm_index per candidate */
+  /* Step 2: RI/PMI selection — sets sched_pdsch.nrOfLayers and pm_index per candidate */
   mac->dl_ri_pmi_select(mac, candidates, n);
 
   /* Step 3: Beam allocation (skip for single beam — candidates default to beam 0).
@@ -702,7 +702,7 @@ static void nr_dl_schedule(gNB_MAC_INST *mac,
   if (n_valid == 0)
     return;
 
-  /* Step 5: MCS adaptation — sets alloc_mcs from BLER state for all candidates.
+  /* Step 5: MCS adaptation — sets sched_pdsch.mcs from BLER state for all candidates.
    * Placed after beam allocation so a custom dl_mcs_select can factor in alloc_beam_dir
    * (e.g. use beam RSRP/SINR to bias the MCS target). Also persists the decision so
    * BLER-based MCS ramps even for candidates the policy rejects this slot. */
@@ -762,50 +762,40 @@ static void nr_dl_schedule(gNB_MAC_INST *mac,
 
     NR_UE_DL_BWP_t *dl_bwp = &UE->current_DL_BWP;
 
-    /* TDA was resolved per-cand by dl_tda_select; no recomputation. */
-    int tda = cand->alloc_tda;
-    NR_tda_info_t tda_info = cand->alloc_tda_info;
-
     /* Reuse CCE/PUCCH from commit_alloc — no recomputation */
     sched_ctrl->cce_index = cand->alloc_cce_index;
     sched_ctrl->aggregation_level = cand->alloc_aggregation_level;
     sched_ctrl->sched_pdcch = cand->alloc_sched_pdcch;
-    int alloc = cand->alloc_pucch_allocation;
     /* fill_pdcch_vrb_map already called in commit_alloc */
 
-    int l = cand->alloc_nrOfLayers;
     bwp_info_t bwp_info = {.bwpStart = cand->bwp_start, .bwpSize = cand->bwp_size};
 
-    int mcs = cand->alloc_mcs; /* MCS already adapted by the policy */
+    /* Start from the candidate's sched_pdsch (pipeline stages already set
+     * mcs, rbStart, rbSize, nrOfLayers, pm_index, tda, tda_info, pucch_allocation).
+     * Fill remaining dispatch-only fields. */
+    NR_sched_pdsch_t sched_pdsch = cand->sched_pdsch;
+    sched_pdsch.bwp_info = bwp_info;
 
-    NR_sched_pdsch_t sched_pdsch;
     if (cand->is_retx) {
-      /* Retransmission: reuse stored sched_pdsch, override placement */
-      sched_pdsch = sched_ctrl->harq_processes[cand->retx_harq_pid].sched_pdsch;
-      sched_pdsch.rbStart = cand->alloc_rbStart;
-      sched_pdsch.pucch_allocation = alloc;
-      sched_pdsch.bwp_info = bwp_info;
+      /* Retransmission: merge HARQ state (R, Qm, tb_size, dmrs) with policy placement */
+      NR_sched_pdsch_t harq_pdsch = sched_ctrl->harq_processes[cand->retx_harq_pid].sched_pdsch;
+      sched_pdsch.R = harq_pdsch.R;
+      sched_pdsch.Qm = harq_pdsch.Qm;
+      sched_pdsch.tb_size = harq_pdsch.tb_size;
+      sched_pdsch.dmrs_parms = harq_pdsch.dmrs_parms;
       sched_pdsch.dl_harq_pid = cand->retx_harq_pid;
     } else {
-      /* New transmission: build from policy allocation */
+      /* New transmission: compute TBS-related fields */
+      int l = sched_pdsch.nrOfLayers;
+      int mcs = sched_pdsch.mcs;
       uint8_t Qm = nr_get_Qm_dl(mcs, dl_bwp->mcsTableIdx);
       uint16_t R = nr_get_code_rate_dl(mcs, dl_bwp->mcsTableIdx);
-      NR_pdsch_dmrs_t dmrs = get_dl_dmrs_params(scc, dl_bwp, &tda_info, l);
+      NR_pdsch_dmrs_t dmrs = get_dl_dmrs_params(scc, dl_bwp, &sched_pdsch.tda_info, l);
 
-      sched_pdsch = (NR_sched_pdsch_t){
-          .rbStart = cand->alloc_rbStart,
-          .mcs = mcs,
-          .R = R,
-          .Qm = Qm,
-          .dl_harq_pid = sched_ctrl->available_dl_harq.head,
-          .pucch_allocation = alloc,
-          .pm_index = cand->alloc_pm_index,
-          .nrOfLayers = l,
-          .bwp_info = bwp_info,
-          .dmrs_parms = dmrs,
-          .time_domain_allocation = tda,
-          .tda_info = tda_info,
-      };
+      sched_pdsch.R = R;
+      sched_pdsch.Qm = Qm;
+      sched_pdsch.dl_harq_pid = sched_ctrl->available_dl_harq.head;
+      sched_pdsch.dmrs_parms = dmrs;
 
       /* Compute actual TBS (policy allocated max rbSize, nr_find_nb_rb gives actual) */
       const int oh = 3 * 4 + (sched_ctrl->ta_apply ? 2 : 0);
@@ -813,11 +803,11 @@ static void nr_dl_schedule(gNB_MAC_INST *mac,
                     R,
                     1,
                     l,
-                    tda_info.nrOfSymbols,
+                    sched_pdsch.tda_info.nrOfSymbols,
                     dmrs.N_PRB_DMRS * dmrs.N_DMRS_SLOT,
                     sched_ctrl->num_total_bytes + oh,
                     5,
-                    cand->alloc_rbSize,
+                    sched_pdsch.rbSize,
                     &sched_pdsch.tb_size,
                     &sched_pdsch.rbSize);
 
