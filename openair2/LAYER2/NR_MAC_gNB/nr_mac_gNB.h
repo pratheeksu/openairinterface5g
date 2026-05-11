@@ -831,7 +831,6 @@ typedef struct {
 } NR_beam_info_t;
 
 #define UE_iterator(BaSe, VaR) for (NR_UE_info_t **VaR##pptr=BaSe, *VaR=*VaR##pptr; VaR; VaR=*(++VaR##pptr))
-#define BEAM_iterator(PaRaMs, VaR) for (int VaR = 0; VaR < (PaRaMs)->num_beams; VaR++)
 
 typedef struct {
   /// current frame
@@ -900,9 +899,6 @@ struct nr_dl_candidate {
   int priority; ///< LC priority from first DRB (lower = higher priority, 0 if none)
   nssai_t nssai; ///< slice/service type/differentiator from first DRB
 
-  /* ── PF scheduling state (set after RI/PMI select, read-only after) ──── */
-  float pf_weight; ///< proportional-fair weight: achievable_rate / avg_throughput
-  int pf_rank; ///< 0 = highest priority; consecutive after initial sort
   bool skipped; ///< true if dropped by TDA/beam select (skip in downstream stages)
 
   /* ── UE CSI observations (set by collect, read-only after) ─────────────── */
@@ -1039,9 +1035,6 @@ struct nr_ul_candidate {
   int pcmax; ///< configured max TX power
   int snrx10; ///< PUSCH SINR × 10 (for SINR-based MCS in harq_round_max==1)
 
-  /* ── PF scheduling state (set after RI/TPMI select, read-only after) ──── */
-  float pf_weight; ///< proportional-fair weight: achievable_rate / avg_throughput
-  int pf_rank; ///< 0 = highest priority; consecutive after initial sort
   bool skipped; ///< true if dropped by TDA/beam select (skip in downstream stages)
 
   /* ── UE CSI observations (set by collect, read-only after) ─────────────── */

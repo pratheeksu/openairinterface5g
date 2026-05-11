@@ -1841,7 +1841,9 @@ static int apply_ul_new_transmission(gNB_MAC_INST *nrmac,
   return sched.rbSize;
 }
 
-static float ul_pf_weight(int mcs, int mcs_table, int nrOfLayers, float avg_throughput)
+/* ---- PF weight utility (used by default beam_select and rb_alloc policies) ---- */
+
+float ul_pf_weight(int mcs, int mcs_table, int nrOfLayers, float avg_throughput)
 {
   uint8_t Qm = nr_get_Qm_ul(mcs, mcs_table);
   uint16_t R = nr_get_code_rate_ul(mcs, mcs_table);
@@ -1849,35 +1851,9 @@ static float ul_pf_weight(int mcs, int mcs_table, int nrOfLayers, float avg_thro
   return (float)tbs / fmaxf(avg_throughput, 1e-9f);
 }
 
-/// Compare by pf_weight descending (retx get INFINITY so they sort first).
-static int compare_ul_pf_weight_desc(const void *a, const void *b)
+static int compare_ul_beam_idx(const void *a, const void *b)
 {
-  float wa = ((const nr_ul_candidate_t *)a)->pf_weight;
-  float wb = ((const nr_ul_candidate_t *)b)->pf_weight;
-  return (wa < wb) - (wa > wb);
-}
-
-/// Compare by pf_rank ascending (for self-healing sort).
-int compare_ul_pf_rank(const void *a, const void *b)
-{
-  return ((const nr_ul_candidate_t *)a)->pf_rank - ((const nr_ul_candidate_t *)b)->pf_rank;
-}
-
-/// Compute PF weights and sort candidates once. Downstream default stages
-/// iterate in this order, giving O(1) PF priority access. Custom stages
-/// that don't use PF can ignore pf_rank — the inline rank check in
-/// beam_select / rb_alloc will re-sort if needed.
-static void ul_assign_pf_ranks(nr_ul_candidate_t *candidates, int n)
-{
-  for (int i = 0; i < n; i++) {
-    nr_ul_candidate_t *c = &candidates[i];
-    c->skipped = false;
-    c->pf_weight = c->is_retx ? INFINITY
-                               : ul_pf_weight(c->current_mcs, c->mcs_table, c->alloc_nrOfLayers, c->avg_throughput);
-  }
-  qsort(candidates, n, sizeof(*candidates), compare_ul_pf_weight_desc);
-  for (int i = 0; i < n; i++)
-    candidates[i].pf_rank = i;
+  return ((const nr_ul_candidate_t *)a)->alloc_beam_idx - ((const nr_ul_candidate_t *)b)->alloc_beam_idx;
 }
 
 static int nr_ul_schedule(gNB_MAC_INST *nrmac,
@@ -1903,11 +1879,10 @@ static int nr_ul_schedule(gNB_MAC_INST *nrmac,
   /* Step 2: RI/TPMI selection */
   nrmac->ul_ri_tpmi_select(nrmac, candidates, n_cand);
 
-  /* Step 2.5: Compute PF weights and sort candidates once */
-  ul_assign_pf_ranks(candidates, n_cand);
-
   /* Step 3: Beam allocation — done before TDA so that TDA selection can use
    * the allocated beam to check the correct VRB map per beam. */
+  for (int i = 0; i < n_cand; i++)
+    candidates[i].skipped = false;
   int n_beam_valid = nrmac->ul_beam_select(&nrmac->beam_info,
                                            nrmac->beam_index_list,
                                            candidates,
@@ -1935,9 +1910,11 @@ static int nr_ul_schedule(gNB_MAC_INST *nrmac,
    * (including skipped ones, so the BLER ramp evolves even for unscheduled UEs). */
   nrmac->ul_mcs_select(nrmac, candidates, n_cand);
 
-  /* Step 6: RB allocation policy (beam loop is inside the policy). */
-  int sched_indices[MAX_MOBILES_PER_GNB];
+  /* Step 6: Sort by beam, then call RB allocation policy per beam */
+  qsort(candidates, n_cand, sizeof(*candidates), compare_ul_beam_idx);
 
+  int sched_indices[MAX_MOBILES_PER_GNB];
+  int n_allocs = 0;
   nr_ul_sched_params_t params = {
       .mac = nrmac,
       .CC_id = CC_id,
@@ -1960,7 +1937,22 @@ static int nr_ul_schedule(gNB_MAC_INST *nrmac,
     params.n_rb_avail[b] = n_rb_sched[b];
   }
 
-  int n_allocs = nrmac->ul_rb_alloc(&params, candidates, sched_indices, n_cand);
+  int i = 0;
+  while (i < n_cand) {
+    int beam = candidates[i].alloc_beam_idx;
+    int start = i;
+    while (i < n_cand && candidates[i].alloc_beam_idx == beam)
+      i++;
+    /* Skip group of candidates whose beam allocation failed (beam < 0) */
+    if (beam < 0)
+      continue;
+    int count = i - start;
+
+    int local_sched[MAX_MOBILES_PER_GNB];
+    int ns = nrmac->ul_rb_alloc(&params, candidates + start, local_sched, count);
+    for (int j = 0; j < ns; j++)
+      sched_indices[n_allocs++] = local_sched[j] + start;
+  }
 
   /* Release beam reservations for candidates the policy rejected (failed
    * CCE validation, no free RBs, max_num_ue reached, etc.).

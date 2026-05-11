@@ -452,7 +452,7 @@ bool update_bler_stats(const NR_bler_options_t *bler_options,
                        NR_bler_stats_t *bler_stats,
                        frame_t frame);
 
-int compare_dl_pf_rank(const void *a, const void *b);
+float dl_pf_weight(int mcs, int mcs_table, int nrOfLayers, float avg_throughput);
 bool nr_dl_validate_cce_pucch(const nr_dl_sched_params_t *params, nr_dl_candidate_t *cand);
 bool commit_alloc(const nr_dl_sched_params_t *params, nr_dl_candidate_t *cand);
 
@@ -537,13 +537,13 @@ void nr_mac_signal_dtx(nr_power_control_t *pc);
 int nr_mac_get_tpc(nr_power_control_t *pc);
 
 /* UL scheduler helpers (shared between default policies and custom plugins) */
+float ul_pf_weight(int mcs, int mcs_table, int nrOfLayers, float avg_throughput);
 void update_ul_ue_R_Qm(int mcs, int mcs_table, const NR_PUSCH_Config_t *pusch_Config, uint16_t *R, uint8_t *Qm);
 uint16_t check_ul_retx_feasibility(const nr_ul_candidate_t *cand,
                                    int tda,
                                    const NR_tda_info_t *tda_info,
                                    const NR_ServingCellConfigCommon_t *scc,
                                    uint16_t max_rbSize);
-int compare_ul_pf_rank(const void *a, const void *b);
 bool nr_ul_validate_cce(const nr_ul_sched_params_t *params, nr_ul_candidate_t *cand);
 bool commit_ul_alloc(const nr_ul_sched_params_t *params, nr_ul_candidate_t *cand);
 

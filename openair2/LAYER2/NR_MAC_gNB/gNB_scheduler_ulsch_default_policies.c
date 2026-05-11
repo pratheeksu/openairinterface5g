@@ -99,6 +99,16 @@ int nr_ul_tda_select_default(gNB_MAC_INST *mac,
   return n_valid;
 }
 
+static int compare_ul_pf_ptrs(const void *a, const void *b)
+{
+  const nr_ul_candidate_t *ca = *(const nr_ul_candidate_t *const *)a;
+  const nr_ul_candidate_t *cb = *(const nr_ul_candidate_t *const *)b;
+  /* retx first (INFINITY weight), then highest PF weight */
+  float wa = ca->is_retx ? INFINITY : ul_pf_weight(ca->current_mcs, ca->mcs_table, ca->alloc_nrOfLayers, ca->avg_throughput);
+  float wb = cb->is_retx ? INFINITY : ul_pf_weight(cb->current_mcs, cb->mcs_table, cb->alloc_nrOfLayers, cb->avg_throughput);
+  return (wa < wb) - (wa > wb);
+}
+
 int nr_ul_beam_select_default(NR_beam_info_t *beam_info,
                               const int16_t *beam_index_list,
                               nr_ul_candidate_t *candidates,
@@ -109,18 +119,17 @@ int nr_ul_beam_select_default(NR_beam_info_t *beam_info,
                               slot_t sched_slot,
                               int slots_per_frame)
 {
-  /* Iterate in PF priority order so retx and high-priority UEs claim beams first.
-   * Inline rank check: O(1) per iteration, sorts the tail only if a custom
-   * upstream stage broke PF rank order. */
+  /* Build pointer array sorted by PF priority so retx and high-priority UEs claim beams first. */
+  nr_ul_candidate_t *order[MAX_MOBILES_PER_GNB];
+  int n_active = 0;
+  for (int i = 0; i < n_candidates; i++)
+    if (!candidates[i].skipped)
+      order[n_active++] = &candidates[i];
+  qsort(order, n_active, sizeof(*order), compare_ul_pf_ptrs);
+
   int n_valid = 0;
-  int last_rank = -1;
-  for (int i = 0; i < n_candidates; i++) {
-    nr_ul_candidate_t *cand = &candidates[i];
-    if (cand->skipped)
-      continue;
-    if (cand->pf_rank < last_rank)
-      qsort(candidates + i, n_candidates - i, sizeof(*candidates), compare_ul_pf_rank);
-    last_rank = cand->pf_rank;
+  for (int i = 0; i < n_active; i++) {
+    nr_ul_candidate_t *cand = order[i];
 
     /* Allocate beam for DCI slot */
     NR_beam_alloc_t dci_beam = beam_allocation_procedure(beam_info, frame, slot, cand->beam_index, slots_per_frame);
@@ -176,97 +185,109 @@ void nr_ul_mcs_select_default(const gNB_MAC_INST *mac, nr_ul_candidate_t *candid
   }
 }
 
+static int compare_ul_pf_rb_ptrs(const void *a, const void *b)
+{
+  const nr_ul_candidate_t *ca = *(const nr_ul_candidate_t *const *)a;
+  const nr_ul_candidate_t *cb = *(const nr_ul_candidate_t *const *)b;
+  /* retx first, then highest PF weight (uses alloc_mcs, which is set by mcs_select) */
+  float wa = ca->is_retx ? INFINITY : ul_pf_weight(ca->alloc_mcs, ca->mcs_table, ca->alloc_nrOfLayers, ca->avg_throughput);
+  float wb = cb->is_retx ? INFINITY : ul_pf_weight(cb->alloc_mcs, cb->mcs_table, cb->alloc_nrOfLayers, cb->avg_throughput);
+  return (wa < wb) - (wa > wb);
+}
+
 int nr_ul_proportional_fair(const nr_ul_sched_params_t *params, nr_ul_candidate_t *candidates, int *sched_indices, int n_candidates)
 {
   int n_scheduled = 0;
   const int min_rb = params->min_rb;
 
-  /* Per-beam scan: iterate all candidates for each beam. Array order = PF
-   * priority order, so within each beam we process retx first, then
-   * highest-priority new-tx first. No grouping sort needed.
-   * Phase 1 includes an inline rank check: O(1) per iteration, sorts the
-   * tail only if a custom upstream stage broke PF rank order. Once healed
-   * in phase 1, phases 2-3 see a sorted array. */
-  int last_rank = -1;
-  BEAM_iterator(params, b) {
-    uint16_t *vrb_map = params->vrb_map_UL[b];
-
-    /* Phase 1: HARQ retransmissions (highest priority, exact RBs) */
-    for (int i = 0; i < n_candidates; i++) {
-      if (candidates[i].skipped || candidates[i].alloc_beam_idx != b || !candidates[i].is_retx)
-        continue;
-      if (candidates[i].pf_rank < last_rank)
-        qsort(candidates + i, n_candidates - i, sizeof(*candidates), compare_ul_pf_rank);
-      last_rank = candidates[i].pf_rank;
-
-      int rbStart;
-      int block_len = find_largest_free_block(vrb_map, candidates[i].alloc_slbitmap, candidates[i].bwp_start, candidates[i].bwp_size, &rbStart);
-      if (block_len < candidates[i].retx_rbSize)
-        continue;
-
-      COMMIT_UL_ALLOC(params, i, &candidates[i], rbStart, candidates[i].retx_rbSize, candidates[i].alloc_mcs, sched_indices, n_scheduled);
+  /* Build pointer array sorted by PF priority (retx first, then highest weight) */
+  nr_ul_candidate_t *order[MAX_MOBILES_PER_GNB];
+  int idx_map[MAX_MOBILES_PER_GNB]; /* order position -> original index in candidates[] */
+  int n_active = 0;
+  for (int i = 0; i < n_candidates; i++) {
+    if (!candidates[i].skipped) {
+      idx_map[n_active] = i;
+      order[n_active] = &candidates[i];
+      n_active++;
     }
+  }
+  qsort(order, n_active, sizeof(*order), compare_ul_pf_rb_ptrs);
+  /* fix idx_map to follow the sorted order */
+  {
+    int tmp_map[MAX_MOBILES_PER_GNB];
+    for (int i = 0; i < n_active; i++)
+      tmp_map[i] = order[i] - candidates;
+    memcpy(idx_map, tmp_map, n_active * sizeof(int));
+  }
 
-    /* Phase 2: Inactive UEs (no BSR data, need scheduling for TA/SR) */
-    for (int i = 0; i < n_candidates; i++) {
-      if (candidates[i].skipped || candidates[i].alloc_beam_idx != b)
-        continue;
-      if (candidates[i].is_retx || !candidates[i].sched_inactive)
-        continue;
+  /* Phase 1: HARQ retransmissions (highest priority, exact RBs) */
+  for (int j = 0; j < n_active; j++) {
+    nr_ul_candidate_t *cand = order[j];
+    if (!cand->is_retx)
+      continue;
 
-      int rbStart;
-      int block_len = find_largest_free_block(vrb_map, candidates[i].alloc_slbitmap, candidates[i].bwp_start, candidates[i].bwp_size, &rbStart);
-      if (block_len < min_rb)
-        continue;
+    int rbStart;
+    uint16_t *vrb_map = params->vrb_map_UL[cand->alloc_beam_idx];
+    int block_len = find_largest_free_block(vrb_map, cand->alloc_slbitmap, cand->bwp_start, cand->bwp_size, &rbStart);
+    if (block_len < cand->retx_rbSize)
+      continue;
 
-      COMMIT_UL_ALLOC(params, i, &candidates[i], rbStart, min_rb, candidates[i].alloc_mcs, sched_indices, n_scheduled);
-    }
+    COMMIT_UL_ALLOC(params, idx_map[j], cand, rbStart, cand->retx_rbSize, cand->alloc_mcs, sched_indices, n_scheduled);
+  }
 
-    /* Phase 3: New data UEs — array order is PF priority, largest free block */
-    for (int i = 0; i < n_candidates; i++) {
-      nr_ul_candidate_t *cand = &candidates[i];
-      if (cand->skipped || cand->alloc_beam_idx != b)
-        continue;
-      if (cand->is_retx || cand->sched_inactive)
-        continue;
+  /* Phase 2: Inactive UEs (no BSR data, need scheduling for TA/SR) */
+  for (int j = 0; j < n_active; j++) {
+    nr_ul_candidate_t *cand = order[j];
+    if (cand->is_retx || !cand->sched_inactive)
+      continue;
 
-      int block_start;
-      int block_len = find_largest_free_block(vrb_map, cand->alloc_slbitmap, cand->bwp_start, cand->bwp_size, &block_start);
-      if (block_len < min_rb)
-        continue;
+    uint16_t *vrb_map = params->vrb_map_UL[cand->alloc_beam_idx];
+    int rbStart;
+    int block_len = find_largest_free_block(vrb_map, cand->alloc_slbitmap, cand->bwp_start, cand->bwp_size, &rbStart);
+    if (block_len < min_rb)
+      continue;
 
-      uint16_t rbSize = block_len;
-      uint8_t mcs = cand->alloc_mcs;
+    COMMIT_UL_ALLOC(params, idx_map[j], cand, rbStart, min_rb, cand->alloc_mcs, sched_indices, n_scheduled);
+  }
 
-      if (cand->pcmax != 0 || cand->ph != 0) {
-        nr_ul_phr_advice_t advice;
-        if (!nr_ul_check_phr(params, cand, rbSize, mcs, &advice)) {
-          rbSize = advice.max_mcs_min_rb.rbSize;
-          mcs = advice.max_mcs_min_rb.mcs;
-        }
+  /* Phase 3: New data UEs — PF priority order, largest free block */
+  for (int j = 0; j < n_active; j++) {
+    nr_ul_candidate_t *cand = order[j];
+    if (cand->is_retx || cand->sched_inactive)
+      continue;
+
+    int block_start;
+    uint16_t *vrb_map = params->vrb_map_UL[cand->alloc_beam_idx];
+    int block_len = find_largest_free_block(vrb_map, cand->alloc_slbitmap, cand->bwp_start, cand->bwp_size, &block_start);
+    if (block_len < min_rb)
+      continue;
+
+    uint16_t rbSize = block_len;
+    uint8_t mcs = cand->alloc_mcs;
+
+    if (cand->pcmax != 0 || cand->ph != 0) {
+      nr_ul_phr_advice_t advice;
+      if (!nr_ul_check_phr(params, cand, rbSize, mcs, &advice)) {
+        rbSize = advice.max_mcs_min_rb.rbSize;
+        mcs = advice.max_mcs_min_rb.mcs;
       }
-
-      NR_UE_UL_BWP_t *current_BWP = &cand->UE->current_UL_BWP;
-      NR_pusch_dmrs_t dmrs_info = get_ul_dmrs_params(params->scc, current_BWP, &cand->alloc_tda_info, cand->alloc_nrOfLayers);
-      uint16_t Rt;
-      uint8_t Qt;
-      update_ul_ue_R_Qm(mcs, current_BWP->mcs_table, current_BWP->pusch_Config, &Rt, &Qt);
-      uint32_t tb_size;
-      uint16_t final_rbSize;
-      nr_find_nb_rb(Qt,
-                    Rt,
-                    current_BWP->transform_precoding,
-                    cand->alloc_nrOfLayers,
-                    cand->alloc_tda_info.nrOfSymbols,
-                    dmrs_info.N_PRB_DMRS * dmrs_info.num_dmrs_symb,
-                    cand->pending_bytes,
-                    min_rb,
-                    rbSize,
-                    &tb_size,
-                    &final_rbSize);
-
-      COMMIT_UL_ALLOC(params, i, cand, block_start, final_rbSize, mcs, sched_indices, n_scheduled);
     }
+
+    NR_UE_UL_BWP_t *current_BWP = &cand->UE->current_UL_BWP;
+    NR_pusch_dmrs_t dmrs_info = get_ul_dmrs_params(params->scc, current_BWP, &cand->alloc_tda_info, cand->alloc_nrOfLayers);
+    uint16_t Rt;
+    uint8_t Qt;
+    update_ul_ue_R_Qm(mcs, current_BWP->mcs_table, current_BWP->pusch_Config, &Rt, &Qt);
+    uint32_t tb_size;
+    uint16_t final_rbSize;
+    nr_find_nb_rb(Qt, Rt, current_BWP->transform_precoding,
+                  cand->alloc_nrOfLayers,
+                  cand->alloc_tda_info.nrOfSymbols,
+                  dmrs_info.N_PRB_DMRS * dmrs_info.num_dmrs_symb,
+                  cand->pending_bytes,
+                  min_rb, rbSize, &tb_size, &final_rbSize);
+
+    COMMIT_UL_ALLOC(params, idx_map[j], cand, block_start, final_rbSize, mcs, sched_indices, n_scheduled);
   }
 
   return n_scheduled;

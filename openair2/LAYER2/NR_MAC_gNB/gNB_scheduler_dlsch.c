@@ -596,9 +596,9 @@ void nr_dl_ri_pmi_select_default(const gNB_MAC_INST *mac, nr_dl_candidate_t *can
   }
 }
 
-/* ---- PF weight utilities (used by dl_assign_pf_ranks, kept here) ---- */
+/* ---- PF weight utility (used by default beam_select and rb_alloc policies) ---- */
 
-static float dl_pf_weight(int mcs, int mcs_table, int nrOfLayers, float avg_throughput)
+float dl_pf_weight(int mcs, int mcs_table, int nrOfLayers, float avg_throughput)
 {
   uint8_t Qm = nr_get_Qm_dl(mcs, mcs_table);
   uint16_t R = nr_get_code_rate_dl(mcs, mcs_table);
@@ -606,32 +606,9 @@ static float dl_pf_weight(int mcs, int mcs_table, int nrOfLayers, float avg_thro
   return (float)tbs / fmaxf(avg_throughput, 1e-9f);
 }
 
-static int compare_dl_pf_weight_desc(const void *a, const void *b)
+static int compare_beam_idx(const void *a, const void *b)
 {
-  const nr_dl_candidate_t *ca = (const nr_dl_candidate_t *)a;
-  const nr_dl_candidate_t *cb = (const nr_dl_candidate_t *)b;
-  /* highest pf_weight first (retx have INFINITY, so they come first) */
-  return (ca->pf_weight < cb->pf_weight) - (ca->pf_weight > cb->pf_weight);
-}
-
-int compare_dl_pf_rank(const void *a, const void *b)
-{
-  return ((const nr_dl_candidate_t *)a)->pf_rank - ((const nr_dl_candidate_t *)b)->pf_rank;
-}
-
-/// Compute PF weight for each candidate, sort by priority (retx first, then
-/// highest PF weight), and assign consecutive pf_rank values 0..n-1.
-static void dl_assign_pf_ranks(nr_dl_candidate_t *candidates, int n)
-{
-  for (int i = 0; i < n; i++) {
-    nr_dl_candidate_t *c = &candidates[i];
-    c->skipped = false;
-    c->pf_weight = c->is_retx ? INFINITY
-                               : dl_pf_weight(c->current_mcs, c->mcs_table, c->alloc_nrOfLayers, c->avg_throughput);
-  }
-  qsort(candidates, n, sizeof(*candidates), compare_dl_pf_weight_desc);
-  for (int i = 0; i < n; i++)
-    candidates[i].pf_rank = i;
+  return ((const nr_dl_candidate_t *)a)->alloc_beam_idx - ((const nr_dl_candidate_t *)b)->alloc_beam_idx;
 }
 
 
@@ -725,17 +702,11 @@ static void nr_dl_schedule(gNB_MAC_INST *mac,
   /* Step 2: RI/PMI selection — sets alloc_nrOfLayers and alloc_pm_index per candidate */
   mac->dl_ri_pmi_select(mac, candidates, n);
 
-  /* Compute PF weights (needs alloc_nrOfLayers from step 2) and sort once.
-   * This is an optimisation for the default PF-based stages: beam_select and
-   * rb_alloc can iterate in array order without re-sorting.  Custom stage
-   * implementations are free to ignore pf_weight/pf_rank entirely and use
-   * their own priority scheme. Default beam_select and rb_alloc both
-   * verify PF rank order on entry and re-sort only if broken. */
-  dl_assign_pf_ranks(candidates, n);
-
   /* Step 3: Beam allocation (skip for single beam — candidates default to beam 0).
    * Done before TDA so that TDA selection can use the allocated beam to check
    * the correct VRB map and pick the best TDA per beam. */
+  for (int i = 0; i < n; i++)
+    candidates[i].skipped = false;
   if (num_beams > 1) {
     int n_beam_valid = mac->dl_beam_select(&mac->beam_info, mac->beam_index_list, candidates, n, frame, slot, slots_per_frame);
     if (n_beam_valid == 0)
@@ -754,9 +725,11 @@ static void nr_dl_schedule(gNB_MAC_INST *mac,
    * BLER-based MCS ramps even for candidates the policy rejects this slot. */
   mac->dl_mcs_select(mac, candidates, n);
 
-  /* Step 6: RB allocation policy (beam loop is inside the policy) */
-  int sched_indices[MAX_MOBILES_PER_GNB];
+  /* Step 6: Sort by beam, then call RB allocation policy per beam */
+  qsort(candidates, n, sizeof(*candidates), compare_beam_idx);
 
+  int sched_indices[MAX_MOBILES_PER_GNB];
+  int n_allocs = 0;
   nr_dl_sched_params_t params = {
       .mac = mac,
       .CC_id = CC_id,
@@ -773,7 +746,19 @@ static void nr_dl_schedule(gNB_MAC_INST *mac,
     params.n_rb_avail[b] = n_rb_sched[b];
   }
 
-  int n_allocs = mac->dl_rb_alloc(&params, candidates, sched_indices, n);
+  int i = 0;
+  while (i < n) {
+    int beam = candidates[i].alloc_beam_idx;
+    int start = i;
+    while (i < n && candidates[i].alloc_beam_idx == beam)
+      i++;
+    int count = i - start;
+
+    int local_sched[MAX_MOBILES_PER_GNB];
+    int ns = mac->dl_rb_alloc(&params, candidates + start, local_sched, count);
+    for (int j = 0; j < ns; j++)
+      sched_indices[n_allocs++] = local_sched[j] + start;
+  }
 
   /* Release beam reservations for candidates the policy rejected (failed
    * CCE/PUCCH validation, no free RBs, max_num_ue reached, etc.).
