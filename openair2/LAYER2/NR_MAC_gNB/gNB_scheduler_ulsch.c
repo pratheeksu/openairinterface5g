@@ -1881,8 +1881,8 @@ static int nr_ul_schedule(gNB_MAC_INST *nrmac,
 
   /* Step 3: Beam allocation — done before TDA so that TDA selection can use
    * the allocated beam to check the correct VRB map per beam. */
-  for (int i = 0; i < n_cand; i++)
-    candidates[i].skipped = false;
+  FOR_EACH_CANDIDATE(cand, candidates, n_cand)
+    cand->skipped = false;
   int n_beam_valid = nrmac->ul_beam_select(&nrmac->beam_info,
                                            nrmac->beam_index_list,
                                            candidates,

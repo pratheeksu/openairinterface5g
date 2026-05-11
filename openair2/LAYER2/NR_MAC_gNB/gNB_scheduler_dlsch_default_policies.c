@@ -37,10 +37,10 @@ int nr_dl_tda_select_default(const gNB_MAC_INST *mac, nr_dl_candidate_t *candida
   const NR_ServingCellConfigCommon_t *scc = mac->common_channels[0].ServingCellConfigCommon;
 
   int n_valid = 0;
-  for (int i = 0; i < n_candidates; i++) {
-    if (candidates[i].skipped)
+  FOR_EACH_CANDIDATE(cand, candidates, n_candidates) {
+    if (cand->skipped)
       continue;
-    NR_UE_info_t *UE = candidates[i].UE;
+    NR_UE_info_t *UE = cand->UE;
     NR_UE_sched_ctrl_t *sched_ctrl = &UE->UE_sched_ctrl;
     NR_UE_DL_BWP_t *dl_bwp = &UE->current_DL_BWP;
     int coresetid = sched_ctrl->coreset->controlResourceSetId;
@@ -53,13 +53,13 @@ int nr_dl_tda_select_default(const gNB_MAC_INST *mac, nr_dl_candidate_t *candida
                                              coresetid,
                                              false);
     if (!tda_info.valid_tda) {
-      candidates[i].skipped = true;
+      cand->skipped = true;
       continue;
     }
 
-    candidates[i].alloc_tda = tda;
-    candidates[i].alloc_tda_info = tda_info;
-    candidates[i].alloc_slbitmap = SL_to_bitmap(tda_info.startSymbolIndex, tda_info.nrOfSymbols);
+    cand->alloc_tda = tda;
+    cand->alloc_tda_info = tda_info;
+    cand->alloc_slbitmap = SL_to_bitmap(tda_info.startSymbolIndex, tda_info.nrOfSymbols);
     n_valid++;
   }
   return n_valid;
@@ -86,9 +86,9 @@ int nr_dl_beam_select_default(NR_beam_info_t *beam_info,
   /* Build pointer array sorted by PF priority so retx and high-priority UEs claim beams first. */
   nr_dl_candidate_t *order[MAX_MOBILES_PER_GNB];
   int n_active = 0;
-  for (int i = 0; i < n_candidates; i++)
-    if (!candidates[i].skipped)
-      order[n_active++] = &candidates[i];
+  FOR_EACH_CANDIDATE(cand, candidates, n_candidates)
+    if (!cand->skipped)
+      order[n_active++] = cand;
   qsort(order, n_active, sizeof(*order), compare_dl_pf_ptrs);
 
   int n_valid = 0;
@@ -110,8 +110,7 @@ int nr_dl_beam_select_default(NR_beam_info_t *beam_info,
 void nr_dl_mcs_select_default(const gNB_MAC_INST *mac, nr_dl_candidate_t *candidates, int n_candidates)
 {
   const NR_bler_options_t *bo = &mac->dl_bler;
-  for (int i = 0; i < n_candidates; i++) {
-    nr_dl_candidate_t *cand = &candidates[i];
+  FOR_EACH_CANDIDATE(cand, candidates, n_candidates) {
     int mcs;
     if (cand->is_retx) {
       mcs = cand->current_mcs; /* retx MCS is fixed by the HARQ round */
@@ -153,23 +152,15 @@ int nr_dl_proportional_fair(const nr_dl_sched_params_t *params, nr_dl_candidate_
 
   /* Build pointer array sorted by PF priority (retx first, then highest weight) */
   nr_dl_candidate_t *order[MAX_MOBILES_PER_GNB];
-  int idx_map[MAX_MOBILES_PER_GNB]; /* order position -> original index in candidates[] */
   int n_active = 0;
-  for (int i = 0; i < n_candidates; i++) {
-    if (!candidates[i].skipped) {
-      idx_map[n_active] = i;
-      order[n_active] = &candidates[i];
-      n_active++;
-    }
-  }
+  FOR_EACH_CANDIDATE(cand, candidates, n_candidates)
+    if (!cand->skipped)
+      order[n_active++] = cand;
   qsort(order, n_active, sizeof(*order), compare_dl_pf_rb_ptrs);
-  /* fix idx_map to follow the sorted order */
-  {
-    int tmp_map[MAX_MOBILES_PER_GNB];
-    for (int i = 0; i < n_active; i++)
-      tmp_map[i] = order[i] - candidates;
-    memcpy(idx_map, tmp_map, n_active * sizeof(int));
-  }
+  /* idx_map: sorted position -> original index in candidates[] */
+  int idx_map[MAX_MOBILES_PER_GNB];
+  for (int j = 0; j < n_active; j++)
+    idx_map[j] = order[j] - candidates;
 
   /* Phase 1: HARQ retransmissions (highest priority, exact RBs) */
   for (int j = 0; j < n_active; j++) {

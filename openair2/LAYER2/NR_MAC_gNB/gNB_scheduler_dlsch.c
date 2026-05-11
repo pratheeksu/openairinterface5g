@@ -581,8 +581,7 @@ static int collect_dl_candidates(gNB_MAC_INST *mac,
 
 void nr_dl_ri_pmi_select_default(const gNB_MAC_INST *mac, nr_dl_candidate_t *candidates, int n_candidates)
 {
-  for (int i = 0; i < n_candidates; i++) {
-    nr_dl_candidate_t *cand = &candidates[i];
+  FOR_EACH_CANDIDATE(cand, candidates, n_candidates) {
     NR_UE_sched_ctrl_t *sched_ctrl = &cand->UE->UE_sched_ctrl;
     NR_UE_DL_BWP_t *dl_bwp = &cand->UE->current_DL_BWP;
     if (cand->is_retx) {
@@ -705,8 +704,8 @@ static void nr_dl_schedule(gNB_MAC_INST *mac,
   /* Step 3: Beam allocation (skip for single beam — candidates default to beam 0).
    * Done before TDA so that TDA selection can use the allocated beam to check
    * the correct VRB map and pick the best TDA per beam. */
-  for (int i = 0; i < n; i++)
-    candidates[i].skipped = false;
+  FOR_EACH_CANDIDATE(cand, candidates, n)
+    cand->skipped = false;
   if (num_beams > 1) {
     int n_beam_valid = mac->dl_beam_select(&mac->beam_info, mac->beam_index_list, candidates, n, frame, slot, slots_per_frame);
     if (n_beam_valid == 0)

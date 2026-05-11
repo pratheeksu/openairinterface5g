@@ -22,11 +22,11 @@
  * A custom impl can compute joint (rank, TPMI) from the H matrix on the candidates. */
 void nr_ul_ri_tpmi_select_default(gNB_MAC_INST *mac, nr_ul_candidate_t *cands, int n_cand)
 {
-  for (int i = 0; i < n_cand; i++) {
-    NR_UE_sched_ctrl_t *sched_ctrl = &cands[i].UE->UE_sched_ctrl;
-    NR_UE_UL_BWP_t *current_BWP = &cands[i].UE->current_UL_BWP;
-    cands[i].alloc_nrOfLayers = (current_BWP->dci_format == NR_UL_DCI_FORMAT_0_0) ? 1 : sched_ctrl->srs_feedback.ul_ri + 1;
-    cands[i].alloc_tpmi = sched_ctrl->srs_feedback.tpmi;
+  FOR_EACH_CANDIDATE(cand, cands, n_cand) {
+    NR_UE_sched_ctrl_t *sched_ctrl = &cand->UE->UE_sched_ctrl;
+    NR_UE_UL_BWP_t *current_BWP = &cand->UE->current_UL_BWP;
+    cand->alloc_nrOfLayers = (current_BWP->dci_format == NR_UL_DCI_FORMAT_0_0) ? 1 : sched_ctrl->srs_feedback.ul_ri + 1;
+    cand->alloc_tpmi = sched_ctrl->srs_feedback.tpmi;
   }
 }
 
@@ -49,50 +49,50 @@ int nr_ul_tda_select_default(gNB_MAC_INST *mac,
   NR_ServingCellConfigCommon_t *scc = mac->common_channels[0].ServingCellConfigCommon;
 
   int n_valid = 0;
-  for (int i = 0; i < n_cand; i++) {
-    if (cands[i].skipped)
+  FOR_EACH_CANDIDATE(cand, cands, n_cand) {
+    if (cand->skipped)
       continue;
 
-    int beam = cands[i].alloc_beam_idx;
-    int rb_start = 0, rb_len = cands[i].bwp_size;
+    int beam = cand->alloc_beam_idx;
+    int rb_start = 0, rb_len = cand->bwp_size;
     const NR_tda_info_t *best = get_best_ul_tda(mac, beam, tda_list, n_tda, sched_frame, sched_slot, &rb_start, &rb_len);
     DevAssert(best->valid_tda);
 
-    if (cands[i].is_retx) {
+    if (cand->is_retx) {
       /* Try to reuse the original TDA if it is among the valid candidates for this slot */
       const NR_sched_pusch_t *retInfo =
-          &cands[i].UE->UE_sched_ctrl.ul_harq_processes[cands[i].retx_harq_pid].sched_pusch;
+          &cand->UE->UE_sched_ctrl.ul_harq_processes[cand->retx_harq_pid].sched_pusch;
       /* Check exact TDA index, not just K2 — same K2 doesn't guarantee valid symbols in mixed slots */
       const NR_tda_info_t *orig = seq_arr_at(&mac->ul_tda, retInfo->time_domain_allocation);
       ptrdiff_t offset = orig - tda_list;
       if (offset >= 0 && offset < n_tda) {
         /* Original TDA is valid — reuse it directly */
-        cands[i].alloc_tda = retInfo->time_domain_allocation;
-        cands[i].alloc_tda_info = *orig;
-        cands[i].alloc_slbitmap = SL_to_bitmap(orig->startSymbolIndex, orig->nrOfSymbols);
-        cands[i].retx_rbSize = retInfo->rbSize;
+        cand->alloc_tda = retInfo->time_domain_allocation;
+        cand->alloc_tda_info = *orig;
+        cand->alloc_slbitmap = SL_to_bitmap(orig->startSymbolIndex, orig->nrOfSymbols);
+        cand->retx_rbSize = retInfo->rbSize;
         n_valid++;
         continue;
       }
       /* Original TDA not available — try the per-beam best TDA with TBS refit */
       int tda = seq_arr_dist(&mac->ul_tda, seq_arr_front(&mac->ul_tda), best);
       AssertFatal(tda >= 0 && tda < 16, "illegal TDA index %d\n", tda);
-      uint16_t needed = check_ul_retx_feasibility(&cands[i], tda, best, scc, cands[i].bwp_size);
+      uint16_t needed = check_ul_retx_feasibility(cand, tda, best, scc, cand->bwp_size);
       if (needed == 0) {
-        LOG_D(NR_MAC, "[UE %04x] retx infeasible with TDA %d, deferring\n", cands[i].UE->rnti, tda);
-        cands[i].skipped = true;
+        LOG_D(NR_MAC, "[UE %04x] retx infeasible with TDA %d, deferring\n", cand->UE->rnti, tda);
+        cand->skipped = true;
         continue;
       }
-      cands[i].alloc_tda = tda;
-      cands[i].alloc_tda_info = *best;
-      cands[i].alloc_slbitmap = SL_to_bitmap(best->startSymbolIndex, best->nrOfSymbols);
-      cands[i].retx_rbSize = needed;
+      cand->alloc_tda = tda;
+      cand->alloc_tda_info = *best;
+      cand->alloc_slbitmap = SL_to_bitmap(best->startSymbolIndex, best->nrOfSymbols);
+      cand->retx_rbSize = needed;
     } else {
       int tda = seq_arr_dist(&mac->ul_tda, seq_arr_front(&mac->ul_tda), best);
       AssertFatal(tda >= 0 && tda < 16, "illegal TDA index %d\n", tda);
-      cands[i].alloc_tda = tda;
-      cands[i].alloc_tda_info = *best;
-      cands[i].alloc_slbitmap = SL_to_bitmap(best->startSymbolIndex, best->nrOfSymbols);
+      cand->alloc_tda = tda;
+      cand->alloc_tda_info = *best;
+      cand->alloc_slbitmap = SL_to_bitmap(best->startSymbolIndex, best->nrOfSymbols);
     }
     n_valid++;
   }
@@ -122,9 +122,9 @@ int nr_ul_beam_select_default(NR_beam_info_t *beam_info,
   /* Build pointer array sorted by PF priority so retx and high-priority UEs claim beams first. */
   nr_ul_candidate_t *order[MAX_MOBILES_PER_GNB];
   int n_active = 0;
-  for (int i = 0; i < n_candidates; i++)
-    if (!candidates[i].skipped)
-      order[n_active++] = &candidates[i];
+  FOR_EACH_CANDIDATE(cand, candidates, n_candidates)
+    if (!cand->skipped)
+      order[n_active++] = cand;
   qsort(order, n_active, sizeof(*order), compare_ul_pf_ptrs);
 
   int n_valid = 0;
@@ -160,8 +160,7 @@ int nr_ul_beam_select_default(NR_beam_info_t *beam_info,
 void nr_ul_mcs_select_default(const gNB_MAC_INST *mac, nr_ul_candidate_t *candidates, int n_candidates)
 {
   const NR_bler_options_t *bo = &mac->ul_bler;
-  for (int i = 0; i < n_candidates; i++) {
-    nr_ul_candidate_t *cand = &candidates[i];
+  FOR_EACH_CANDIDATE(cand, candidates, n_candidates) {
     int mcs;
     if (cand->is_retx) {
       mcs = cand->current_mcs;
@@ -202,23 +201,15 @@ int nr_ul_proportional_fair(const nr_ul_sched_params_t *params, nr_ul_candidate_
 
   /* Build pointer array sorted by PF priority (retx first, then highest weight) */
   nr_ul_candidate_t *order[MAX_MOBILES_PER_GNB];
-  int idx_map[MAX_MOBILES_PER_GNB]; /* order position -> original index in candidates[] */
   int n_active = 0;
-  for (int i = 0; i < n_candidates; i++) {
-    if (!candidates[i].skipped) {
-      idx_map[n_active] = i;
-      order[n_active] = &candidates[i];
-      n_active++;
-    }
-  }
+  FOR_EACH_CANDIDATE(cand, candidates, n_candidates)
+    if (!cand->skipped)
+      order[n_active++] = cand;
   qsort(order, n_active, sizeof(*order), compare_ul_pf_rb_ptrs);
-  /* fix idx_map to follow the sorted order */
-  {
-    int tmp_map[MAX_MOBILES_PER_GNB];
-    for (int i = 0; i < n_active; i++)
-      tmp_map[i] = order[i] - candidates;
-    memcpy(idx_map, tmp_map, n_active * sizeof(int));
-  }
+  /* idx_map: sorted position -> original index in candidates[] */
+  int idx_map[MAX_MOBILES_PER_GNB];
+  for (int j = 0; j < n_active; j++)
+    idx_map[j] = order[j] - candidates;
 
   /* Phase 1: HARQ retransmissions (highest priority, exact RBs) */
   for (int j = 0; j < n_active; j++) {
