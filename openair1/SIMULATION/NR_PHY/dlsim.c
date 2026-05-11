@@ -1296,6 +1296,12 @@ int main(int argc, char **argv)
 
         dl_config.sfn = frame;
         dl_config.slot = slot;
+        int sigenergy = 0;
+        for (int aarx = 0; aarx < UE->frame_parms.nb_antennas_rx; aarx++) {
+          sigenergy +=
+              signal_energy((int32_t *)(UE->common_vars.rxdata[aarx] + slot_offset), slot_length) / UE->frame_parms.nb_antennas_rx;
+        }
+        UE->dft_in_levdB = dB_fixed(sigenergy);
         ue_dci_configuration(UE_mac, &dl_config, frame, slot);
         nr_ue_scheduled_response(&scheduled_response);
 

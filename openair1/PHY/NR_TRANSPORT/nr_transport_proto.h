@@ -177,7 +177,7 @@ typedef struct rx_prach_out {
 } rx_prach_out_t;
 rx_prach_out_t rx_nr_prach(const prach_item_t *, int occasion);
 
-void rx_nr_prach_ru(prach_item_t *, int32_t **, NR_DL_FRAME_PARMS *frame_parms, int N_TA_offset);
+void rx_nr_prach_ru(prach_item_t *, int32_t **, NR_DL_FRAME_PARMS *frame_parms, int N_TA_offset, int dft_in_levdB);
 
 void nr_fill_pucch(PHY_VARS_gNB *gNB,
                    int frame,

@@ -140,14 +140,15 @@ typedef struct RU_prec_t_s{
 } RU_prec_t;
 
 typedef struct {
- int startSymbol;
- int endSymbol;
- int slot;
- const c16_t *rxdata;
- c16_t *rxdataF;
- const NR_DL_FRAME_PARMS *fp;
- int32_t sample_offet;
- task_ans_t *ans;
+  int startSymbol;
+  int endSymbol;
+  int slot;
+  int dft_in_levdB;
+  const c16_t *rxdata;
+  c16_t *rxdataF;
+  const NR_DL_FRAME_PARMS *fp;
+  int32_t sample_offet;
+  task_ans_t *ans;
 } feprx_cmd_t;
 
 typedef struct {
@@ -608,6 +609,7 @@ typedef struct RU_t_s {
   /// number of cores for RU ThreadPool
   int num_tpcores;
   void* scopeData;
+  int32_t dft_in_levdB;
 } RU_t;
 
 

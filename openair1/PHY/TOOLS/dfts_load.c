@@ -12,8 +12,8 @@
 #include "assertions.h"
 #include "common/utils/LOG/log.h"
 #include "tools_defs.h"
-#include "common/config/config_userapi.h" 
-#include "common/utils/load_module_shlib.h" 
+#include "common/config/config_userapi.h"
+#include "common/utils/load_module_shlib.h"
 
 
 /* function description array, to be used when loading the dfts/idfts lib */

@@ -102,6 +102,7 @@ void nr_phy_init_RU(RU_t *ru)
 
     LOG_D(PHY, "[INIT] %s() ru->num_gNB:%d \n", __FUNCTION__, ru->num_gNB);
   } // !=IF5
+  ru->dft_in_levdB = -1;
 }
 
 void nr_phy_free_RU(RU_t *ru)

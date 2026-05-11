@@ -112,7 +112,8 @@ static void rx_nr_prach_ru_internal(prach_item_t *p,
                                     int prachOccasion,
                                     int32_t **rxdata,
                                     NR_DL_FRAME_PARMS *fp,
-                                    int N_TA_offset)
+                                    int N_TA_offset,
+                                    int dft_in_levdB)
 {
   int sample_offset_slot;
   const int sum = fp->ofdm_symbol_size + fp->nb_prefix_samples;
@@ -319,6 +320,7 @@ static void rx_nr_prach_ru_internal(prach_item_t *p,
   }
 
   const dft_size_idx_t dftsize = get_dft(dftlen);
+  const uint32_t *scaling_sched = get_dft_scaling(dftlen, dft_in_levdB);
 
   // Do forward transform
   if (LOG_DEBUGFLAG(DEBUG_PRACH)) {
@@ -350,10 +352,10 @@ static void rx_nr_prach_ru_internal(prach_item_t *p,
     memset(rxsigF_tmp, 0, sizeof(rxsigF_tmp));
     for (int i = 0; i < reps; i++, prach2 += dftlen) {
       c16_t tmp[dftlen] __attribute__((aligned(32)));
-      dft(dftsize, (int16_t *)prach2, (int16_t *)tmp, 1);
-      // Coherent combining of PRACH repetitions (assumes channel does not change, to be revisted for "long" PRACH)
-      LOG_D(PHY, "Doing PRACH combining of %d reptitions N_ZC %d\n", reps, N_ZC);
-      //    if (k+N_ZC > dftlen) { // PRACH signal is split around DC
+      dft(dftsize, (int16_t *)prach2, (int16_t *)tmp, scaling_sched);
+    //Coherent combining of PRACH repetitions (assumes channel does not change, to be revisted for "long" PRACH)
+    LOG_D(PHY,"Doing PRACH combining of %d reptitions N_ZC %d\n",reps,N_ZC);
+    //    if (k+N_ZC > dftlen) { // PRACH signal is split around DC 
       int k2 = k;
       for (int j = 0; j < N_ZC; j++, k2++) {
         if (k2 == dftlen)
@@ -365,7 +367,7 @@ static void rx_nr_prach_ru_internal(prach_item_t *p,
   }
 }
 
-void rx_nr_prach_ru(prach_item_t *p, int32_t **rxdata, NR_DL_FRAME_PARMS *fp, int N_TA_offset)
+void rx_nr_prach_ru(prach_item_t *p, int32_t **rxdata, NR_DL_FRAME_PARMS *fp, int N_TA_offset, int dft_in_levdB)
 {
   int N_dur = get_nr_prach_duration(p->pdu.prach_format);
   LOG_D(NR_PHY_RACH, "%d.%d try to decode %d occasions \n", p->frame, p->slot, p->pdu.num_prach_ocas);
@@ -375,7 +377,7 @@ void rx_nr_prach_ru(prach_item_t *p, int32_t **rxdata, NR_DL_FRAME_PARMS *fp, in
     // comment FK: the standard 38.211 section 5.3.2 has one extra term +14*N_RA_slot. This is because there prachStartSymbol is
     // given wrt to start of the 15kHz slot or 60kHz slot. Here we work slot based, so this function is anyway only called in slots
     // where there is PRACH. Its up to the MAC to schedule another PRACH PDU in the case there are there N_RA_slot \in {0,1}.
-    rx_nr_prach_ru_internal(p, beam_id, prachStartSymbol, prach_oc, rxdata, fp, N_TA_offset);
+    rx_nr_prach_ru_internal(p, beam_id, prachStartSymbol, prach_oc, rxdata, fp, N_TA_offset, dft_in_levdB);
   }
 }
 
@@ -542,7 +544,7 @@ rx_prach_out_t rx_nr_prach(const prach_item_t *in, int occasion)
         memset(prachF + N_ZC, 0, sizeof(*prachF) * (dft_sz - N_ZC));
         // Now do IFFT of size 1024 (N_ZC=839) or 256 (N_ZC=139)
         c16_t prach_ifft_tmp[dft_sz] __attribute__((aligned(32)));
-        idft(get_idft(dft_sz), (int16_t *)prachF, (int16_t *)prach_ifft_tmp, 1);
+        idft(get_idft(dft_sz), (int16_t *)prachF, (int16_t *)prach_ifft_tmp, get_idft_scaling(256, 0));
         // compute energy and accumulate over receive antennas
         for (int i = 0; i < dft_sz; i++)
           prach_ifft[i] += squaredMod(prach_ifft_tmp[i]);

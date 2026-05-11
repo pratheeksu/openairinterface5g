@@ -59,13 +59,15 @@ void nr_ue_layer_mapping(const c16_t *mod_symbs, const int n_layers, const int n
 \param symbol symbol within slot (0..12/14)
 \param slot Slot number
 \param sample_offset offset within rxdata (points to beginning of symbol)
+\param levdB signal level for choosing dft scaling
 */
 int nr_symbol_fep_ul(const NR_DL_FRAME_PARMS *fp,
                      const c16_t *rxdata,
                      c16_t *rxdataF,
                      unsigned char symbol,
                      unsigned char slot,
-                     int sample_offset);
+                     int sample_offset,
+                     uint32_t levdB);
 
 /*!
 \brief This function implements the dft transform precoding in PUSCH
@@ -100,7 +102,8 @@ void nr_ofdm_demod_and_rx_rotation(c16_t **rxdata,
                                    int slot,
                                    int slot_offsetF,
                                    enum nr_Link linktype,
-                                   bool was_symbol_used[NR_SYMBOLS_PER_SLOT]);
+                                   bool was_symbol_used[NR_SYMBOLS_PER_SLOT],
+				   uint32_t levdB);
 
 void perform_symbol_rotation(NR_DL_FRAME_PARMS *fp, double f0, c16_t *symbol_rotation);
 

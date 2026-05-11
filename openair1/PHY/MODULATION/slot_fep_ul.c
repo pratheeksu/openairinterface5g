@@ -63,10 +63,10 @@ int slot_fep_ul(RU_t *ru,
       LOG_D(PHY,"slot_fep: symbol 0 %d dB\n",
 	    dB_fixed(signal_energy(&common->rxdata_7_5kHz[aa][rx_offset],fp->ofdm_symbol_size)));
 #endif
-      dft( dftsize,(int16_t *)&common->rxdata_7_5kHz[aa][rx_offset],
-           (int16_t *)&common->rxdataF[aa][fp->ofdm_symbol_size*symbol],
-           1
-         );
+      dft(dftsize,
+          (int16_t *)&common->rxdata_7_5kHz[aa][rx_offset],
+          (int16_t *)&common->rxdataF[aa][fp->ofdm_symbol_size * symbol],
+          get_dft_scaling(s, ru->dft_in_levdB));
     } else {
       
       rx_offset += (fp->ofdm_symbol_size+nb_prefix_samples)*l;
@@ -75,16 +75,16 @@ int slot_fep_ul(RU_t *ru,
         memcpy((void *)&tmp_dft_in,
 	       (void *)&common->rxdata_7_5kHz[aa][(rx_offset % frame_length_samples)],
 	       fp->ofdm_symbol_size*sizeof(int));
-        dft( dftsize,(short *) tmp_dft_in,
-             (short*)  &common->rxdataF[aa][fp->ofdm_symbol_size*symbol],
-             1
-           );
+        dft(dftsize,
+            (short *)tmp_dft_in,
+            (short *)&common->rxdataF[aa][fp->ofdm_symbol_size * symbol],
+            get_dft_scaling(s, ru->dft_in_levdB));
       }
       else{
-      dft( dftsize,(short *)&common->rxdata_7_5kHz[aa][rx_offset],
-           (short*)&common->rxdataF[aa][fp->ofdm_symbol_size*symbol],
-           1
-         );
+        dft(dftsize,
+            (short *)&common->rxdata_7_5kHz[aa][rx_offset],
+            (short *)&common->rxdataF[aa][fp->ofdm_symbol_size * symbol],
+            get_dft_scaling(s, ru->dft_in_levdB));
       }
     }
   }

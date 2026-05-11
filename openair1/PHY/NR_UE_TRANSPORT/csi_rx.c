@@ -910,6 +910,10 @@ void nr_ue_csi_rs_procedures(PHY_VARS_NR_UE *ue,
   uint8_t cqi = 0;
   int32_t precoded_sinr_dB = 0;
   // bit 3 in bitmap to indicate RI measurment
+  if (csi_info->csi_im_meas_computed) 
+     AssertFatal(csi_info->interference_plus_noise_power > 0, "interference_plus_noise_power is 0\n");
+  else
+     AssertFatal(noise_power > 0, "noise_power is 0\n");
   if (csirs_config_pdu->measurement_bitmap & 8) {
     nr_csi_rs_pmi_estimation(ue,
                              csirs_config_pdu,

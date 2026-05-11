@@ -436,6 +436,7 @@ typedef struct PHY_VARS_NR_UE_s {
   Actor_t *ul_actors;
   pthread_t main_thread;
   pthread_t stat_thread;
+  int32_t dft_in_levdB;
 } PHY_VARS_NR_UE;
 
 typedef struct {
