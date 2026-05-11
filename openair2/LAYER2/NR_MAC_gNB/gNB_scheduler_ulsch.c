@@ -1674,10 +1674,9 @@ void update_ul_ue_R_Qm(int mcs, int mcs_table, const NR_PUSCH_Config_t *pusch_Co
   }
 }
 
-/* Check retx feasibility against the call's TDA.
- * Returns the validated rbSize needed (>0), or 0 if infeasible.
- * For TDA-reuse: returns retInfo->rbSize.
- * For TDA-change: refits rbSize via nr_find_nb_rb to preserve TBS; returns new rbSize or 0. */
+/* Check retx feasibility against a new TDA.
+ * Refits rbSize via nr_find_nb_rb so the new TDA preserves TBS.
+ * Returns the new rbSize needed (>0), or 0 if infeasible. */
 uint16_t check_ul_retx_feasibility(const nr_ul_candidate_t *cand,
                                           int tda,
                                           const NR_tda_info_t *tda_info,
@@ -1688,11 +1687,6 @@ uint16_t check_ul_retx_feasibility(const nr_ul_candidate_t *cand,
   NR_UE_UL_BWP_t *current_BWP = &cand->UE->current_UL_BWP;
   const NR_sched_pusch_t *retInfo = &sched_ctrl->ul_harq_processes[cand->retx_harq_pid].sched_pusch;
 
-  bool reuse_tda = (retInfo->time_domain_allocation == tda && retInfo->nrOfLayers == cand->alloc_nrOfLayers);
-  if (reuse_tda)
-    return retInfo->rbSize;
-
-  /* TDA-change: refit rbSize so the new TDA's symbol/DMRS layout preserves TBS */
   NR_pusch_dmrs_t dmrs_info = get_ul_dmrs_params(scc, current_BWP, tda_info, retInfo->nrOfLayers);
   uint32_t new_tbs;
   uint16_t new_rbSize;
