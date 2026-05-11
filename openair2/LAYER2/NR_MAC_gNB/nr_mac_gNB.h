@@ -1024,18 +1024,25 @@ struct nr_ul_candidate {
   float bler;
   int current_mcs;
   int max_mcs;
+  int last_num_sched; ///< scheduling count at last BLER update (activity guard)
+  bool bler_updated; ///< true if BLER was refreshed this frame
   int mcs_table;
   int bwp_start;
   int bwp_size;
-  int ph;
-  int pcmax;
-  int snrx10; ///< PUSCH SINR × 10 (for SINR-based MCS in harq_round_max==1)
-  bool bler_updated; ///< true if BLER was refreshed this frame
-  int last_num_sched; ///< scheduling count at last BLER update (activity guard)
   uint64_t fiveQI; ///< 5QI from first DRB's QoS config (0 if none)
   int priority; ///< LC priority from first DRB (0 if none)
   nssai_t nssai; ///< slice/service type/differentiator from first DRB
   int beam_index;
+
+  /* ── Power control (set by collect, read-only after) ─────────────────────── */
+  int ph; ///< power headroom
+  int pcmax; ///< configured max TX power
+  int snrx10; ///< PUSCH SINR × 10 (for SINR-based MCS in harq_round_max==1)
+
+  /* ── PF scheduling state (set after RI/TPMI select, read-only after) ──── */
+  float pf_weight; ///< proportional-fair weight: achievable_rate / avg_throughput
+  int pf_rank; ///< 0 = highest priority; consecutive after initial sort
+  bool skipped; ///< true if dropped by TDA/beam select (skip in downstream stages)
 
   /* ── UE CSI observations (set by collect, read-only after) ─────────────── */
   uint16_t cqi; ///< wideband CQI (from CSI report)
@@ -1055,11 +1062,6 @@ struct nr_ul_candidate {
   int alloc_beam_idx; ///< beam idx for the scheduled PUSCH slot; -1 = failed
   bool alloc_dci_beam_new; ///< true if dci_beam was newly allocated
   bool alloc_sched_beam_new; ///< true if sched_beam was newly allocated
-  /* ── PF scheduling state (set after RI/TPMI select, read-only after) ──── */
-  float pf_weight; ///< proportional-fair weight: achievable_rate / avg_throughput
-  int pf_rank; ///< 0 = highest priority; consecutive after initial sort
-  bool skipped; ///< true if dropped by TDA/beam select (skip in downstream stages)
-
   /* ul_mcs_select: MCS from BLER/SINR */
   int alloc_mcs; ///< MCS target; SINR-based (harq_round_max==1) or BLER-based
   /* ul_rb_alloc: frequency-domain assignment */
