@@ -6,7 +6,7 @@
  * \brief       Default pluggable policy functions for the DL scheduler pipeline.
  *
  * These are the built-in implementations behind the function pointers
- * (dl_tda_select, dl_beam_select, dl_mcs_select, dl_rb_alloc, dl_lcid_alloc)
+ * (dl_ri_pmi_select, dl_tda_select, dl_beam_select, dl_mcs_select, dl_rb_alloc, dl_lcid_alloc)
  * wired up at MAC init time.  They can be replaced at runtime by external
  * scheduler plug-ins without touching the core scheduling loop in
  * gNB_scheduler_dlsch.c.
@@ -26,6 +26,24 @@
 /*Softmodem params*/
 #include "executables/softmodem-common.h"
 #include "../../../nfapi/oai_integration/vendor_ext.h"
+
+// Default RI/PMI selector: reads rank and PMI from CSI feedback for new-tx,
+// or from HARQ process state for retx.
+void nr_dl_ri_pmi_select_default(const gNB_MAC_INST *mac, nr_dl_candidate_t *candidates, int n_candidates)
+{
+  FOR_EACH_CANDIDATE(cand, candidates, n_candidates) {
+    NR_UE_sched_ctrl_t *sched_ctrl = &cand->UE->UE_sched_ctrl;
+    NR_UE_DL_BWP_t *dl_bwp = &cand->UE->current_DL_BWP;
+    if (cand->is_retx) {
+      cand->alloc_nrOfLayers = sched_ctrl->harq_processes[cand->retx_harq_pid].sched_pdsch.nrOfLayers;
+      cand->alloc_pm_index =
+          get_pm_index(mac, cand->UE, dl_bwp->dci_format, cand->alloc_nrOfLayers, mac->radio_config.pdsch_AntennaPorts.XP);
+    } else {
+      cand->alloc_nrOfLayers = cand->csi_ri + 1;
+      cand->alloc_pm_index = cand->csi_pm_index;
+    }
+  }
+}
 
 // Default TDA selector: picks the slot-wide TDA index from get_dl_tda(),
 // then resolves tda_info per candidate using each UE's own BWP / search

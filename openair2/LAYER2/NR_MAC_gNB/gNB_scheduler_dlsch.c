@@ -579,22 +579,6 @@ static int collect_dl_candidates(gNB_MAC_INST *mac,
   return n;
 }
 
-void nr_dl_ri_pmi_select_default(const gNB_MAC_INST *mac, nr_dl_candidate_t *candidates, int n_candidates)
-{
-  FOR_EACH_CANDIDATE(cand, candidates, n_candidates) {
-    NR_UE_sched_ctrl_t *sched_ctrl = &cand->UE->UE_sched_ctrl;
-    NR_UE_DL_BWP_t *dl_bwp = &cand->UE->current_DL_BWP;
-    if (cand->is_retx) {
-      cand->alloc_nrOfLayers = sched_ctrl->harq_processes[cand->retx_harq_pid].sched_pdsch.nrOfLayers;
-      cand->alloc_pm_index =
-          get_pm_index(mac, cand->UE, dl_bwp->dci_format, cand->alloc_nrOfLayers, mac->radio_config.pdsch_AntennaPorts.XP);
-    } else {
-      cand->alloc_nrOfLayers = cand->csi_ri + 1;
-      cand->alloc_pm_index = cand->csi_pm_index;
-    }
-  }
-}
-
 /* ---- PF weight utility (used by default beam_select and rb_alloc policies) ---- */
 
 float dl_pf_weight(int mcs, int mcs_table, int nrOfLayers, float avg_throughput)
