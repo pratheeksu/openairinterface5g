@@ -898,8 +898,7 @@ struct nr_dl_candidate {
   int bwp_size; ///< UE's BWP size
   uint64_t fiveQI; ///< 5QI from first DRB's QoS config (0 if none)
   int priority; ///< LC priority from first DRB (lower = higher priority, 0 if none)
-  uint8_t nssai_sst; ///< slice/service type from first DRB (0 if none)
-  uint32_t nssai_sd; ///< slice differentiator from first DRB (0xFFFFFF if none)
+  nssai_t nssai; ///< slice/service type/differentiator from first DRB
 
   /* ── PF scheduling state (set after RI/PMI select, read-only after) ──── */
   float pf_weight; ///< proportional-fair weight: achievable_rate / avg_throughput
@@ -1035,8 +1034,7 @@ struct nr_ul_candidate {
   int last_num_sched; ///< scheduling count at last BLER update (activity guard)
   uint64_t fiveQI; ///< 5QI from first DRB's QoS config (0 if none)
   int priority; ///< LC priority from first DRB (0 if none)
-  uint8_t nssai_sst; ///< slice/service type from first DRB (0 if none)
-  uint32_t nssai_sd; ///< slice differentiator from first DRB (0xFFFFFF if none)
+  nssai_t nssai; ///< slice/service type/differentiator from first DRB
   int beam_index;
 
   /* ── UE CSI observations (set by collect, read-only after) ─────────────── */

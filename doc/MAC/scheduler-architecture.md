@@ -220,7 +220,7 @@ MAC subheaders. RLC may return fewer bytes than budgeted; the builder handles th
 transparently.
 
 **Inputs:** `candidate->pending_bytes_per_lcid[]`, `candidate->fiveQI`, `candidate->priority`,
-`candidate->nssai_sst/sd`, `tbs_available`.
+`candidate->nssai`, `tbs_available`.
 **Outputs:** `lcid_alloc[NR_MAX_NUM_LCID]` — byte budget per LCID.
 
 Not invoked for retransmissions (which reuse the stored transport block) or for phy-test
@@ -275,7 +275,7 @@ All phases use `COMMIT_{DL,UL}_ALLOC` to validate CCE (and PUCCH on DL).
 Greedy fill: sets each LCID's budget to its full `pending_bytes_per_lcid` value. The
 execution loop in `generate_dl_mac_pdu` then fills LCIDs in LC config order until the
 TBS is exhausted, reproducing the original first-come-first-served behavior. A custom
-implementation could use the candidate's QoS fields (`fiveQI`, `priority`, `nssai_sst/sd`)
+implementation could use the candidate's QoS fields (`fiveQI`, `priority`, `nssai`)
 to implement weighted fair queuing, strict priority with rate limiting, or slice-aware
 allocation across LCIDs.
 
@@ -324,7 +324,7 @@ Flows through the pipeline accumulating decisions. Three sections:
 **Identity / scheduling state** (set by collect, read-only after):
 `UE` pointer, `rnti`, `is_retx`, `retx_harq_pid`, `retx_rbSize`, `pending_bytes`,
 `pending_bytes_per_lcid[NR_MAX_NUM_LCID]`, `avg_throughput`, `bler`, `current_mcs`,
-`max_mcs`, `bwp_start`, `bwp_size`, `fiveQI`, `priority`, `nssai_sst`, `nssai_sd`.
+`max_mcs`, `bwp_start`, `bwp_size`, `fiveQI`, `priority`, `nssai`.
 
 **CSI observations** (set by collect, read-only after):
 `cqi` (DL CQI), `beam_rsrp[]`, `beam_sinr[]` (per-SSB L1-RSRP/SINR, `INT16_MIN` = no data).
