@@ -53,15 +53,18 @@
   #define  SYNCHRO_RATE_CHANGE_FACTOR  (1)
 #endif
 
-pss_detection_result_t pss_search_time_nr(const c16_t **rxdata,
-                                          int ofdm_symbol_size,
-                                          int nb_antennas_rx,
-                                          int subcarrier_spacing,
-                                          const c16_t pssTime[NUMBER_PSS_SEQUENCE][ofdm_symbol_size],
-                                          bool fo_flag,
-                                          int target_Nid_cell,
-                                          int search_start,
-                                          int search_length);
+typedef struct {
+  c16_t **rxdata;
+  int nb_antennas_rx;
+  int rxdata_length;
+  int ofdm_symbol_size;
+  int subcarrier_spacing;
+  bool fo_flag;
+  int target_Nid_cell;
+  c16_t *pssTime;
+} pss_search_t;
+
+pss_detection_result_t pss_search_time_nr(const pss_search_t *p);
 
 void generate_pss_nr_time(int ofdm_symbol_size,
                           int first_carrier_offset,

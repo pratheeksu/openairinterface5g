@@ -285,18 +285,20 @@ static bool validate_known_pci(NR_DL_FRAME_PARMS *frame_parms,
 {
   int known_pci = nr_neighboring_cell->Nid_cell;
 
-  int start = neighboring_cell_info->pss_search_start;
   int length = neighboring_cell_info->pss_search_length;
+  c16_t *rx[frame_parms->nb_antennas_rx];
+  for (int i=0; i<frame_parms->nb_antennas_rx; i++)
+    rx[i]=rxdata[i]+neighboring_cell_info->pss_search_start;
 
-  pss_detection_result_t pss_res = pss_search_time_nr((const c16_t **)rxdata,
-                                                      frame_parms->ofdm_symbol_size,
-                                                      frame_parms->nb_antennas_rx,
-                                                      frame_parms->subcarrier_spacing,
-                                                      pssTime,
-                                                      false, // no frequency offset estimation for tracking
-                                                      known_pci,
-                                                      start,
-                                                      length);
+  pss_search_t p_pss = (pss_search_t){.rxdata = rx,
+                                      .nb_antennas_rx = frame_parms->nb_antennas_rx,
+                                      .rxdata_length = length,
+                                      .ofdm_symbol_size = frame_parms->ofdm_symbol_size,
+                                      .subcarrier_spacing = frame_parms->subcarrier_spacing,
+                                      .fo_flag = false,
+                                      .target_Nid_cell = known_pci,
+                                      .pssTime = (c16_t *)pssTime};
+  pss_detection_result_t pss_res = pss_search_time_nr(&p_pss);
 
   if (!pss_res.success) {
     if (neighboring_cell_info->valid_meas)
@@ -304,7 +306,7 @@ static bool validate_known_pci(NR_DL_FRAME_PARMS *frame_parms,
     LOG_D(NR_PHY,
           "PSS validation failed for PCI=%d (search window: start=%d, length=%d, peak=%d dB, avg=%d dB), consec_fail=%d\n",
           known_pci,
-          start,
+          neighboring_cell_info->pss_search_start,
           length,
           pss_res.peak,
           pss_res.avg,
@@ -312,7 +314,7 @@ static bool validate_known_pci(NR_DL_FRAME_PARMS *frame_parms,
     return false;
   }
 
-  int ssb_time_offset = pss_res.pos - frame_parms->nb_prefix_samples;
+  int ssb_time_offset = neighboring_cell_info->pss_search_start + pss_res.pos - frame_parms->nb_prefix_samples;
   if (ssb_time_offset < 0)
     return false; // pss position is too close to buffer begining
 
@@ -329,13 +331,13 @@ static bool validate_known_pci(NR_DL_FRAME_PARMS *frame_parms,
            sizeof(c16_t) * frame_parms->ofdm_symbol_size);
   }
 
-  nr_sss_params_t p = (nr_sss_params_t){.nb_antennas_rx = frame_parms->nb_antennas_rx,
-                                        .samples_per_slot_wCP = frame_parms->samples_per_slot_wCP,
-                                        .ofdm_symbol_size = frame_parms->ofdm_symbol_size,
-                                        .first_carrier_offset = frame_parms->first_carrier_offset,
-                                        .ssb_start_subcarrier = frame_parms->ssb_start_subcarrier,
-                                        .subcarrier_spacing = frame_parms->subcarrier_spacing};
-  sss_detection_result_t res = rx_sss_nr(&p, &pss_res, known_pci, rxdataF);
+  nr_sss_params_t p_sss = (nr_sss_params_t){.nb_antennas_rx = frame_parms->nb_antennas_rx,
+                                            .samples_per_slot_wCP = frame_parms->samples_per_slot_wCP,
+                                            .ofdm_symbol_size = frame_parms->ofdm_symbol_size,
+                                            .first_carrier_offset = frame_parms->first_carrier_offset,
+                                            .ssb_start_subcarrier = frame_parms->ssb_start_subcarrier,
+                                            .subcarrier_spacing = frame_parms->subcarrier_spacing};
+  sss_detection_result_t res = rx_sss_nr(&p_sss, &pss_res, known_pci, rxdataF);
 
   if (!res.success) {
     if (neighboring_cell_info->valid_meas)

@@ -201,15 +201,15 @@ bool nr_search_ssb_common(nr_ssb_search_params_t *params)
   c16_t(*pssTime)[pssTime_sz] = (c16_t(*)[pssTime_sz])params->pssTime;
 
   // Perform PSS search
-  params->pss_res = pss_search_time_nr((const c16_t **)params->rxdata,
-                                       params->ofdm_symbol_size,
-                                       params->nb_antennas_rx,
-                                       params->subcarrier_spacing,
-                                       pssTime,
-                                       params->fo_flag,
-                                       params->target_nid_cell,
-                                       0,
-                                       params->rxdata_size);
+  pss_search_t p_pss = (pss_search_t){.rxdata = params->rxdata,
+                                      .nb_antennas_rx = params->nb_antennas_rx,
+                                      .rxdata_length = params->rxdata_size,
+                                      .ofdm_symbol_size = params->ofdm_symbol_size,
+                                      .subcarrier_spacing = params->subcarrier_spacing,
+                                      .fo_flag = params->fo_flag,
+                                      .target_Nid_cell = params->target_nid_cell,
+                                      .pssTime = (c16_t *)pssTime};
+  params->pss_res = pss_search_time_nr(&p_pss);
 
   if (!params->pss_res.success)
     return false;
@@ -240,16 +240,16 @@ bool nr_search_ssb_common(nr_ssb_search_params_t *params)
   do_time_to_freq(params, ssb_time_offset);
 
   // Perform SSS detection
-  nr_sss_params_t p = (nr_sss_params_t){.nb_antennas_rx = params->nb_antennas_rx,
-                                        .samples_per_slot_wCP = params->samples_per_slot_wCP,
-                                        .ofdm_symbol_size = params->ofdm_symbol_size,
-                                        .first_carrier_offset = params->first_carrier_offset,
-                                        .ssb_start_subcarrier = params->ssb_start_subcarrier,
-                                        .subcarrier_spacing = params->subcarrier_spacing};
+  nr_sss_params_t p_sss = (nr_sss_params_t){.nb_antennas_rx = params->nb_antennas_rx,
+                                            .samples_per_slot_wCP = params->samples_per_slot_wCP,
+                                            .ofdm_symbol_size = params->ofdm_symbol_size,
+                                            .first_carrier_offset = params->first_carrier_offset,
+                                            .ssb_start_subcarrier = params->ssb_start_subcarrier,
+                                            .subcarrier_spacing = params->subcarrier_spacing};
 
   c16_t(*rxdataF)[params->nb_antennas_rx][params->ofdm_symbol_size] =
       (c16_t(*)[params->nb_antennas_rx][params->ofdm_symbol_size])params->rxdataF;
-  params->sss_res = rx_sss_nr(&p, &params->pss_res, -1, rxdataF);
+  params->sss_res = rx_sss_nr(&p_sss, &params->pss_res, -1, rxdataF);
 
   if (!params->sss_res.success || params->sss_res.nid_cell < 0) {
     return false;
