@@ -373,11 +373,33 @@ void rrc_gnb_nrdc_start(gNB_RRC_INST *rrc, gNB_RRC_UE_t *ue)
   if (ue->nrdc)
     return;
 
-  /* look for an NR-DC combination */
-  int mcg_band = 77;
-  int scg_band = 261;
+  /* look for an NR-DC combination, configured and available */
+  nr_rrc_cell_container_t *ue_pcell = rrc_get_pcell_for_ue(rrc, ue);
+  if (ue_pcell == NULL) {
+    LOG_W(NR_RRC, "NR-DC: UE %d has no PCell, don't try to activate NR-DC\n", ue->rrc_ue_id);
+    return;
+  }
+
+  int mcg_band = -1;
+  int scg_band = -1;
+  for (int i = 0; i < rrc->nrdc_config.combination_count; i++) {
+    nr_rrc_cell_container_t *mcg_cell = get_cell_by_band(&rrc->cells, rrc->nrdc_config.combinations[i].mcg_band);
+    nr_rrc_cell_container_t *scg_cell = get_cell_by_band(&rrc->cells, rrc->nrdc_config.combinations[i].scg_band);
+    /* MCG cell must be the one used by the UE */
+    if (mcg_cell == ue_pcell && scg_cell != NULL) {
+      mcg_band = rrc->nrdc_config.combinations[i].mcg_band;
+      scg_band = rrc->nrdc_config.combinations[i].scg_band;
+    }
+  }
+
+  if (mcg_band == -1) {
+    LOG_W(NR_RRC, "NR-DC: UE %d: no NR-DC combination found, NR-DC will not be activated\n", ue->rrc_ue_id);
+    return;
+  }
 
   /* a combination is found, start NR-DC, ask for UE capabilities */
+  LOG_I(NR_RRC, "NR-DC: UE %d: trying band combination MCG band %d and SCG band %d\n", ue->rrc_ue_id, mcg_band, scg_band);
+
   /* allocate the NR-DC state data in the UE */
   nrdc_ue_state_t *nrdc = calloc_or_fail(1, sizeof(*nrdc));
   ue->nrdc = nrdc;
