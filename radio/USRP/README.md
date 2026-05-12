@@ -151,3 +151,53 @@ There are two workarounds:
 
 You can also find more information on this in the [5G/NR gNB with COTS UE
 tutorial](./NR_SA_Tutorial_COTS_UE.md).
+
+### Map UTC timestamp to sample index
+
+#### Without GPS sync
+
+The current software attempts to generate a valid sample_index from UTC timestamp
+in `get_timestamp`. This is done by first continuously polling `get_time_last_pps`
+setting up the clock reference using `set_time_next_pps`.
+
+This works only for devices with short and stable round-trip time of `get_time_last_pps`
+
+The following graph describes the delay:
+
+```mermaid
+
+sequenceDiagram
+    participant host
+    participant usrp
+    participant last_pps
+    participant usrp_clock
+
+loop get_last_pps
+    host ->>+ usrp: get_last_pps query
+    usrp ->> last_pps: read
+    alt delay start
+    usrp_clock -->> last_pps: write ?
+    end
+    usrp ->>- host: get_last_pps response
+end
+    host ->>+ usrp: get_last_pps query
+    alt delay start
+    usrp_clock -->> last_pps: write ?
+    end
+    usrp ->> last_pps: read
+    usrp ->>- host: get_last_pps response
+    note over host: read CLOCK_REALTIME
+
+    host ->> usrp: set_time_next_pps
+```
+
+The total delay between the PPS pulse on the USRP and the host reading CLOCK_REALTIME can
+be estimated to between 1.5 RTT (if last_pps was written after USRP read it in the
+`get_last_pps` loop above) to 0.5 RTT (if last_pps was written right before the final
+`get_last_pps` call).
+
+This mechanism makes it so that USRP clock is running ahead of the host CLOCK_REALTIME.
+to circumvent that, an extra offset is added when calculating sample index in `get_timestamp`.
+
+For 5G, if the RTT value is small (~few symbols) and stable (low stdev) it would allow for
+temporary synchronization to CLOCK_REALTIME at least until the clocks drift.
