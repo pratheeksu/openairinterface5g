@@ -17,7 +17,7 @@
 #include "T.h"
 #include "T_messages_creator.h"
 #include <sys/time.h>
-
+#include "openair1/SCHED_NR/sched_nr.h"
 
 #if T_TRACER
 static void copy_c16_data_to_slot_memory(c16_t *src, c16_t *dst_slot, int nb_re_pusch, int symbol)
@@ -871,7 +871,7 @@ static void inner_rx(PHY_VARS_gNB *gNB,
                      c16_t *chFext_slot)
 {
   int nb_layer = rel15_ul->nrOfLayers;
-  int nb_rx_ant = frame_parms->nb_antennas_rx;
+  int nb_rx_ant = rel15_ul->param_v4.numSpatialStreamIndices;
   int dmrs_symbol_flag = (rel15_ul->ul_dmrs_symb_pos >> symbol) & 0x01;
   int buffer_length = ceil_mod(rel15_ul->rb_size * NR_NB_SC_PER_RB, 16);
   c16_t rxFext[nb_rx_ant][buffer_length] __attribute__((aligned(32)));
@@ -957,6 +957,7 @@ static void inner_rx(PHY_VARS_gNB *gNB,
                              pusch_vars,
                              slot,
                              symbol,
+                             nb_rx_ant,
                              buffer_length);
     pusch_vars->ul_valid_re_per_slot[symbol] -= pusch_vars->ptrs_re_per_slot;
   }
@@ -1013,7 +1014,8 @@ typedef struct puschSymbolProc_s {
   int16_t *llr;
   int16_t *scramblingSequence;
   uint32_t nvar;
-  int beam_nb;
+  // TODO: Remove assumption of contiguous ports after DAS is properly handled in beamforming
+  uint16_t ant_port_start;
   task_ans_t *ans;
   c16_t *pusch_ch_est_dmrs_interpl_slot_mem;
   c16_t *rxFext_slot_mem;
@@ -1043,7 +1045,7 @@ static void nr_pusch_symbol_processing(void *arg)
              frame_parms,
              pusch_vars,
              rel15_ul,
-             gNB->common_vars.rxdataF[rdata->beam_nb],
+             gNB->common_vars.rxdataF + rdata->ant_port_start,
              llrss,
              soffset,
              symbol,
@@ -1103,10 +1105,14 @@ int nr_rx_pusch_tp(PHY_VARS_gNB *gNB,
                    const nfapi_nr_pusch_pdu_t *rel15_ul,
                    uint32_t *ret_unav_res,
                    uint32_t frame,
-                   uint8_t slot,
-                   int beam_nb)
+                   uint8_t slot)
 {
   NR_DL_FRAME_PARMS *frame_parms = &gNB->frame_parms;
+  const nfapi_nr_spatial_stream_index_t *p = &rel15_ul->param_v4;
+  uint16_t ant_port_start = get_first_ant_idx(gNB->enable_analog_das,
+                                              frame_parms->nb_antennas_tx / gNB->common_vars.num_beams_period,
+                                              rel15_ul->beamforming.prgs_list[0].dig_bf_interface_list[0].beam_idx,
+                                              p->numSpatialStreamIndices > 0 ? p->spatialStreamIndices[0] : 0);
 
   uint32_t bwp_start_subcarrier = ((rel15_ul->rb_start + rel15_ul->bwp_start) * NR_NB_SC_PER_RB + frame_parms->first_carrier_offset) % frame_parms->ofdm_symbol_size;
   LOG_D(PHY,"pusch %d.%d : bwp_start_subcarrier %d, rb_start %d, first_carrier_offset %d\n", frame,slot,bwp_start_subcarrier, rel15_ul->rb_start, frame_parms->first_carrier_offset);
@@ -1165,7 +1171,7 @@ int nr_rx_pusch_tp(PHY_VARS_gNB *gNB,
                                     get_dmrs_port(nl, rel15_ul->dmrs_ports),
                                     symbol,
                                     pusch_vars,
-                                    beam_nb,
+                                    ant_port_start,
                                     bwp_start_subcarrier,
                                     rel15_ul,
                                     &max_ch,
@@ -1177,7 +1183,8 @@ int nr_rx_pusch_tp(PHY_VARS_gNB *gNB,
     }
   }
 
-  nvar /= (rel15_ul->nr_of_symbols * rel15_ul->nrOfLayers * frame_parms->nb_antennas_rx);
+  const uint8_t num_sp_streams = rel15_ul->param_v4.numSpatialStreamIndices;
+  nvar /= (rel15_ul->nr_of_symbols * rel15_ul->nrOfLayers * num_sp_streams);
 
   allocCast2D(n0_subband_power,
               unsigned int,
@@ -1189,27 +1196,29 @@ int nr_rx_pusch_tp(PHY_VARS_gNB *gNB,
   int start_sc = (rel15_ul->bwp_start + rel15_ul->rb_start) * NR_NB_SC_PER_RB;
   int middle_sc = frame_parms->ofdm_symbol_size - frame_parms->first_carrier_offset;
   int end_sc = (start_sc + rel15_ul->rb_size * NR_NB_SC_PER_RB - 1) % frame_parms->ofdm_symbol_size;
-  for (int aarx = 0; aarx < frame_parms->nb_antennas_rx; aarx++) {
-    pusch_vars->ulsch_power[aarx] = 0;
-    pusch_vars->ulsch_noise_power[aarx] = 0;
+  for (int aa_pusch = 0; aa_pusch < num_sp_streams; aa_pusch++) {
+    const int aarx = ant_port_start + aa_pusch;
+    DevAssert(aarx < sizeofArray(pusch_vars->ulsch_power));
+    pusch_vars->ulsch_power[aa_pusch] = 0;
+    pusch_vars->ulsch_noise_power[aa_pusch] = 0;
     int64_t symb_energy = 0;
 
     for (uint8_t symbol = rel15_ul->start_symbol_index; symbol < end_symbol; symbol++) {
       int offset0 = ((slot % RU_RX_SLOT_DEPTH) * frame_parms->symbols_per_slot + symbol) * frame_parms->ofdm_symbol_size;
       int offset = offset0 + (frame_parms->first_carrier_offset + start_sc) % frame_parms->ofdm_symbol_size;
-      c16_t *ul_ch = &gNB->common_vars.rxdataF[beam_nb][aarx][offset];
+      c16_t *ul_ch = &gNB->common_vars.rxdataF[aarx][offset];
       if (end_sc < start_sc) {
         int64_t symb_energy_aux = signal_energy_nodc(ul_ch, middle_sc - start_sc) * (middle_sc - start_sc);
-        ul_ch = &gNB->common_vars.rxdataF[beam_nb][aarx][offset0];
+        ul_ch = &gNB->common_vars.rxdataF[aarx][offset0];
         symb_energy_aux += (signal_energy_nodc(ul_ch, end_sc + 1) * (end_sc + 1));
         symb_energy += symb_energy_aux / (rel15_ul->rb_size * NR_NB_SC_PER_RB);
       } else {
         symb_energy += signal_energy_nodc(ul_ch, rel15_ul->rb_size * NR_NB_SC_PER_RB);
       }
     }
-    pusch_vars->ulsch_power[aarx] += (symb_energy / rel15_ul->nr_of_symbols);
+    pusch_vars->ulsch_power[aa_pusch] += (symb_energy / rel15_ul->nr_of_symbols);
 
-    pusch_vars->ulsch_noise_power[aarx] +=
+    pusch_vars->ulsch_noise_power[aa_pusch] +=
         average_u32(&n0_subband_power[aarx][rel15_ul->bwp_start + rel15_ul->rb_start], rel15_ul->rb_size);
 
     LOG_D(PHY,
@@ -1218,8 +1227,8 @@ int nr_rx_pusch_tp(PHY_VARS_gNB *gNB,
           rel15_ul->bwp_start,
           rel15_ul->rb_start,
           rel15_ul->rb_size,
-          pusch_vars->ulsch_power[aarx],
-          pusch_vars->ulsch_noise_power[aarx]);
+          pusch_vars->ulsch_power[aa_pusch],
+          pusch_vars->ulsch_noise_power[aa_pusch]);
   }
 
   // averaging time domain channel estimates
@@ -1229,7 +1238,8 @@ int nr_rx_pusch_tp(PHY_VARS_gNB *gNB,
                              rel15_ul->nr_of_symbols,
                              rel15_ul->start_symbol_index,
                              rel15_ul->ul_dmrs_symb_pos,
-                             rel15_ul->rb_size);
+                             rel15_ul->rb_size,
+                             num_sp_streams);
 
   stop_meas(&gNB->ulsch_channel_estimation_stats);
 
@@ -1296,16 +1306,16 @@ int nr_rx_pusch_tp(PHY_VARS_gNB *gNB,
   else // average of channel estimates stored in first symbol
     dmrs_symbol = get_next_dmrs_symbol_in_slot(rel15_ul->ul_dmrs_symb_pos, rel15_ul->start_symbol_index, end_symbol);
   int size_est = nb_re_pusch * frame_parms->symbols_per_slot;
-  __attribute__((aligned(32))) int ul_ch_estimates_ext[rel15_ul->nrOfLayers * frame_parms->nb_antennas_rx][size_est];
+  __attribute__((aligned(32))) int ul_ch_estimates_ext[rel15_ul->nrOfLayers * num_sp_streams][size_est];
   memset(ul_ch_estimates_ext, 0, sizeof(ul_ch_estimates_ext));
   int buffer_length = rel15_ul->rb_size * NR_NB_SC_PER_RB;
-  c16_t temp_rxFext[frame_parms->nb_antennas_rx][buffer_length] __attribute__((aligned(32)));
-  for (int aarx = 0; aarx < frame_parms->nb_antennas_rx; aarx++) 
+  c16_t temp_rxFext[num_sp_streams][buffer_length] __attribute__((aligned(32)));
+  for (int aarx = 0; aarx < num_sp_streams; aarx++)
     for (int nl = 0; nl < rel15_ul->nrOfLayers; nl++)
-      nr_ulsch_extract_rbs(gNB->common_vars.rxdataF[beam_nb][aarx],
-                           (c16_t *)pusch_vars->ul_ch_estimates[nl * frame_parms->nb_antennas_rx + aarx],
+      nr_ulsch_extract_rbs(gNB->common_vars.rxdataF[ant_port_start + aarx],
+                           (c16_t *)pusch_vars->ul_ch_estimates[nl * num_sp_streams + aarx],
                            temp_rxFext[aarx],
-                           (c16_t*)&ul_ch_estimates_ext[nl * frame_parms->nb_antennas_rx + aarx][meas_symbol * nb_re_pusch],
+                           (c16_t *)&ul_ch_estimates_ext[nl * num_sp_streams + aarx][meas_symbol * nb_re_pusch],
                            soffset + meas_symbol * frame_parms->ofdm_symbol_size,
                            dmrs_symbol * frame_parms->ofdm_symbol_size,
                            (rel15_ul->ul_dmrs_symb_pos >> meas_symbol) & 0x01, 
@@ -1317,34 +1327,28 @@ int nr_rx_pusch_tp(PHY_VARS_gNB *gNB,
   //----------------------------------------------------------
   //--------------------- Channel Scaling --------------------
   //----------------------------------------------------------
-  nr_scale_channel(size_est,
-                   ul_ch_estimates_ext,
-                   meas_symbol,
-                   nb_re_pusch,
-                   rel15_ul->nrOfLayers,
-                   frame_parms->nb_antennas_rx,
-                   shift_ch_ext);
+  nr_scale_channel(size_est, ul_ch_estimates_ext, meas_symbol, nb_re_pusch, rel15_ul->nrOfLayers, num_sp_streams, shift_ch_ext);
 
-  int avg[frame_parms->nb_antennas_rx*rel15_ul->nrOfLayers];
+  int avg[num_sp_streams * rel15_ul->nrOfLayers];
   nr_channel_level(meas_symbol,
                    size_est,
-                   (c16_t (*)[size_est])ul_ch_estimates_ext,
-                   frame_parms->nb_antennas_rx,
+                   (c16_t(*)[size_est])ul_ch_estimates_ext,
+                   num_sp_streams,
                    rel15_ul->nrOfLayers,
                    avg,
                    nb_re_pusch);
 
   int avgs = 0;
   for (int nl = 0; nl < rel15_ul->nrOfLayers; nl++)
-    for (int aarx = 0; aarx < frame_parms->nb_antennas_rx; aarx++)
-      avgs = cmax(avgs, avg[nl * frame_parms->nb_antennas_rx + aarx]);
+    for (int aarx = 0; aarx < num_sp_streams; aarx++)
+      avgs = cmax(avgs, avg[nl * num_sp_streams + aarx]);
 
   if (rel15_ul->nrOfLayers == 2 && rel15_ul->qam_mod_order > 6)
     pusch_vars->log2_maxh = (log2_approx(avgs) >> 1) - 3; // for MMSE
   else if (rel15_ul->nrOfLayers == 2)
-    pusch_vars->log2_maxh = (log2_approx(avgs) >> 1) - 2 + log2_approx(frame_parms->nb_antennas_rx >> 1);
-  else 
-    pusch_vars->log2_maxh = (log2_approx(avgs) >> 1) + 1 + log2_approx(frame_parms->nb_antennas_rx >> 1);
+    pusch_vars->log2_maxh = (log2_approx(avgs) >> 1) - 2 + log2_approx(num_sp_streams >> 1);
+  else
+    pusch_vars->log2_maxh = (log2_approx(avgs) >> 1) + 1 + log2_approx(num_sp_streams >> 1);
 
   if (pusch_vars->log2_maxh < 0)
     pusch_vars->log2_maxh = 0;
@@ -1387,7 +1391,7 @@ int nr_rx_pusch_tp(PHY_VARS_gNB *gNB,
       rdata->llr = pusch_vars->llr;
       rdata->scramblingSequence = scramblingSequence;
       rdata->nvar = nvar;
-      rdata->beam_nb = beam_nb;
+      rdata->ant_port_start = ant_port_start;
       rdata->rxFext_slot_mem = rxFext_slot_mem;
       rdata->pusch_ch_est_dmrs_interpl_slot_mem = pusch_ch_est_dmrs_interpl_slot_mem;
 
@@ -1417,16 +1421,24 @@ int nr_rx_pusch_tp(PHY_VARS_gNB *gNB,
                               (const c16_t *)(&(pusch_ch_est_dmrs_pos_slot_mem[0])),
                               rel15_ul->rb_size * NR_NB_SC_PER_RB * rel15_ul->nr_of_symbols * 4);
 
-  log_ul_fd_pusch_iq(frame, slot, frame_parms, rel15_ul,
-                     number_dmrs_symbols, dmrs_port,
+  log_ul_fd_pusch_iq(frame,
+                     slot,
+                     frame_parms,
+                     rel15_ul,
+                     number_dmrs_symbols,
+                     dmrs_port,
                      (const c16_t *)(&(rxFext_slot_mem[0])),
-                     rel15_ul->rb_size * NR_NB_SC_PER_RB * rel15_ul->nr_of_symbols * frame_parms->nb_antennas_rx * 4);
+                     rel15_ul->rb_size * NR_NB_SC_PER_RB * rel15_ul->nr_of_symbols * num_sp_streams * 4);
 
-  log_ul_fd_chan_est_dmrs_interpl(frame, slot, frame_parms, rel15_ul,
-                                  number_dmrs_symbols, dmrs_port,
-                                  (const c16_t *)pusch_ch_est_dmrs_interpl_slot_mem,
-                                  rel15_ul->rb_size * NR_NB_SC_PER_RB * rel15_ul->nr_of_symbols
-                                      * frame_parms->nb_antennas_rx * rel15_ul->nrOfLayers * 4);
+  log_ul_fd_chan_est_dmrs_interpl(
+      frame,
+      slot,
+      frame_parms,
+      rel15_ul,
+      number_dmrs_symbols,
+      dmrs_port,
+      (const c16_t *)pusch_ch_est_dmrs_interpl_slot_mem,
+      rel15_ul->rb_size * NR_NB_SC_PER_RB * rel15_ul->nr_of_symbols * num_sp_streams * rel15_ul->nrOfLayers * 4);
 #endif
 
   join_task_ans(&ans);

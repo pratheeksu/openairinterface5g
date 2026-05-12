@@ -268,6 +268,17 @@ static uint8_t pack_dl_tti_csi_rs_pdu_rel15_value(void *tlv, uint8_t **ppWritePa
   if(!pack_nr_tx_beamforming_pdu(&value->precodingAndBeamforming,ppWritePackedMsg, end)) {
     return 0;
   }
+#ifndef ENABLE_AERIAL
+  if (!push8(value->param_v4.numSpatialStreamIndices, ppWritePackedMsg, end))
+    return 0;
+
+  if (!pusharray8(value->param_v4.spatialStreamIndices,
+                  MAX_NUM_SPATIAL_STREAMS,
+                  value->param_v4.numSpatialStreamIndices,
+                  ppWritePackedMsg,
+                  end))
+    return 0;
+#endif
   return 1;
 }
 
@@ -307,6 +318,31 @@ static uint8_t pack_dl_tti_pdcch_pdu_rel15_value(void *tlv, uint8_t **ppWritePac
       return 0;
     }
   }
+
+#ifndef ENABLE_AERIAL
+  // Spatial steam indices for MU-MIMO
+  const nfapi_v4_pdcch_pdu_parameters_t *p = &value->param_v4;
+  if (!push16(p->numSpatialStreams, ppWritePackedMsg, end))
+    return 0;
+
+  for (uint_fast16_t i = 0; i < p->numSpatialStreams; i++)
+    if (!(push16(p->dci_spatialStreamIndices[i].dci_index, ppWritePackedMsg, end)
+          && push16(p->dci_spatialStreamIndices[i].spatial_stream_index, ppWritePackedMsg, end)))
+      return 0;
+#endif
+  return 1;
+}
+
+static inline uint8_t pack_spatial_stream_indices(const nfapi_nr_spatial_stream_index_t *ss,
+                                                  uint8_t **ppWritePackedMsg,
+                                                  uint8_t *end)
+{
+  if (!push8(ss->numSpatialStreamIndices, ppWritePackedMsg, end))
+    return 0;
+
+  if (!pusharray16(ss->spatialStreamIndices, MAX_NUM_SPATIAL_STREAMS, ss->numSpatialStreamIndices, ppWritePackedMsg, end))
+    return 0;
+
   return 1;
 }
 
@@ -369,6 +405,14 @@ static uint8_t pack_dl_tti_pdsch_pdu_rel15_value(void *tlv, uint8_t **ppWritePac
   if (!push8(value->maintenance_parms_v3.ldpcBaseGraph, ppWritePackedMsg, end)
       || !push32(value->maintenance_parms_v3.tbSizeLbrmBytes, ppWritePackedMsg, end))
     return 0;
+
+  // PDSCH parameter in FAPI v4 for MU-MIMO spatial stream indexing
+  if (!push8(value->param_v4.numberCodewords, ppWritePackedMsg, end))
+    return 0;
+
+  for (uint_fast8_t c = 0; c < value->param_v4.numberCodewords; c++)
+    if (!pack_spatial_stream_indices(value->param_v4.spatialStreamsCw + c, ppWritePackedMsg, end))
+      return 0;
 #endif
   return 1;
 }
@@ -390,6 +434,11 @@ static uint8_t pack_dl_tti_ssb_pdu_rel15_value(void *tlv, uint8_t **ppWritePacke
   if(!pack_nr_tx_beamforming_pdu(&value->precoding_and_beamforming,ppWritePackedMsg, end)) {
     return 0;
   }
+#ifndef ENABLE_AERIAL
+  if (!(push8(value->param_v4.spatialStreamIndexPresent, ppWritePackedMsg, end)
+        && push16(value->param_v4.spatialStreamIndex, ppWritePackedMsg, end)))
+    return 0;
+#endif
   return 1;
 }
 
@@ -517,6 +566,30 @@ static uint8_t unpack_dl_tti_pdcch_pdu_rel15_value(void *tlv, uint8_t **ppReadPa
       return 0;
     }
   }
+
+#ifndef ENABLE_AERIAL
+  // Spatial steam indices for MU-MIMO
+  nfapi_v4_pdcch_pdu_parameters_t *p = &value->param_v4;
+  if (!pull16(ppReadPackedMsg, &p->numSpatialStreams, end))
+    return 0;
+
+  for (uint_fast16_t i = 0; i < p->numSpatialStreams; i++) {
+    if (!(pull16(ppReadPackedMsg, &p->dci_spatialStreamIndices[i].dci_index, end)
+          && pull16(ppReadPackedMsg, &p->dci_spatialStreamIndices[i].spatial_stream_index, end)))
+      return 0;
+  }
+#endif
+  return 1;
+}
+
+static inline uint8_t unpack_spatial_stream_indices(nfapi_nr_spatial_stream_index_t *ss, uint8_t **ppReadPackedMsg, uint8_t *end)
+{
+  if (!pull8(ppReadPackedMsg, &ss->numSpatialStreamIndices, end))
+    return 0;
+
+  if (!pullarray16(ppReadPackedMsg, ss->spatialStreamIndices, MAX_NUM_SPATIAL_STREAMS, ss->numSpatialStreamIndices, end))
+    return 0;
+
   return 1;
 }
 
@@ -579,6 +652,14 @@ static uint8_t unpack_dl_tti_pdsch_pdu_rel15_value(void *tlv, uint8_t **ppReadPa
   if (!pull8(ppReadPackedMsg, &value->maintenance_parms_v3.ldpcBaseGraph, end)
       || !pull32(ppReadPackedMsg, &value->maintenance_parms_v3.tbSizeLbrmBytes, end))
     return 0;
+
+  // PDSCH parameter in FAPI v4 for MU-MIMO spatial stream indexing
+  if (!pull8(ppReadPackedMsg, &value->param_v4.numberCodewords, end))
+    return 0;
+
+  for (uint_fast8_t c = 0; c < value->param_v4.numberCodewords; c++)
+    if (!unpack_spatial_stream_indices(value->param_v4.spatialStreamsCw + c, ppReadPackedMsg, end))
+      return 0;
 #endif
   return 1;
 }
@@ -602,6 +683,17 @@ static uint8_t unpack_dl_tti_csi_rs_pdu_rel15_value(void *tlv, uint8_t **ppReadP
   if(!unpack_nr_tx_beamforming_pdu(&value->precodingAndBeamforming, ppReadPackedMsg, end)) {
     return 0;
   }
+#ifndef ENABLE_AERIAL
+  if (!pull8(ppReadPackedMsg, &value->param_v4.numSpatialStreamIndices, end))
+    return 0;
+
+  if (!pullarray8(ppReadPackedMsg,
+                  value->param_v4.spatialStreamIndices,
+                  MAX_NUM_SPATIAL_STREAMS,
+                  value->param_v4.numSpatialStreamIndices,
+                  end))
+    return 0;
+#endif
 
   return 1;
 }
@@ -626,6 +718,11 @@ static uint8_t unpack_dl_tti_ssb_pdu_rel15_value(void *tlv, uint8_t **ppReadPack
   if(!unpack_nr_tx_beamforming_pdu(&value->precoding_and_beamforming, ppReadPackedMsg, end)) {
     return 0;
   }
+#ifndef ENABLE_AERIAL
+  if (!(pull8(ppReadPackedMsg, &value->param_v4.spatialStreamIndexPresent, end)
+        && pull16(ppReadPackedMsg, &value->param_v4.spatialStreamIndex, end)))
+    return 0;
+#endif
   return 1;
 }
 
@@ -725,7 +822,14 @@ static uint8_t pack_ul_tti_request_prach_pdu(const nfapi_nr_prach_pdu_t *prach_p
     return 0;
   }
 
-  return pack_nr_rx_beamforming_pdu(&prach_pdu->beamforming, ppWritePackedMsg, end);
+  if (!pack_nr_rx_beamforming_pdu(&prach_pdu->beamforming, ppWritePackedMsg, end))
+    return 0;
+
+  const nfapi_nr_spatial_stream_index_t *p = &prach_pdu->param_v4;
+  if (!pack_spatial_stream_indices(p, ppWritePackedMsg, end))
+    return 0;
+
+  return 1;
 }
 
 static uint8_t pack_ul_tti_request_pusch_pdu(nfapi_nr_pusch_pdu_t *pusch_pdu, uint8_t **ppWritePackedMsg, uint8_t *end)
@@ -817,7 +921,8 @@ static uint8_t pack_ul_tti_request_pusch_pdu(nfapi_nr_pusch_pdu_t *pusch_pdu, ui
   }
 #ifndef ENABLE_AERIAL
   if (!(push8(pusch_pdu->maintenance_parms_v3.ldpcBaseGraph, ppWritePackedMsg, end)
-        && push32(pusch_pdu->maintenance_parms_v3.tbSizeLbrmBytes, ppWritePackedMsg, end)))
+        && push32(pusch_pdu->maintenance_parms_v3.tbSizeLbrmBytes, ppWritePackedMsg, end)
+        && pack_spatial_stream_indices(&pusch_pdu->param_v4, ppWritePackedMsg, end)))
     return 0;
 #endif
   return 1;
@@ -845,7 +950,15 @@ static uint8_t pack_ul_tti_request_pucch_pdu(const nfapi_nr_pucch_pdu_t *pucch_p
     return 0;
   }
 
-  return pack_nr_rx_beamforming_pdu(&pucch_pdu->beamforming, ppWritePackedMsg, end);
+  if (!pack_nr_rx_beamforming_pdu(&pucch_pdu->beamforming, ppWritePackedMsg, end))
+    return 0;
+
+#ifndef ENABLE_AERIAL
+  if (!pack_spatial_stream_indices(&pucch_pdu->param_v4, ppWritePackedMsg, end))
+    return 0;
+#endif
+
+  return 1;
 }
 
 static uint8_t pack_ul_tti_request_srs_parameters_v4(nfapi_v4_srs_parameters_t *srsParameters,
@@ -1050,7 +1163,14 @@ static uint8_t unpack_ul_tti_request_prach_pdu(nfapi_nr_prach_pdu_t *prach_pdu, 
     return 0;
   }
 
-  return unpack_nr_rx_beamforming_pdu(&prach_pdu->beamforming, ppReadPackedMsg, end);
+  if (!unpack_nr_rx_beamforming_pdu(&prach_pdu->beamforming, ppReadPackedMsg, end))
+    return 0;
+#ifndef ENABLE_AERIAL
+  if (!unpack_spatial_stream_indices(&prach_pdu->param_v4, ppReadPackedMsg, end))
+    return 0;
+#endif
+
+  return 1;
 }
 
 static uint8_t unpack_ul_tti_request_pusch_pdu(nfapi_nr_pusch_pdu_t *pusch_pdu, uint8_t **ppReadPackedMsg, uint8_t *end)
@@ -1139,7 +1259,8 @@ static uint8_t unpack_ul_tti_request_pusch_pdu(nfapi_nr_pusch_pdu_t *pusch_pdu, 
   }
 #ifndef ENABLE_AERIAL
   if (!(pull8(ppReadPackedMsg, &pusch_pdu->maintenance_parms_v3.ldpcBaseGraph, end)
-        && pull32(ppReadPackedMsg, &pusch_pdu->maintenance_parms_v3.tbSizeLbrmBytes, end)))
+        && pull32(ppReadPackedMsg, &pusch_pdu->maintenance_parms_v3.tbSizeLbrmBytes, end)
+        && unpack_spatial_stream_indices(&pusch_pdu->param_v4, ppReadPackedMsg, end)))
     return 0;
 #endif
   return 1;
@@ -1166,7 +1287,14 @@ static uint8_t unpack_ul_tti_request_pucch_pdu(nfapi_nr_pucch_pdu_t *pucch_pdu, 
         && pull16(ppReadPackedMsg, &pucch_pdu->bit_len_csi_part2, end))) {
     return 0;
   }
-  return unpack_nr_rx_beamforming_pdu(&pucch_pdu->beamforming, ppReadPackedMsg, end);
+  if (!unpack_nr_rx_beamforming_pdu(&pucch_pdu->beamforming, ppReadPackedMsg, end))
+    return 0;
+
+#ifndef ENABLE_AERIAL
+  if (!unpack_spatial_stream_indices(&pucch_pdu->param_v4, ppReadPackedMsg, end))
+    return 0;
+#endif
+  return 1;
 }
 
 static uint8_t unpack_ul_tti_request_srs_parameters_v4(nfapi_v4_srs_parameters_t *srsParameters,

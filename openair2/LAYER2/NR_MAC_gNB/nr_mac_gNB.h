@@ -207,6 +207,8 @@ typedef struct nr_mac_config_s {
   nr_ptrs_config_t *ptrs;
   nr_config_report_type_t report_type;
   nr_beam_table_t bt;
+  /// Spatial stream indexing for mapping onto RU ports. Needed for MU-MIMO
+  uint16_t spatial_stream_index[MAX_NUM_SPATIAL_STREAMS];
 } nr_mac_config_t;
 
 typedef struct NR_preamble_ue {
@@ -410,6 +412,7 @@ typedef struct NR_sched_pucch {
   int second_hop_prb;
   int nr_of_symb;
   int start_symb;
+  int beam_idx;
 } NR_sched_pucch_t;
 
 typedef struct NR_pusch_dmrs {
@@ -455,6 +458,10 @@ typedef struct NR_sched_pusch {
 
   /// TPC command for this PUSCH
   int tpc_pusch;
+  // Antenna ports to use
+  nfapi_nr_spatial_stream_index_t ant_port_idx;
+  // Antenna port for PUSCH DCI
+  uint16_t dci_ant_idx;
 } NR_sched_pusch_t;
 
 typedef struct NR_pdsch_dmrs {
@@ -499,6 +506,8 @@ typedef struct NR_sched_pdsch {
   int time_domain_allocation;
   NR_tda_info_t tda_info;
   feedback_action_t action;
+  // Baseband ports to use
+  nfapi_nr_spatial_stream_index_t ant_port_idx;
 } NR_sched_pdsch_t;
 
 typedef struct NR_UE_harq {

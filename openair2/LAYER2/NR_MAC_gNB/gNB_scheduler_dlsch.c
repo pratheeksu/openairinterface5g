@@ -514,6 +514,14 @@ static bool allocate_dl_retransmission(gNB_MAC_INST *nr_mac,
     new_sched.tda_info = temp_tda;
   }
 
+  // Spatial stream indexing for retx
+  const nr_pdsch_AntennaPorts_t *p = &nr_mac->radio_config.pdsch_AntennaPorts;
+  const uint16_t num_log_ports = p->XP * p->N1 * p->N2;
+  new_sched.ant_port_idx.numSpatialStreamIndices = num_log_ports;
+  const int start_stream_idx = beam_idx * num_log_ports;
+  for (int i = 0; i < new_sched.ant_port_idx.numSpatialStreamIndices;i++)
+    new_sched.ant_port_idx.spatialStreamIndices[i] = nr_mac->radio_config.spatial_stream_index[start_stream_idx + i];
+
   /* Find a free CCE */
   int CCEIndex = get_cce_index(nr_mac,
                                CC_id,
@@ -855,6 +863,14 @@ static void pf_dl(gNB_MAC_INST *mac,
       .tda_info = tda_info,
     };
 
+    // Map antenna ports for this UE
+    const nr_pdsch_AntennaPorts_t *p = &mac->radio_config.pdsch_AntennaPorts;
+    const uint16_t num_log_ports = p->XP * p->N1 * p->N2;
+    sched_pdsch.ant_port_idx.numSpatialStreamIndices = num_log_ports;
+    const int start_stream_idx = beam.idx * num_log_ports;
+    for (int i = 0; i < sched_pdsch.ant_port_idx.numSpatialStreamIndices;i++)
+      sched_pdsch.ant_port_idx.spatialStreamIndices[i] = mac->radio_config.spatial_stream_index[start_stream_idx + i];
+
     sched_pdsch.action = NULL;
     int srb1 = 1;
     /* everything that's only 3 bytes is an ack. To be safe, use a bit more. */
@@ -989,12 +1005,16 @@ nfapi_nr_dl_tti_pdsch_pdu_rel15_t *prepare_pdsch_pdu(nfapi_nr_dl_tti_request_pdu
   int dl_bw_tbslbrm = UE ? UE->sc_info.dl_bw_tbslbrm : sched_pdsch->bwp_info.bwpSize;
   pdsch_pdu->maintenance_parms_v3.tbSizeLbrmBytes = nr_compute_tbslbrm(pdsch_pdu->mcsTable[0], dl_bw_tbslbrm, nl_tbslbrm);
   pdsch_pdu->maintenance_parms_v3.ldpcBaseGraph = get_BG(sched_pdsch->tb_size << 3, sched_pdsch->R);
+  // MU-MIMO port mapping info
+  pdsch_pdu->param_v4.numberCodewords = pdsch_pdu->NrOfCodewords;
+  memcpy(&pdsch_pdu->param_v4.spatialStreamsCw[0], &sched_pdsch->ant_port_idx, sizeof(*pdsch_pdu->param_v4.spatialStreamsCw));
   // Precoding and beamforming
   pdsch_pdu->precodingAndBeamforming.num_prgs = 1;
   pdsch_pdu->precodingAndBeamforming.prg_size = pdsch_pdu->rbSize;
-  pdsch_pdu->precodingAndBeamforming.dig_bf_interfaces = 1;
-  pdsch_pdu->precodingAndBeamforming.prgs_list[0].pm_idx = sched_pdsch->pm_index; 
-  pdsch_pdu->precodingAndBeamforming.prgs_list[0].dig_bf_interface_list[0].beam_idx = beam_index;
+  pdsch_pdu->precodingAndBeamforming.prgs_list[0].pm_idx = sched_pdsch->pm_index;
+  pdsch_pdu->precodingAndBeamforming.dig_bf_interfaces = pdsch_pdu->param_v4.spatialStreamsCw[0].numSpatialStreamIndices;
+  for (int i = 0; i < pdsch_pdu->param_v4.spatialStreamsCw[0].numSpatialStreamIndices; i++)
+    pdsch_pdu->precodingAndBeamforming.prgs_list[0].dig_bf_interface_list[i].beam_idx = beam_index;
   return pdsch_pdu;
 }
 
@@ -1133,6 +1153,7 @@ void post_process_dlsch(gNB_MAC_INST *nr_mac, post_process_pdsch_t *pdsch, NR_UE
                                                    scc,
                                                    sched_ctrl->search_space,
                                                    sched_ctrl->coreset,
+                                                   sched_pdsch->ant_port_idx.spatialStreamIndices,
                                                    sched_ctrl->aggregation_level,
                                                    sched_ctrl->cce_index,
                                                    fapi_beam,

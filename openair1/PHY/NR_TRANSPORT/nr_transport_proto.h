@@ -97,8 +97,7 @@ int nr_rx_pusch_tp(PHY_VARS_gNB *gNB,
                    const nfapi_nr_pusch_pdu_t *rel15_ul,
                    uint32_t *ret_unav_res,
                    uint32_t frame,
-                   uint8_t slot,
-                   int beam_nb);
+                   uint8_t slot);
 
 /*!
 \brief This function implements the idft transform precoding in PUSCH
@@ -177,7 +176,7 @@ typedef struct rx_prach_out {
 } rx_prach_out_t;
 rx_prach_out_t rx_nr_prach(const prach_item_t *, int occasion);
 
-void rx_nr_prach_ru(prach_item_t *, int32_t **, NR_DL_FRAME_PARMS *frame_parms, int N_TA_offset);
+void rx_nr_prach_ru(prach_item_t *, int32_t **, NR_DL_FRAME_PARMS *frame_parms, int N_TA_offset, bool das);
 
 void nr_fill_pucch(PHY_VARS_gNB *gNB,
                    int frame,

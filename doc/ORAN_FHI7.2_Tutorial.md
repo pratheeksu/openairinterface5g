@@ -1698,9 +1698,10 @@ For two RUs using a 8x8 configuration, i.e. a single antenna system, the referen
 
 For two RUs each using a 4x4 configuration, i.e. a distributed antenna system (DAS),
 we use the analog beamforming implementation. More details can be found in
-[this document](./analog_beamforming.md). It is important to note that
-the configuration file should be set as a 4x4 scenario and each RU would be given a
-different beam. The reference DU configuration file is [`gnb-du.sa.band77.273prb.fhi72.4x4-das-benetel650_650.conf`](../targets/PROJECTS/GENERIC-NR-5GC/CONF/gnb-du.sa.band77.273prb.fhi72.4x4-das-benetel650_650.conf).
+[this document](./analog_beamforming.md). It is important to note the following parameters in the configuration file:
+- In RU section `nb_tx` and `nb_rx` indicates the total number of physical antenna ports across all distributed RUs.
+- `pusch_AntennaPorts`, `pdsch_AntennaPorts_XP * pdsch_AntennaPorts_N1 * pdsch_AntennaPorts_N2` indicate the number of logical antenna ports for one analog beam.
+The reference DU configuration file is [`gnb-du.sa.band77.273prb.fhi72.4x4-das-benetel650_650.conf`](../targets/PROJECTS/GENERIC-NR-5GC/CONF/gnb-du.sa.band77.273prb.fhi72.4x4-das-benetel650_650.conf).
 
 DAS is enabled by setting to 1 the parameter `enable_das` in `L1` section.
 

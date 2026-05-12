@@ -381,7 +381,7 @@ uint32_t pullarrays16(uint8_t **in, int16_t out[], uint32_t max_len, uint32_t le
     return 0;
   }
 }
-uint32_t pusharray16(uint16_t in[], uint32_t max_len, uint32_t len, uint8_t **out, uint8_t *end)
+uint32_t pusharray16(const uint16_t in[], uint32_t max_len, uint32_t len, uint8_t **out, uint8_t *end)
 {
   if (len == 0)
     return 1;

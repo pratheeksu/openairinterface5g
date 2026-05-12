@@ -1711,6 +1711,7 @@ static bool allocate_ul_retransmission(gNB_MAC_INST *nrmac,
                                        post_process_pusch_t *pp_pusch,
                                        uint16_t *rballoc_mask,
                                        int *n_rb_sched,
+                                       int ulsch_beam_idx,
                                        int dci_beam_idx,
                                        NR_UE_info_t *UE,
                                        int harq_pid,
@@ -1808,6 +1809,13 @@ static bool allocate_ul_retransmission(gNB_MAC_INST *nrmac,
     new_sched.tda_info = *tda_info;
     new_sched.dmrs_info = dmrs_info;
   }
+
+  // Spatial stream indexing for retx
+  new_sched.ant_port_idx.numSpatialStreamIndices = nrmac->radio_config.pusch_AntennaPorts;
+  const int start_stream_idx = ulsch_beam_idx * nrmac->radio_config.pusch_AntennaPorts;
+  for (int i = 0; i < nrmac->radio_config.pusch_AntennaPorts; i++)
+    new_sched.ant_port_idx.spatialStreamIndices[i] = nrmac->radio_config.spatial_stream_index[start_stream_idx + i];
+  new_sched.dci_ant_idx = dci_beam_idx;
 
   /* Find a free CCE */
   int CCEIndex = get_cce_index(nrmac,
@@ -1952,6 +1960,7 @@ static int  pf_ul(gNB_MAC_INST *nrmac,
                                           pp_pusch,
                                           rballoc_mask,
                                           &n_rb_sched[beam.idx],
+                                          beam.idx,
                                           dci_beam.idx,
                                           UE,
                                           ul_harq_pid,
@@ -2144,6 +2153,13 @@ static int  pf_ul(gNB_MAC_INST *nrmac,
       // phr_txpower_calc below
     };
 
+    // Map antenna ports for this UE
+    sched.ant_port_idx.numSpatialStreamIndices = nrmac->radio_config.pusch_AntennaPorts;
+    const int start_stream_idx = beam.idx * nrmac->radio_config.pusch_AntennaPorts;
+    for (int i = 0; i < nrmac->radio_config.pusch_AntennaPorts; i++)
+      sched.ant_port_idx.spatialStreamIndices[i] = nrmac->radio_config.spatial_stream_index[start_stream_idx + i];
+    sched.dci_ant_idx = dci_beam.idx;
+
     /* Calculate the current scheduling bytes */
     const int B = cmax(sched_ctrl->estimated_ul_buffer - sched_ctrl->sched_ul_bytes, 0);
     /* adjust rbSize and MCS according to PHR and BPRE, only if there is data */
@@ -2276,9 +2292,11 @@ nfapi_nr_pusch_pdu_t *prepare_pusch_pdu(nfapi_nr_ul_tti_request_t *future_ul_tti
   // Beamforming
   pusch_pdu->beamforming.num_prgs = 1;
   pusch_pdu->beamforming.prg_size = pusch_pdu->bwp_size;
-  pusch_pdu->beamforming.dig_bf_interface = 1;
-  pusch_pdu->beamforming.prgs_list[0].dig_bf_interface_list[0].beam_idx =
-      convert_to_fapi_beam(UE->UE_beam_index, beam_mode);
+  pusch_pdu->beamforming.dig_bf_interface = sched_pusch->ant_port_idx.numSpatialStreamIndices;
+  memcpy(&pusch_pdu->param_v4, &sched_pusch->ant_port_idx, sizeof(pusch_pdu->param_v4));
+  const uint16_t fapi_beam_id = convert_to_fapi_beam(UE->UE_beam_index, beam_mode);
+  for (int i = 0; i < sched_pusch->ant_port_idx.numSpatialStreamIndices;i++)
+    pusch_pdu->beamforming.prgs_list[0].dig_bf_interface_list[i].beam_idx = fapi_beam_id;
   /* TRANSFORM PRECODING --------------------------------------------------------*/
   if (pusch_pdu->transform_precoding == NR_PUSCH_Config__transformPrecoder_enabled) {
     // U as specified in section 6.4.1.1.1.2 in 38.211, if sequence hopping and group hopping are disabled
@@ -2477,6 +2495,7 @@ void post_process_ulsch(gNB_MAC_INST *nr_mac, post_process_pusch_t *pusch, NR_UE
                                                    scc,
                                                    ss,
                                                    coreset,
+                                                   &sched_pusch->dci_ant_idx,
                                                    sched_ctrl->aggregation_level,
                                                    sched_ctrl->cce_index,
                                                    convert_to_fapi_beam(UE->UE_beam_index, nr_mac->beam_info.beam_mode),

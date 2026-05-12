@@ -32,7 +32,6 @@ typedef struct {
   int frame;
   int slot;
   int num_slots; // prach duration in slots
-  int beams[NFAPI_MAX_NUM_BG_IF];
   nfapi_nr_prach_pdu_t pdu;
   int rootSequenceIndex;
   int numrootSequenceIndex;
@@ -42,6 +41,7 @@ typedef struct {
   int restricted_set;
   int numerology_index;
   int nb_rx;
+  int ant_start;
   c16_t (*Xu)[839];
   time_stats_t *rx_prach;
   c16_t (*prach_buf)[NUMBER_OF_NR_RU_PRACH_OCCASIONS_MAX][NR_PRACH_SEQ_LEN_L];
@@ -163,8 +163,6 @@ typedef struct {
 typedef struct {
   uint32_t frame;
   uint32_t slot;
-  // identifier for concurrent beams
-  int beam_nb;
   uint32_t unav_res;
   /// Pointers to 16 HARQ processes for the ULSCH
   NR_UL_gNB_HARQ_t *harq_process;
@@ -181,8 +179,6 @@ typedef struct {
 } NR_gNB_ULSCH_t;
 
 typedef struct {
-  // identifier for concurrent beams
-  int beam_nb;
   /// Frame where current PUSCH pdu was sent
   uint32_t frame;
   /// Slot where current PUSCH pdu was sent
@@ -192,8 +188,6 @@ typedef struct {
 } NR_gNB_PUSCH_job_t;
 
 typedef struct {
-  // identifier for concurrent beams
-  int beam_nb;
   /// Frame where current PUCCH pdu was sent
   uint32_t frame;
   /// Slot where current PUCCH pdu was sent
@@ -203,8 +197,6 @@ typedef struct {
 } NR_gNB_PUCCH_job_t;
 
 typedef struct {
-  // identifier for concurrent beams
-  int beam_nb;
   /// Frame where current SRS pdu was received
   uint32_t frame;
   /// Slot where current SRS pdu was received
@@ -215,19 +207,19 @@ typedef struct {
 
 typedef struct {
   /// \brief Pointers (dynamic) to the received data in the frequency domain.
-  /// - first index: rx antenna [0..nb_antennas_rx[
-  /// - second index: ? [0..2*ofdm_symbol_size*frame_parms->symbols_per_tti[
-  c16_t ***rxdataF;
+  /// - first index: tx antenna [0..16) where 16 is the total supported antenna ports.
+  /// - second index: [0..4*ofdm_symbol_size*symbols_per_slot)
+  c16_t **rxdataF;
   /// \brief holds the transmit data in the frequency domain.
   /// For IFFT_FPGA this points to the same memory as PHY_vars->rx_vars[a].RX_DMA_BUFFER. //?
-  /// - first index: beam (for concurrent beams)
-  /// - second index: tx antenna [0..14[ where 14 is the total supported antenna ports.
-  /// - third index: sample [0..samples_per_frame_woCP]
-  c16_t ***txdataF;
+  /// - first index: tx antenna [0..16) where 16 is the total supported antenna ports.
+  /// - second index: sample [0..ofdm_symbol_size*symbols_per_frame)
+  c16_t **txdataF;
   /// \brief Anaglogue beam ID for each OFDM symbol (used when beamforming not done in RU)
-  /// - first index: beam index (for concurrent beams)
-  /// - second index: beam_id [0.. symbols_per_frame[
-  int **beam_id;
+  /// - first index: symbol index [0 .. symbols_per_frame)
+  /// - second index: beam ID for each antenna port [0 .. num_ports)
+  /// Array of beam id assigned to antenna ports in a frame
+  uint16_t **beam_id;
   int num_beams_period;
   bool analog_bf;
   int32_t *debugBuff;
@@ -414,10 +406,6 @@ typedef struct PHY_VARS_gNB_s {
 
   /// counter to average prach energh over first 100 prach opportunities
   int prach_energy_counter;
-
-  int ap_N1;
-  int ap_N2;
-  int ap_XP;
 
   int pucch0_thres;
   int pusch_thres;

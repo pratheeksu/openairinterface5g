@@ -153,7 +153,8 @@ int nr_ulsch_decoding(PHY_VARS_gNB *phy_vars_gNB,
     if (stats) {
       stats->frame = frame;
       stats->ulsch_stats.round_trials[harq_process->round]++;
-      for (int aarx = 0; aarx < frame_parms->nb_antennas_rx; aarx++) {
+      const uint8_t num_streams = pusch_pdu->param_v4.numSpatialStreamIndices;
+      for (int aarx = 0; aarx < num_streams; aarx++) {
         stats->ulsch_stats.power[aarx] = dB_fixed_x10(pusch->ulsch_power[aarx]);
         stats->ulsch_stats.noise_power[aarx] = dB_fixed_x10(pusch->ulsch_noise_power[aarx]);
       }

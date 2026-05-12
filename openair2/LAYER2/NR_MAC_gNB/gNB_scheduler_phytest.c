@@ -165,6 +165,14 @@ void nr_preprocessor_phytest(gNB_MAC_INST *mac, post_process_pdsch_t *pp_pdsch)
       .time_domain_allocation = tda,
       .tda_info = tda_info,
   };
+  // Map antenna ports for this UE
+  const nr_pdsch_AntennaPorts_t *p = &mac->radio_config.pdsch_AntennaPorts;
+  const uint16_t num_log_ports = p->XP * p->N1 * p->N2;
+  sched_pdsch.ant_port_idx.numSpatialStreamIndices = num_log_ports;
+  const int start_stream_idx = beam.idx * num_log_ports;
+  for (int i = 0; i < sched_pdsch.ant_port_idx.numSpatialStreamIndices;i++)
+    sched_pdsch.ant_port_idx.spatialStreamIndices[i] = mac->radio_config.spatial_stream_index[start_stream_idx + i];
+
   sched_ctrl->dl_bler_stats.mcs = target_dl_mcs; /* for logging output */
   sched_pdsch.tb_size = nr_compute_tbs(sched_pdsch.Qm,
                                        sched_pdsch.R,
@@ -289,7 +297,12 @@ void nr_ul_preprocessor_phytest(gNB_MAC_INST *nr_mac, post_process_pusch_t *pp_p
       .tda_info = tda_info,
       .dmrs_info = get_ul_dmrs_params(scc, ul_bwp, &tda_info, target_ul_Nl),
       .bwp_info = get_pusch_bwp_start_size(UE),
+      .ant_port_idx.numSpatialStreamIndices = nr_mac->radio_config.pusch_AntennaPorts,
   };
+  const uint16_t start_stream_idx = beam * nr_mac->radio_config.pusch_AntennaPorts;
+  for (int i = 0; i < sched.ant_port_idx.numSpatialStreamIndices; i++)
+    sched.ant_port_idx.spatialStreamIndices[i] = nr_mac->radio_config.spatial_stream_index[start_stream_idx + i];
+
   sched_ctrl->ul_bler_stats.mcs = sched.mcs; /* for logging output */
 
   /* Calculate TBS from MCS */

@@ -39,43 +39,35 @@ static void nr_fill_indication(const PHY_VARS_gNB *gNB,
                                nfapi_nr_crc_t *crc,
                                nfapi_nr_rx_data_pdu_t *pdu);
 
-int beam_index_allocation(bool das,
-                          int fapi_beam_index,
-                          NR_gNB_COMMON *common_vars,
-                          int slot,
-                          int symbols_per_slot,
-                          int bitmap_symbols)
+void beam_index_allocation(uint16_t fapi_beam_index,
+                           int ant,
+                           int num_ports,
+                           int symbols_per_slot,
+                           int slot,
+                           uint16_t bitmap_symbols,
+                           int num_ant_max,
+                           uint16_t **ant_beam_id_list)
 {
-  if (!common_vars->beam_id)
-    return 0;
+  if (!ant_beam_id_list)
+    return;
 
   AssertFatal(IS_BIT_SET(fapi_beam_index, 15), "Can't handle preconfigured DBM yet\n");
-  int ru_beam_idx = fapi_beam_index & 0x7fff;
-  if (das)
-    return ru_beam_idx;
-
-  int idx = -1;
-  for (int j = 0; j < common_vars->num_beams_period; j++) {
-    // L2 analog beam implementation is slot based, so we need to verify occupancy for the whole slot
-    for (int i = 0; i < symbols_per_slot; i++) {
-      int current_beam = common_vars->beam_id[j][slot * symbols_per_slot + i];
-      if (current_beam == -1 || current_beam == ru_beam_idx)
-        idx = j;
-      else {
-        idx = -1;
-        break;
-      }
-    }
-    if (idx != -1)
-      break;
-  }
-  AssertFatal(idx >= 0, "Couldn't allocate beam ID %d\n", ru_beam_idx);
+  uint16_t ru_beam_idx = fapi_beam_index & 0x7fff;
   for (int j = 0; j < symbols_per_slot; j++) {
     if (((bitmap_symbols >> j) & 0x01))
-      common_vars->beam_id[idx][slot * symbols_per_slot + j] = ru_beam_idx;
+      for (uint_fast8_t p = 0; p < num_ports; p++) {
+        DevAssert(ant + p < num_ant_max);
+        ant_beam_id_list[slot * symbols_per_slot + j][ant + p] = ru_beam_idx;
+      }
   }
-  LOG_D(PHY, "Allocating beam_id[%d] %d in slot %d\n", idx, ru_beam_idx, slot);
-  return idx;
+}
+
+// Temporary workaround to get antenna ports for DAS. After L1 digital
+// beamforming is implemented, DAS case can be handled with a special DBT in
+// config file and this function can be removed.
+uint16_t get_first_ant_idx(bool das, uint16_t num_ports_beams, uint16_t beam_id, uint16_t fapi_start_port)
+{
+  return ((das) ? (beam_id & 0x7fff) * num_ports_beams : fapi_start_port);
 }
 
 void nr_common_signal_procedures(PHY_VARS_gNB *gNB, int frame, int slot, const nfapi_nr_dl_tti_ssb_pdu *ssb_pdu)
@@ -122,25 +114,25 @@ void nr_common_signal_procedures(PHY_VARS_gNB *gNB, int frame, int slot, const n
   }
   LOG_D(PHY,"SS TX: frame %d, slot %d, start_symbol %d\n", frame, slot, ssb_start_symbol);
   const nfapi_nr_tx_precoding_and_beamforming_t *pb = &pdu->precoding_and_beamforming;
-  c16_t ***txdataF = gNB->common_vars.txdataF;
+  c16_t **txdataF = gNB->common_vars.txdataF;
   // beam number in a scenario with multiple concurrent beams
-  int bitmap = SL_to_bitmap(ssb_start_symbol, 4); // 4 ssb symbols
-  int beam_nb = beam_index_allocation(gNB->enable_analog_das,
-                                      pb->prgs_list[0].dig_bf_interface_list[0].beam_idx,
-                                      &gNB->common_vars,
-                                      slot,
-                                      fp->symbols_per_slot,
-                                      bitmap);
+  uint16_t sym_bitmap = SL_to_bitmap(ssb_start_symbol, 4); // 4 ssb symbols
+  uint16_t beam_id = pb->prgs_list[0].dig_bf_interface_list[0].beam_idx;
+  uint16_t ant_port = get_first_ant_idx(gNB->enable_analog_das,
+                                        fp->nb_antennas_tx / gNB->common_vars.num_beams_period,
+                                        beam_id,
+                                        (pdu->param_v4.spatialStreamIndexPresent ? pdu->param_v4.spatialStreamIndex : 0));
+  beam_index_allocation(beam_id, ant_port, 1, fp->symbols_per_slot, slot, sym_bitmap, fp->nb_antennas_tx, gNB->common_vars.beam_id);
 
-  nr_generate_pss(txdataF[beam_nb][0], gNB->TX_AMP, ssb_start_symbol, cfg, fp);
-  nr_generate_sss(txdataF[beam_nb][0], gNB->TX_AMP, ssb_start_symbol, cfg->cell_config.phy_cell_id.value, fp);
+  nr_generate_pss(txdataF[ant_port], gNB->TX_AMP, ssb_start_symbol, cfg, fp);
+  nr_generate_sss(txdataF[ant_port], gNB->TX_AMP, ssb_start_symbol, cfg->cell_config.phy_cell_id.value, fp);
 
   uint16_t slots_per_hf = (fp->slots_per_frame) >> 1;
   int n_hf = slot < slots_per_hf ? 0 : 1;
 
   int hf = fp->Lmax == 4 ? n_hf : 0;
   nr_generate_pbch_dmrs(nr_gold_pbch(fp->Lmax, gNB->gNB_config.cell_config.phy_cell_id.value, hf, ssb_index & 7),
-                        txdataF[beam_nb][0],
+                        txdataF[ant_port],
                         gNB->TX_AMP,
                         ssb_start_symbol,
                         cfg,
@@ -156,25 +148,19 @@ void nr_common_signal_procedures(PHY_VARS_gNB *gNB, int frame, int slot, const n
   }
 #endif
 
-  nr_generate_pbch(gNB,
-                   ssb_pdu,
-                   txdataF[beam_nb][0],
-                   ssb_start_symbol,
-                   n_hf,
-                   frame,
-                   cfg,
-                   fp);
+  nr_generate_pbch(gNB, ssb_pdu, txdataF[ant_port], ssb_start_symbol, n_hf, frame, cfg, fp);
 }
 
 // clearing beam information to be provided to RU for all slots (DL and UL)
 void clear_slot_beamid(PHY_VARS_gNB *gNB, int slot)
 {
   LOG_D(PHY, "Clearing beam_id structure for slot %d\n", slot);
-  int slot_sz = gNB->frame_parms.symbols_per_slot;
-  for (int i = 0; i < gNB->common_vars.num_beams_period; i++) {
-    if (gNB->common_vars.beam_id)
-      memset(&gNB->common_vars.beam_id[i][slot * slot_sz], -1, slot_sz * sizeof(**gNB->common_vars.beam_id));
-  }
+  const NR_DL_FRAME_PARMS *fp = &gNB->frame_parms;
+  int slot_sz = fp->symbols_per_slot;
+  if (gNB->common_vars.beam_id)
+    for (int i = 0; i < slot_sz; i++) {
+      memset(gNB->common_vars.beam_id[slot * slot_sz + i], 0, fp->nb_antennas_tx * sizeof(**gNB->common_vars.beam_id));
+    }
 }
 
 static void nr_generate_csi_rs_gNB(PHY_VARS_gNB *gNB, int slot, const nfapi_nr_dl_tti_csi_rs_pdu *csi_rs_pdu)
@@ -186,16 +172,32 @@ static void nr_generate_csi_rs_gNB(PHY_VARS_gNB *gNB, int slot, const nfapi_nr_d
   csi_mapping_parms_t mapping_parms =
       get_csi_mapping_parms(csi_params->row, csi_params->freq_domain, csi_params->symb_l0, csi_params->symb_l1);
   const nfapi_nr_tx_precoding_and_beamforming_t *pb = &csi_params->precodingAndBeamforming;
-  int csi_bitmap = 0;
+  uint16_t csi_bitmap = 0;
   int lprime_num = mapping_parms.lprime + 1;
   for (int j = 0; j < mapping_parms.size; j++)
     csi_bitmap |= ((1 << lprime_num) - 1) << mapping_parms.loverline[j];
-  int beam_nb = beam_index_allocation(gNB->enable_analog_das,
-                                      pb->prgs_list[0].dig_bf_interface_list[0].beam_idx,
-                                      &gNB->common_vars,
-                                      slot,
-                                      gNB->frame_parms.symbols_per_slot,
-                                      csi_bitmap);
+  // Get first antenna port index for CSI assigned by L2
+  AssertFatal(
+      csi_params->param_v4.numSpatialStreamIndices <= 1,
+      "In current implementation, CSI spatial stream indexing is used to specify the first antenna port. So it cannot be > 1: %d\n",
+      csi_params->param_v4.numSpatialStreamIndices);
+  const uint16_t beam_id = pb->prgs_list[0].dig_bf_interface_list[0].beam_idx;
+  const uint16_t ant_port_offset =
+      get_first_ant_idx(gNB->enable_analog_das,
+                        gNB->frame_parms.nb_antennas_tx / gNB->common_vars.num_beams_period,
+                        beam_id,
+                        csi_params->param_v4.numSpatialStreamIndices > 0 ? csi_params->param_v4.spatialStreamIndices[0] : 0);
+  const int group_sz = get_cdm_group_size(csi_params->cdm_type);
+  const uint16_t start_port = mapping_parms.j[0] * group_sz; // Start port of this CSI config
+  const uint16_t num_ports = mapping_parms.size * group_sz;
+  beam_index_allocation(beam_id,
+                        ant_port_offset + start_port,
+                        num_ports,
+                        gNB->frame_parms.symbols_per_slot,
+                        slot,
+                        csi_bitmap,
+                        gNB->frame_parms.nb_antennas_tx,
+                        gNB->common_vars.beam_id);
 
   nr_generate_csi_rs(&gNB->frame_parms,
                      &mapping_parms,
@@ -210,7 +212,7 @@ static void nr_generate_csi_rs_gNB(PHY_VARS_gNB *gNB, int slot, const nfapi_nr_d
                      csi_params->scramb_id,
                      csi_params->power_control_offset_ss,
                      csi_params->cdm_type,
-                     gNB->common_vars.txdataF[beam_nb]);
+                     gNB->common_vars.txdataF + ant_port_offset);
 }
 
 void phy_procedures_gNB_TX(PHY_VARS_gNB *gNB,
@@ -227,10 +229,8 @@ void phy_procedures_gNB_TX(PHY_VARS_gNB *gNB,
     return;
 
   // clear the transmit data array and beam index for the current slot
-  for (int i = 0; i < gNB->common_vars.num_beams_period; i++) {
-    for (int aa = 0; aa < cfg->carrier_config.num_tx_ant.value; aa++) {
-      memset(gNB->common_vars.txdataF[i][aa], 0, fp->samples_per_slot_wCP * sizeof(***gNB->common_vars.txdataF));
-    }
+  for (int aa = 0; aa < fp->nb_antennas_tx; aa++) {
+    memset(gNB->common_vars.txdataF[aa], 0, fp->samples_per_slot_wCP * sizeof(**gNB->common_vars.txdataF));
   }
 
   // Check for PRS slot - section 7.4.1.7.4 in 3GPP rel16 38.211
@@ -243,7 +243,7 @@ void phy_procedures_gNB_TX(PHY_VARS_gNB *gNB,
       {
         int slot_prs = (slot - i * prs_config->PRSResourceTimeGap + fp->slots_per_frame) % fp->slots_per_frame;
         LOG_D(PHY,"gNB_TX: frame %d, slot %d, slot_prs %d, PRS Resource ID %d\n",frame, slot, slot_prs, rsc_id);
-        nr_generate_prs(slot_prs, gNB->common_vars.txdataF[0][0], AMP, prs_config, fp);
+        nr_generate_prs(slot_prs, gNB->common_vars.txdataF[0], AMP, prs_config, fp);
       }
     }
   }
@@ -292,25 +292,23 @@ void phy_procedures_gNB_TX(PHY_VARS_gNB *gNB,
 
   //apply the OFDM symbol rotation here
   start_meas(&gNB->phase_comp_stats);
-  for (int i = 0; i < gNB->common_vars.num_beams_period; ++i) {
-    for (int aa = 0; aa < cfg->carrier_config.num_tx_ant.value; aa++) {
-      if (gNB->phase_comp) {
-        apply_nr_rotation_TX(fp,
-                             gNB->common_vars.txdataF[i][aa],
-                             true,
-                             fp->symbol_rotation[0],
-                             slot,
-                             fp->N_RB_DL,
-                             0,
-                             fp->Ncp == NR_EXTENDED ? 12 : 14);
-      }
-      T(T_GNB_PHY_DL_OUTPUT_SIGNAL,
-        T_INT(0),
-        T_INT(frame),
-        T_INT(slot),
-        T_INT(aa),
-        T_BUFFER(gNB->common_vars.txdataF[i][aa], fp->samples_per_slot_wCP * sizeof(int32_t)));
+  for (int aa = 0; aa < fp->nb_antennas_tx; aa++) {
+    if (gNB->phase_comp) {
+      apply_nr_rotation_TX(fp,
+                           gNB->common_vars.txdataF[aa],
+                           true,
+                           fp->symbol_rotation[0],
+                           slot,
+                           fp->N_RB_DL,
+                           0,
+                           fp->Ncp == NR_EXTENDED ? 12 : 14);
     }
+    T(T_GNB_PHY_DL_OUTPUT_SIGNAL,
+      T_INT(0),
+      T_INT(frame),
+      T_INT(slot),
+      T_INT(aa),
+      T_BUFFER(gNB->common_vars.txdataF[aa], fp->samples_per_slot_wCP * sizeof(int32_t)));
   }
   stop_meas(&gNB->phase_comp_stats);
 }
@@ -561,7 +559,7 @@ static int fill_srs_channel_matrix(nfapi_nr_srs_normalized_channel_iq_matrix_t *
                                    const NR_DL_FRAME_PARMS *frame_parms,
                                    const c16_t srs_estimated_channel_freq[][1 << srs_pdu->num_ant_ports][frame_parms->ofdm_symbol_size * (1 << srs_pdu->num_symbols)])
 {
-  const uint16_t num_gnb_antenna_elements = frame_parms->nb_antennas_rx;
+  const uint16_t num_gnb_antenna_elements = srs_pdu->srs_parameters_v4.num_ul_spatial_streams_ports;
   const uint16_t num_ue_srs_ports = srs_pdu->srs_parameters_v4.num_total_ue_antennas;
   const uint8_t normalized_iq_representation = srs_pdu->srs_parameters_v4.iq_representation;
   const uint16_t prg_size = srs_pdu->srs_parameters_v4.prg_size;
@@ -675,7 +673,12 @@ nr_srs_info_t nr_srs_rx_procedures(PHY_VARS_gNB *gNB,
   }
 
   stop_meas(&gNB->generate_srs_stats);
-  c16_t **rxdataF = gNB->common_vars.rxdataF[srs->beam_nb];
+  const nfapi_v4_srs_parameters_t *p = &srs_pdu->srs_parameters_v4;
+  const uint16_t ant_port_start = get_first_ant_idx(gNB->enable_analog_das,
+                                                    frame_parms->nb_antennas_tx / gNB->common_vars.num_beams_period,
+                                                    srs_pdu->beamforming.prgs_list[0].dig_bf_interface_list[0].beam_idx,
+                                                    p->num_ul_spatial_streams_ports > 0 ? p->Ul_spatial_stream_ports[0] : 0);
+  c16_t **rxdataF = gNB->common_vars.rxdataF + ant_port_start;
   start_meas(&gNB->get_srs_signal_stats);
   *srs_est = nr_get_srs_signal(gNB, rxdataF, slot_rx, srs_pdu, &nr_srs_info, srs_received_signal, srs_received_noise);
   stop_meas(&gNB->get_srs_signal_stats);
@@ -809,9 +812,9 @@ nr_srs_info_t nr_srs_rx_procedures(PHY_VARS_gNB *gNB,
 static void handle_srs(fsn_t now, PHY_VARS_gNB *gNB, const NR_gNB_SRS_job_t *srs, nfapi_nr_srs_indication_pdu_t *srs_indication)
 {
   const NR_DL_FRAME_PARMS *frame_parms = &gNB->frame_parms;
-  const uint8_t nb_antennas_rx = frame_parms->nb_antennas_rx;
-  const uint16_t ofdm_symbol_size = frame_parms->ofdm_symbol_size;
   const nfapi_nr_srs_pdu_t *srs_pdu = &srs->srs_pdu;
+  const uint8_t nb_antennas_rx = srs_pdu->srs_parameters_v4.num_ul_spatial_streams_ports;
+  const uint16_t ofdm_symbol_size = frame_parms->ofdm_symbol_size;
 
   uint8_t N_symb_SRS = 1 << srs_pdu->num_symbols;
   uint8_t N_ap = 1 << srs_pdu->num_ant_ports;
@@ -978,10 +981,11 @@ static bool handle_pusch_decode_trigger(PHY_VARS_gNB *gNB, NR_gNB_PUSCH *pusch_v
 #endif
 
   start_meas(&gNB->rx_pusch_stats);
-  nr_rx_pusch_tp(gNB, pusch_vars, pdu, &ulsch->unav_res, ulsch->frame, ulsch->slot, ulsch->beam_nb);
+  nr_rx_pusch_tp(gNB, pusch_vars, pdu, &ulsch->unav_res, ulsch->frame, ulsch->slot);
   pusch_vars->ulsch_power_tot = 0;
   pusch_vars->ulsch_noise_power_tot = 0;
-  for (int aarx = 0; aarx < gNB->frame_parms.nb_antennas_rx; aarx++) {
+  const uint8_t num_sp_streams = pdu->param_v4.numSpatialStreamIndices;
+  for (int aarx = 0; aarx < num_sp_streams; aarx++) {
     pusch_vars->ulsch_power_tot += pusch_vars->ulsch_power[aarx];
     pusch_vars->ulsch_noise_power_tot += pusch_vars->ulsch_noise_power[aarx];
   }
@@ -1117,7 +1121,6 @@ static int handle_pusch_job_trigger(PHY_VARS_gNB *gNB, const NR_gNB_PUSCH_job_t 
   ulsch->slot = job->slot;
   ulsch->rnti = pdu->rnti;
   ulsch->harq_pid = pid;
-  ulsch->beam_nb = job->beam_nb;
   ulsch->harq_process->ulsch_pdu = job->pusch_pdu;
   if (pdu->pusch_data.new_data_indicator) {
     ulsch->harq_process->harq_to_be_cleared = true;
@@ -1179,7 +1182,12 @@ int phy_procedures_gNB_uespec_RX(PHY_VARS_gNB *gNB, int frame_rx, int slot_rx, N
   UL_INFO->uci_ind.num_ucis = n_pucch;
   nfapi_nr_uci_t *uci = UL_INFO->uci_ind.uci_list;
   for (int i = 0; i < n_pucch; ++i) {
-    c16_t **rxdataF = gNB->common_vars.rxdataF[pucch->beam_nb];
+    const nfapi_nr_spatial_stream_index_t *p = &pucch[i].pucch_pdu.param_v4;
+    const uint16_t ant_port = get_first_ant_idx(gNB->enable_analog_das,
+                                                frame_parms->nb_antennas_tx / gNB->common_vars.num_beams_period,
+                                                pucch[i].pucch_pdu.beamforming.prgs_list[0].dig_bf_interface_list[0].beam_idx,
+                                                p->numSpatialStreamIndices > 0 ? p->spatialStreamIndices[0] : 0);
+    c16_t **rxdataF = gNB->common_vars.rxdataF + ant_port;
     handle_pucch(gNB, rxdataF, &pucch[i], uci++);
   }
 
@@ -1238,7 +1246,7 @@ int phy_procedures_gNB_uespec_RX(PHY_VARS_gNB *gNB, int frame_rx, int slot_rx, N
     T(T_GNB_PHY_PUCCH_PUSCH_IQ,
       T_INT(frame_rx),
       T_INT(slot_rx),
-      T_BUFFER(&gNB->common_vars.rxdataF[0][0][0], frame_parms->symbols_per_slot * ofdm_symbol_size * 4));
+      T_BUFFER(&gNB->common_vars.rxdataF[0][0], frame_parms->symbols_per_slot * ofdm_symbol_size * 4));
   }
 
   return pusch_DTX;
