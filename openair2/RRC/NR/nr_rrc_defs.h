@@ -36,6 +36,7 @@
 #include "openair2/LAYER2/nr_pdcp/nr_pdcp_configuration.h"
 #include "openair2/LAYER2/nr_rlc/nr_rlc_configuration.h"
 #include "openair2/SDAP/nr_sdap/nr_sdap_configuration.h"
+#include "openair2/RRC/NR/nrdc_configuration.h"
 
 typedef enum {
   NR_RRC_OK=0,
@@ -650,6 +651,8 @@ typedef struct gNB_RRC_INST_s {
   // PDCP configuration parameters loaded during startup
   nr_pdcp_configuration_t pdcp_config;
   nr_rlc_configuration_t rlc_config;
+
+  nrdc_configuration_t nrdc_config;
 } gNB_RRC_INST;
 
 /** Forward declaration for UE log macros */

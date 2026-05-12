@@ -1303,6 +1303,26 @@ static void config_pdcp(configmodule_interface_t *cfg, nr_pdcp_configuration_t *
   pdcp_config->drb.discard_timer = config_get_processedint(cfg, &pdcp_params[CONFIG_NR_PDCP_DRB_DISCARD_TIMER_IDX]);
 }
 
+static void config_nrdc(configmodule_interface_t *cfg, nrdc_configuration_t *nrdc_config)
+{
+  GET_PARAMS_LIST(nrdc_combination_list, nrdc_combination, NRDC_PARAMS_DESC, CONFIG_NRDC_COMBINATION_LIST, CONFIG_STRING_NRDC);
+
+  nrdc_config->combination_count = nrdc_combination_list.numelt;
+
+  LOG_I(NR_RRC, "NR-DC: %d combinations configured\n", nrdc_config->combination_count);
+
+  nrdc_config->combinations = calloc_or_fail(nrdc_config->combination_count, sizeof(nrdc_combination_t));
+  for (int i = 0; i < nrdc_combination_list.numelt; i++) {
+    const paramdef_t *combination = nrdc_combination_list.paramarray[i];
+    int mcg = *gpd(combination, sizeofArray(nrdc_combination), CONFIG_NRDC_MCG)->iptr;
+    int scg = *gpd(combination, sizeofArray(nrdc_combination), CONFIG_NRDC_SCG)->iptr;
+    LOG_I(NR_RRC, "NR-DC: combination %d: mcg band %d scg band %d\n", i, mcg, scg);
+
+    nrdc_config->combinations[i].mcg_band = mcg;
+    nrdc_config->combinations[i].scg_band = scg;
+  }
+}
+
 void nfapi_stop_l1()
 {
   if (NFAPI_MODE && (NFAPI_MODE == NFAPI_MODE_AERIAL || NFAPI_MODE == NFAPI_MODE_VNF)) {
@@ -2448,6 +2468,8 @@ gNB_RRC_INST *RCconfig_NRRRC()
 
   config_rlc(config_get_if(), &rrc->rlc_config);
   config_pdcp(config_get_if(), &rrc->pdcp_config);
+
+  config_nrdc(config_get_if(), &rrc->nrdc_config);
 
   return rrc;
 }
