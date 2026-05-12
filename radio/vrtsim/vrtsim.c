@@ -347,7 +347,10 @@ static void parse_ue_config(vrtsim_state_t *vrtsim_state)
       AssertFatal(rx_ant > 0 && rx_ant <= MAX_NUM_ANTENNAS_TX,
                   "Invalid RX antenna count %d for UE %d\n", rx_ant, i);
       vrtsim_state->ue_conf[i].tx_ant = tx_ant;
-      vrtsim_state->ue_conf[i].rx_ant = rx_ant;
+      vrtsim_state->ue_conf[i].rx_ant = rx_ant;       
+      AssertFatal(rx_ant == vrtsim_state->tx_num_channels,
+                  "VRTSIM: ue_config.[%d].antennas M=%d does not match RU nb_tx=%d\n",
+                  i, rx_ant, vrtsim_state->tx_num_channels);
     } else {
       vrtsim_state->ue_conf[i].tx_ant = 1;
       vrtsim_state->ue_conf[i].rx_ant = 1;

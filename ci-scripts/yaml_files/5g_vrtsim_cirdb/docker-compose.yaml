@@ -111,7 +111,7 @@ services:
         cap_drop:
             - ALL
         environment:
-            USE_ADDITIONAL_OPTIONS: -E --log_config.global_log_options level,nocolor,time --device.name vrtsim --vrtsim.role server --vrtsim.cirdb 1 --vrtsim.cirdb_file /cirdb/cir_db.bin --vrtsim.cirdb_yaml /cirdb/cir_db.yaml --vrtsim.cirdb_model_id 0 --vrtsim.cirdb_ds_ns 1 --vrtsim.cirdb_speed_mps 1.5
+            USE_ADDITIONAL_OPTIONS: -E --log_config.global_log_options level,nocolor,time --device.name vrtsim --vrtsim.role server --vrtsim.cirdb 1
         depends_on:
             cir-generator:
                 condition: service_completed_successfully
