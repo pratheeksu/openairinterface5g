@@ -1381,7 +1381,6 @@ endif()
 add_library(L2_LTE_NR
   # temporary solution until 4G/5G code completely untangled (as evidenced by deletion of the following file)
   ${MAC_DIR}/dummy_functions.c
-  ${ENB_APP_SRC}
 )
 
 target_link_libraries(L2_LTE_NR PRIVATE f1ap s1ap nr_rrc)
