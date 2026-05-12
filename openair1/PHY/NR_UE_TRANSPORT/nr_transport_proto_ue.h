@@ -299,7 +299,8 @@ int nr_rx_pdsch(PHY_VARS_NR_UE *ue,
                 int32_t ptrs_re_per_slot[][NR_SYMBOLS_PER_SLOT],
                 int G,
                 uint32_t nvar,
-                pdsch_scope_req_t *scope_req);
+                pdsch_scope_req_t *scope_req,
+                c16_t rho_dl[][dlsch->Nl * dlsch->Nl][rx_size_symbol]);
 
 int32_t generate_nr_prach(PHY_VARS_NR_UE *ue, uint8_t gNB_id, int frame, uint8_t slot, c16_t **txData);
 void apply_ntn_config(PHY_VARS_NR_UE *UE,
