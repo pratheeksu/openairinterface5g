@@ -1673,7 +1673,7 @@ NR_UE_RRC_INST_t* nr_rrc_init_ue(char* uecap_file, int instance_id, int num_ant_
   rrc->sched_reconfsync_sib1 = false;
   rrc->detach_after_release = false;
   rrc->reconfig_after_reestab = false;
-  /* 5G-S-TMSI */
+  /* 5G-S-TMSI starts unset (sentinel UINT64_MAX). NAS_5GMM_IND populates it on registration */
   rrc->fiveG_S_TMSI = UINT64_MAX;
   rrc->access_barred = false;
 
@@ -3221,6 +3221,8 @@ void *rrc_nrue(void *notUsed)
   case NAS_5GMM_IND: {
     nas_5gmm_ind_t *req = &NAS_5GMM_IND(msg_p);
     rrc->fiveG_S_TMSI = req->fiveG_STMSI;
+    /* Push the 5G-S-TMSI-derived UE_ID to MAC for paging PF/PO derivation */
+    nr_rrc_mac_config_req_paging_ue_id(rrc->ue_id, rrc->fiveG_S_TMSI);
     break;
   }
 

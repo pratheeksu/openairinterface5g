@@ -531,6 +531,8 @@ typedef struct {
   // First PDCCH MO index of (i_s+1)-th PO within the PF (TS 38.331 PCCH-Config,
   // firstPDCCH-MonitoringOccasionOfPO list)
   uint16_t first_mo_of_po[NR_PCCH_MAX_PO];
+  // UE_ID for paging PF/PO (TS 38.304 §7.1)
+  uint16_t ue_id;
 } nr_ue_paging_cfg_t;
 
 /*!\brief Top level UE MAC structure */
