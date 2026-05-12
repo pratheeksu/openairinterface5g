@@ -2066,7 +2066,7 @@ static void nr_rrc_ue_decode_NR_BCCH_DL_SCH_Message(NR_UE_RRC_INST_t *rrc,
 static void rrc_ue_generate_RRCSetupComplete(const NR_UE_RRC_INST_t *rrc, const uint8_t Transaction_id)
 {
   uint8_t buffer[100];
-  as_nas_info_t initialNasMsg;
+  as_nas_info_t initialNasMsg = {0};
 
   if (IS_SA_MODE(get_softmodem_params())) {
     nr_ue_nas_t *nas = get_ue_nas_info(rrc->ue_id);
