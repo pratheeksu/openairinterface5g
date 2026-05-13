@@ -475,9 +475,9 @@ void clean_bwp_structures(NR_SpCellConfig_t *spCellConfig);
 
 bool nr_mac_ue_is_active(const NR_UE_info_t *ue);
 
-void nr_mac_trigger_ul_failure(NR_UE_sched_ctrl_t *sched_ctrl, NR_SubcarrierSpacing_t subcarrier_spacing);
-void nr_mac_reset_ul_failure(NR_UE_sched_ctrl_t *sched_ctrl);
-bool nr_mac_check_ul_failure(gNB_MAC_INST *nrmac, int rnti, NR_UE_sched_ctrl_t *sched_ctrl);
+void nr_mac_trigger_link_failure(NR_UE_sched_ctrl_t *sched_ctrl, NR_SubcarrierSpacing_t subcarrier_spacing);
+void nr_mac_reset_link_failure(NR_UE_sched_ctrl_t *sched_ctrl);
+bool nr_mac_check_link_failure(gNB_MAC_INST *nrmac, int rnti, NR_UE_sched_ctrl_t *sched_ctrl);
 
 void nr_mac_trigger_reconfiguration(const gNB_MAC_INST *nrmac, NR_UE_info_t *UE, int new_bwp_id, bool new_beam);
 

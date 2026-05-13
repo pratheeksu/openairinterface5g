@@ -358,7 +358,7 @@ static int stop_modem(char *buf, int debug, telnet_printfunc_t prnt)
    * combinations that won't happen. */
   const gNB_MAC_INST *mac = RC.nrmac[0];
   UE_iterator((NR_UE_info_t **)mac->UE_info.connected_ue_list, it) {
-    nr_mac_trigger_ul_failure(&it->UE_sched_ctrl, 1);
+    nr_mac_trigger_link_failure(&it->UE_sched_ctrl, 1);
   }
   usleep(50000);
 

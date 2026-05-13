@@ -126,7 +126,7 @@ size_t dump_mac_stats(gNB_MAC_INST *gNB, char *output, size_t strlen, bool reset
       output = st_append(output, end, "(none)");
     }
 
-    bool in_sync = !sched_ctrl->ul_failure;
+    bool in_sync = !sched_ctrl->link_failure;
     output = st_append(output,
                        end,
                        " %s PH %d dB PCMAX %d dBm",
