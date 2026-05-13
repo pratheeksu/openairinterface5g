@@ -1977,6 +1977,12 @@ void fill_dci_pdu_rel15(const NR_UE_ServingCell_Info_t *servingCellInfo,
         // TB scaling 2 bit
         for (int i = 0; i < 2; i++)
           *dci_pdu |= (((uint64_t)dci_pdu_rel15->tb_scaling >> (1 - i)) & 1) << (dci_size - pos++);
+        LOG_D(NR_MAC,
+              "Packed P-RNTI DCI: payload=0x%lx dci_size=%d SMI=%d short_msg=0x%02x\n",
+              *dci_pdu,
+              dci_size,
+              dci_pdu_rel15->short_messages_indicator,
+              dci_pdu_rel15->short_messages);
         break;
 
       case TYPE_SI_RNTI_:
