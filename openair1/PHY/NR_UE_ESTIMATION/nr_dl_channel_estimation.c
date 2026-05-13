@@ -1349,127 +1349,94 @@ void nr_pdsch_ptrs_processing(int nbRx,
                               int nl,
                               c16_t rxdataF_comp[][nl][nbRx][rx_size_symbol],
                               NR_DL_FRAME_PARMS *frame_parms,
-                              NR_DL_UE_HARQ_t *dlsch0_harq,
-                              NR_DL_UE_HARQ_t *dlsch1_harq,
+                              fapi_nr_dl_config_dlsch_pdu_rel15_t *dlsch_config,
                               uint8_t nr_slot_rx,
                               unsigned char symbol,
                               int nb_rb,
                               uint16_t rnti,
-                              NR_UE_DLSCH_t dlsch[2])
+                              uint16_t *ptrsSymbPos,
+                              uint8_t *ptrsSymbIdx)
 {
   //#define DEBUG_DL_PTRS 1
   int32_t *ptrs_re_symbol = NULL;
   int8_t   ret = 0;
   /* harq specific variables */
-  uint8_t  symbInSlot       = 0;
-  uint16_t *startSymbIndex  = NULL;
-  uint16_t *nbSymb          = NULL;
-  uint8_t  *L_ptrs          = NULL;
-  uint8_t  *K_ptrs          = NULL;
-  uint16_t *dmrsSymbPos     = NULL;
-  uint16_t *ptrsSymbPos     = NULL;
-  uint8_t  *ptrsSymbIdx     = NULL;
-  uint8_t  *ptrsReOffset    = NULL;
-  int nscid = 0;
+  int symbInSlot = dlsch_config->start_symbol + dlsch_config->number_symbols;
+  int startSymbIndex = dlsch_config->start_symbol;
+  int nbSymb = dlsch_config->number_symbols;
+  int L_ptrs = dlsch_config->PTRSTimeDensity;
+  int K_ptrs = dlsch_config->PTRSFreqDensity;
+  int dmrsSymbPos = dlsch_config->dlDmrsSymbPos;
+  int ptrsReOffset = dlsch_config->PTRSReOffset;
+  int nscid = dlsch_config->nscid;
 
-  if(dlsch0_harq->status == NR_ACTIVE) {
-    symbInSlot      = dlsch[0].dlsch_config.start_symbol + dlsch[0].dlsch_config.number_symbols;
-    startSymbIndex  = &dlsch[0].dlsch_config.start_symbol;
-    nbSymb          = &dlsch[0].dlsch_config.number_symbols;
-    L_ptrs          = &dlsch[0].dlsch_config.PTRSTimeDensity;
-    K_ptrs          = &dlsch[0].dlsch_config.PTRSFreqDensity;
-    dmrsSymbPos     = &dlsch[0].dlsch_config.dlDmrsSymbPos;
-    ptrsReOffset    = &dlsch[0].dlsch_config.PTRSReOffset;
-    ptrsSymbPos     = &dlsch[0].ptrs_symbols;
-    ptrsSymbIdx     = &dlsch[0].ptrs_symbol_index;
-    nscid = dlsch[0].dlsch_config.nscid;
-  }
-  if(dlsch1_harq) {
-    symbInSlot      = dlsch[1].dlsch_config.start_symbol + dlsch[1].dlsch_config.number_symbols;
-    startSymbIndex  = &dlsch[1].dlsch_config.start_symbol;
-    nbSymb          = &dlsch[1].dlsch_config.number_symbols;
-    L_ptrs          = &dlsch[1].dlsch_config.PTRSTimeDensity;
-    K_ptrs          = &dlsch[1].dlsch_config.PTRSFreqDensity;
-    dmrsSymbPos     = &dlsch[1].dlsch_config.dlDmrsSymbPos;
-    ptrsReOffset    = &dlsch[1].dlsch_config.PTRSReOffset;
-    ptrsSymbPos     = &dlsch[1].ptrs_symbols;
-    ptrsSymbIdx     = &dlsch[1].ptrs_symbol_index;
-    nscid = dlsch[1].dlsch_config.nscid;
-  }
   /* loop over antennas */
-  for (int aarx=0; aarx<frame_parms->nb_antennas_rx; aarx++) {
+  for (int aarx = 0; aarx < frame_parms->nb_antennas_rx; aarx++) {
     c16_t *phase_per_symbol = (c16_t*)ptrs_phase_per_slot[aarx];
     ptrs_re_symbol = (int32_t*)ptrs_re_per_slot[aarx];
     ptrs_re_symbol[symbol] = 0;
     phase_per_symbol[symbol].i = 0; // Imag
     /* set DMRS estimates to 0 angle with magnitude 1 */
-    if(is_dmrs_symbol(symbol,*dmrsSymbPos)) {
+    if(is_dmrs_symbol(symbol, dmrsSymbPos)) {
       /* set DMRS real estimation to 32767 */
       phase_per_symbol[symbol].r=INT16_MAX; // 32767
 #ifdef DEBUG_DL_PTRS
       printf("[PHY][PTRS]: DMRS Symbol %d -> %4d + j*%4d\n", symbol, phase_per_symbol[symbol].r,phase_per_symbol[symbol].i);
 #endif
-    }
-    else { // real ptrs value is set to 0
+    } else { // real ptrs value is set to 0
       phase_per_symbol[symbol].r = 0; // Real
     }
 
-    if(dlsch0_harq->status == NR_ACTIVE) {
-      if(symbol == *startSymbIndex) {
-        *ptrsSymbPos = 0;
-        set_ptrs_symb_idx(ptrsSymbPos,
-                          *nbSymb,
-                          *startSymbIndex,
-                          1<< *L_ptrs,
-                          *dmrsSymbPos);
-      }
-      /* if not PTRS symbol set current ptrs symbol index to zero*/
-      *ptrsSymbIdx = 0;
-      /* Check if current symbol contains PTRS */
-      if(is_ptrs_symbol(symbol, *ptrsSymbPos)) {
-        *ptrsSymbIdx = symbol;
-        /*------------------------------------------------------------------------------------------------------- */
-        /* 1) Estimate common phase error per PTRS symbol                                                                */
-        /*------------------------------------------------------------------------------------------------------- */
-        const uint32_t *gold =
+    if (symbol == startSymbIndex) {
+      *ptrsSymbPos = 0;
+      set_ptrs_symb_idx(ptrsSymbPos, nbSymb, startSymbIndex, 1 << L_ptrs, dmrsSymbPos);
+    }
+    /* if not PTRS symbol set current ptrs symbol index to zero*/
+    *ptrsSymbIdx = 0;
+    /* Check if current symbol contains PTRS */
+    if (is_ptrs_symbol(symbol, *ptrsSymbPos)) {
+      *ptrsSymbIdx = symbol;
+      /*------------------------------------------------------------------------------------------------------- */
+      /* 1) Estimate common phase error per PTRS symbol                                                                */
+      /*------------------------------------------------------------------------------------------------------- */
+      const uint32_t *gold =
             nr_gold_pdsch(frame_parms->N_RB_DL, frame_parms->symbols_per_slot, frame_parms->Nid_cell, nscid, nr_slot_rx, symbol);
-        nr_ptrs_cpe_estimation(*K_ptrs,
-                               *ptrsReOffset,
-                               nb_rb,
-                               rnti,
-                               frame_parms->ofdm_symbol_size,
-                               rxdataF_comp[symbol][0][aarx],
-                               gold,
-                               (int16_t *)&phase_per_symbol[symbol],
-                               &ptrs_re_symbol[symbol]);
-      }
-    }// HARQ 0
+      nr_ptrs_cpe_estimation(K_ptrs,
+                             ptrsReOffset,
+                             nb_rb,
+                             rnti,
+                             frame_parms->ofdm_symbol_size,
+                             rxdataF_comp[symbol][0][aarx],
+                             gold,
+                             (int16_t *)&phase_per_symbol[symbol],
+                             &ptrs_re_symbol[symbol]);
+    }
 
     /* For last OFDM symbol at each antenna perform interpolation and compensation for the slot*/
-    if(symbol == (symbInSlot -1)) {
+    if (symbol == (symbInSlot -1)) {
       /*------------------------------------------------------------------------------------------------------- */
       /* 2) Interpolate PTRS estimated value in TD */
       /*------------------------------------------------------------------------------------------------------- */
       /* If L-PTRS is > 0 then we need interpolation */
-      if(*L_ptrs > 0) {
-        ret = nr_ptrs_process_slot(*dmrsSymbPos, *ptrsSymbPos, (int16_t*)phase_per_symbol, *startSymbIndex, *nbSymb);
+      if (L_ptrs > 0) {
+        ret = nr_ptrs_process_slot(dmrsSymbPos, *ptrsSymbPos, (int16_t*)phase_per_symbol, startSymbIndex, nbSymb);
         if(ret != 0) {
           LOG_W(PHY,"[PTRS] Compensation is skipped due to error in PTRS slot processing !!\n");
         }
       }
 #ifdef DEBUG_DL_PTRS
-      LOG_M("ptrsEst.m","est",ptrs_phase_per_slot[aarx],frame_parms->symbols_per_slot,1,1 );
-      LOG_M("rxdataF_bf_ptrs_comp.m", "bf_ptrs_cmp", rxdataF_comp[0][aarx] + (*startSymbIndex) * rx_size_symbol, rx_size_symbol * (*nbSymb), 1, 1);
+      LOG_M("ptrsEst.m","est", ptrs_phase_per_slot[aarx], frame_parms->symbols_per_slot, 1, 1);
+      LOG_M("rxdataF_bf_ptrs_comp.m", "bf_ptrs_cmp", rxdataF_comp[0][aarx] + startSymbIndex * rx_size_symbol, rx_size_symbol * nbSymb, 1, 1);
 #endif
       /*------------------------------------------------------------------------------------------------------- */
       /* 3) Compensated DMRS based estimated signal with PTRS estimation                                        */
       /*--------------------------------------------------------------------------------------------------------*/
-      for(uint8_t i = *startSymbIndex; i < symbInSlot; i++) {
+      for(uint8_t i = startSymbIndex; i < symbInSlot; i++) {
         /* DMRS Symbol has 0 phase so no need to rotate the respective symbol */
         /* Skip rotation if the slot processing is wrong */
-        if((!is_dmrs_symbol(i, *dmrsSymbPos)) && (ret == 0)) {
+        if((!is_dmrs_symbol(i, dmrsSymbPos)) && (ret == 0)) {
 #ifdef DEBUG_DL_PTRS
-          printf("[PHY][DL][PTRS]: Rotate Symbol %2d with  %d + j* %d\n", i, phase_per_symbol[i].r,phase_per_symbol[i].i);
+          printf("[PHY][DL][PTRS]: Rotate Symbol %2d with  %d + j* %d\n", i, phase_per_symbol[i].r, phase_per_symbol[i].i);
 #endif
           rotate_cpx_vector(rxdataF_comp[i][0][aarx], &phase_per_symbol[i], rxdataF_comp[i][0][aarx], nb_rb * NR_NB_SC_PER_RB, 15);
         }// if not DMRS Symbol

@@ -121,13 +121,13 @@ void nr_pdsch_ptrs_processing(int nbRx,
                               int nl,
                               c16_t rxdataF_comp[][nl][nbRx][rx_size_symbol],
                               NR_DL_FRAME_PARMS *frame_parms,
-                              NR_DL_UE_HARQ_t *dlsch0_harq,
-                              NR_DL_UE_HARQ_t *dlsch1_harq,
+                              fapi_nr_dl_config_dlsch_pdu_rel15_t *dlsch_config,
                               uint8_t nr_slot_rx,
                               unsigned char symbol,
                               int nb_rb,
                               uint16_t rnti,
-                              NR_UE_DLSCH_t dlsch[2]);
+                              uint16_t *ptrsSymbPos,
+                              uint8_t *ptrsSymbIdx);
 
 int nr_sl_psbch_rsrp_measurements(PHY_VARS_NR_UE *ue,
                                   sl_nr_ue_phy_params_t *sl_phy_params,

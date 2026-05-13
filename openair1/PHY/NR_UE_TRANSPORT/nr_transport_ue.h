@@ -97,16 +97,13 @@ typedef struct {
 } NR_DL_UE_HARQ_t;
 
 typedef struct {
+  fapi_nr_dl_cw_info_t cw_info;
   /// RNTI
   uint16_t rnti;
   /// RNTI type
   uint8_t rnti_type;
   /// Active flag for DLSCH demodulation
   bool active;
-  /// Structure to hold dlsch config from MAC
-  fapi_nr_dl_config_dlsch_pdu_rel15_t dlsch_config;
-  /// Number of MIMO layers (streams) 
-  uint8_t Nl;
   /// Maximum number of LDPC iterations
   uint8_t max_ldpc_iterations;
   /// number of iterations used in last turbo decoding

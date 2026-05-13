@@ -1197,7 +1197,7 @@ void trigger_MAC_UE_RA(NR_UE_MAC_INST_t *mac, dci_pdu_rel15_t *pdcch_order)
 
 void prepare_msg4_msgb_feedback(NR_UE_MAC_INST_t *mac, int pid, int ack_nack)
 {
-  NR_UE_DL_HARQ_STATUS_t *current_harq = &mac->dl_harq_info[pid];
+  NR_UE_DL_HARQ_STATUS_t *current_harq = &mac->dl_harq_info[pid][0]; // single cw for MSG4
   int sched_slot = current_harq->ul_slot;
   int sched_frame = current_harq->ul_frame;
   PUCCH_sched_t pucch = {.n_CCE = current_harq->n_CCE,

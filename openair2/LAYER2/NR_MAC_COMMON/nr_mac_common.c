@@ -3033,7 +3033,7 @@ uint16_t nr_dci_size(const NR_UE_DL_BWP_t *DL_BWP,
       size += 8;
       // TB2
       long *maxCWperDCI = pdsch_Config ? pdsch_Config->maxNrofCodeWordsScheduledByDCI : NULL;
-      if ((maxCWperDCI != NULL) && (*maxCWperDCI == 2)) {
+      if (maxCWperDCI && (*maxCWperDCI == NR_PDSCH_Config__maxNrofCodeWordsScheduledByDCI_n2)) {
         size += 8;
       }
       // HARQ process number – 5 bits if higher layer parameter harq-ProcessNumberSizeDCI-1-1 is configured;

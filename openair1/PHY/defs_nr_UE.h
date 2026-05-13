@@ -521,8 +521,9 @@ typedef struct nr_phy_data_tx_s {
 
 typedef struct nr_phy_data_s {
   NR_UE_PDCCH_CONFIG phy_pdcch_config;
+  fapi_nr_dl_config_dlsch_pdu_rel15_t dlsch_config;
   NR_UE_DLSCH_t dlsch[2];
-
+  int n_dlsch_codewords;
   // Sidelink Rx action decided by MAC
   sl_nr_rx_config_type_enum_t sl_rx_action;
   NR_UE_CSI_RS csirs_vars;
@@ -535,7 +536,7 @@ enum stream_status_e { STREAM_STATUS_UNSYNC, STREAM_STATUS_SYNCING, STREAM_STATU
  */
 typedef struct nr_rxtx_thread_data_s {
   UE_nr_rxtx_proc_t proc;
-  PHY_VARS_NR_UE    *UE;
+  PHY_VARS_NR_UE *UE;
   int writeBlockSize;
   nr_phy_data_t phy_data;
   dynamic_barrier_t* next_barrier;

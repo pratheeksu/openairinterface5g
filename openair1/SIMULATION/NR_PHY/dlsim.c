@@ -1316,12 +1316,14 @@ int main(int argc, char **argv)
 
         int16_t *UE_llr = (int16_t*)UE->phy_sim_pdsch_llr;
 
-        TBS                  = dlsch0->dlsch_config.TBS;
-        uint16_t length_dmrs = get_num_dmrs(dlsch0->dlsch_config.dlDmrsSymbPos);
-        uint16_t nb_rb       = dlsch0->dlsch_config.number_rbs;
-        uint8_t  nb_re_dmrs  = dlsch0->dlsch_config.dmrsConfigType == NFAPI_NR_DMRS_TYPE1 ? 6*dlsch0->dlsch_config.n_dmrs_cdm_groups : 4*dlsch0->dlsch_config.n_dmrs_cdm_groups;
-        uint8_t  mod_order   = dlsch0->dlsch_config.qamModOrder;
-        uint8_t  nb_symb_sch = dlsch0->dlsch_config.number_symbols;
+        TBS = phy_data.dlsch_config.cw_info[0].TBS;
+        uint16_t length_dmrs = get_num_dmrs(phy_data.dlsch_config.dlDmrsSymbPos);
+        uint16_t nb_rb = phy_data.dlsch_config.number_rbs;
+        uint8_t nb_re_dmrs = phy_data.dlsch_config.dmrsConfigType == NFAPI_NR_DMRS_TYPE1 ?
+                             6 * phy_data.dlsch_config.n_dmrs_cdm_groups :
+                             4 * phy_data.dlsch_config.n_dmrs_cdm_groups;
+        uint8_t mod_order = phy_data.dlsch_config.cw_info[0].qamModOrder;
+        uint8_t nb_symb_sch = phy_data.dlsch_config.number_symbols;
         uint32_t unav_res = ptrsSymbPerSlot * ptrsRePerSymb;
         available_bits = nr_get_G(nb_rb, nb_symb_sch, nb_re_dmrs, length_dmrs, unav_res, mod_order, pdsch_pdu_rel15->nrOfLayers);
         if (pdu_bit_map & 0x1) {
@@ -1463,10 +1465,10 @@ int main(int argc, char **argv)
           const int s = pdsch_pdu_rel15->StartSymbolIndex;
           const int n = pdsch_pdu_rel15->NrOfSymbols;
           for (int i = s; i < s + n; i++) {
-            const uint32_t dmrsBitMap = phy_data.dlsch[0].dlsch_config.dlDmrsSymbPos;
-            const uint32_t dmrsCfg = phy_data.dlsch[0].dlsch_config.dmrsConfigType;
-            const uint32_t nrb = phy_data.dlsch[0].dlsch_config.number_rbs;
-            const uint32_t ncdmg = phy_data.dlsch[0].dlsch_config.n_dmrs_cdm_groups;
+            const uint32_t dmrsBitMap = phy_data.dlsch_config.dlDmrsSymbPos;
+            const uint32_t dmrsCfg = phy_data.dlsch_config.dmrsConfigType;
+            const uint32_t nrb = phy_data.dlsch_config.number_rbs;
+            const uint32_t ncdmg = phy_data.dlsch_config.n_dmrs_cdm_groups;
             const uint32_t numValidReSym = ((dmrsBitMap >> i) & 1)
                                               ? ((dmrsCfg == NFAPI_NR_DMRS_TYPE1) ? nrb * (12 - 6 * ncdmg) : nrb * (12 - 4 * ncdmg))
                                               : (nrb * 12);

@@ -116,15 +116,22 @@ static void trigger_regular_bsr(NR_UE_MAC_INST_t *mac, NR_LogicalChannelIdentity
     nr_timer_stop(&mac->scheduling_info.sr_DelayTimer);
 }
 
+static void flush_harq_buffers(NR_UE_MAC_INST_t *mac)
+{
+  for (int k = 0; k < NR_MAX_HARQ_PROCESSES; k++) {
+    for (int c = 0; c < 2; c++) {
+      memset(&mac->dl_harq_info[k][c], 0, sizeof(NR_UE_DL_HARQ_STATUS_t));
+      mac->dl_harq_info[k][c].last_ndi = -1; // initialize to invalid value
+    }
+    memset(&mac->ul_harq_info[k], 0, sizeof(*mac->ul_harq_info));
+    mac->ul_harq_info[k].last_ndi = -1; // initialize to invalid value
+  }
+}
+
 void handle_time_alignment_timer_expired(NR_UE_MAC_INST_t *mac)
 {
   // flush all HARQ buffers for all Serving Cells
-  for (int k = 0; k < NR_MAX_HARQ_PROCESSES; k++) {
-    memset(&mac->dl_harq_info[k], 0, sizeof(*mac->dl_harq_info));
-    memset(&mac->ul_harq_info[k], 0, sizeof(*mac->ul_harq_info));
-    mac->dl_harq_info[k].last_ndi = -1; // initialize to invalid value
-    mac->ul_harq_info[k].last_ndi = -1; // initialize to invalid value
-  }
+  flush_harq_buffers(mac);
   // release PUCCH for all Serving Cells;
   // release SRS for all Serving Cells;
   release_PUCCH_SRS(mac);
@@ -142,12 +149,7 @@ void handle_time_alignment_timer_expired(NR_UE_MAC_INST_t *mac)
 void handle_ulsync_loss(NR_UE_MAC_INST_t *mac)
 {
   // flush all HARQ buffers for all Serving Cells
-  for (int k = 0; k < NR_MAX_HARQ_PROCESSES; k++) {
-    memset(&mac->dl_harq_info[k], 0, sizeof(*mac->dl_harq_info));
-    memset(&mac->ul_harq_info[k], 0, sizeof(*mac->ul_harq_info));
-    mac->dl_harq_info[k].last_ndi = -1; // initialize to invalid value
-    mac->ul_harq_info[k].last_ndi = -1; // initialize to invalid value
-  }
+  flush_harq_buffers(mac);
   // clear any configured downlink assignments and uplink grants;
   if (mac->dl_config_request)
     memset(mac->dl_config_request, 0, sizeof(*mac->dl_config_request));
