@@ -1,0 +1,17 @@
+<!-- SPDX-License-Identifier: LicenseRef-CSSL-1.0 -->
+
+<testCaseList>
+  <htmlTabRef>build-tab-optional</htmlTabRef>
+  <htmlTabName>Build nr-softmodems with optional features on</htmlTabName>
+  <htmlTabIcon>wrench</htmlTabIcon>
+
+  <testCase>
+    <class>Custom_Script</class>
+    <desc>Build OAI software with optional features on</desc>
+    <node>obelix</node>
+    <timeout>240</timeout>
+    <workdir>%%workspace%%</workdir>
+    <script>./scripts/ci_build_optional.sh</script>
+  </testCase>
+
+</testCaseList>
