@@ -762,6 +762,7 @@ static int nr_dlsch_llr(const NR_UE_DLSCH_t *dlsch,
 //==============================================================================================
 
 /* Main Function */
+
 int nr_rx_pdsch(PHY_VARS_NR_UE *ue,
                 const UE_nr_rxtx_proc_t *proc,
                 NR_UE_DLSCH_t dlsch[2],
@@ -794,6 +795,25 @@ int nr_rx_pdsch(PHY_VARS_NR_UE *ue,
   const int matrixSz = n_rx * nl;
   __attribute__((aligned(32))) int32_t dl_ch_estimates_ext[matrixSz][rx_size_symbol];
   memset(dl_ch_estimates_ext, 0, sizeof(dl_ch_estimates_ext));
+
+  // Reinterpret flat dl_ch_estimates_ext as [nl][n_rx][rx_size_symbol]
+  c16_t (*chFext)[n_rx][rx_size_symbol] = (void *)dl_ch_estimates_ext;
+
+  // Build c16_t** view into rxdataF_comp at the current symbol
+  c16_t *rxComp_ptrs[nl * n_rx];
+  for (int l = 0; l < nl; l++)
+    for (int a = 0; a < n_rx; a++)
+      rxComp_ptrs[l * n_rx + a] = rxdataF_comp[symbol][l * n_rx + a];
+
+  // Per-layer pointers directly into dl_ch_mag[symbol]
+  c16_t *ch_mag_ptrs[nl];
+  c16_t *ch_magb_ptrs[nl];
+  c16_t *ch_magr_ptrs[nl];
+  for (int l = 0; l < nl; l++) {
+    ch_mag_ptrs[l]  = dl_ch_mag[symbol][l * n_rx];
+    ch_magb_ptrs[l] = dl_ch_magb[symbol][l * n_rx];
+    ch_magr_ptrs[l] = dl_ch_magr[symbol][l * n_rx];
+  }
 
   NR_UE_COMMON *common_vars  = &ue->common_vars;
   const int frame = proc->frame_rx;
@@ -1008,7 +1028,11 @@ int nr_rx_pdsch(PHY_VARS_NR_UE *ue,
           }
         }
       }
-      *log2_maxh = (log2_approx(avgs) / 2) + 1;
+      if (nl == 1)
+        *log2_maxh = (log2_approx(avgs) / 2) + 1 + log2_approx(n_rx >> 1);
+      else
+        *log2_maxh = (log2_approx(avgs) >> 1) - 0 + log2_approx(n_rx >> 1);
+      
       LOG_D(PHY, "[DLSCH] AbsSubframe %d.%d log2_maxh = %d (%d)\n", frame % 1024, nr_slot_rx, *log2_maxh, avgs);
 #if T_TRACER
       T(T_UE_PHY_PDSCH_ENERGY,
@@ -1041,47 +1065,31 @@ int nr_rx_pdsch(PHY_VARS_NR_UE *ue,
     for (int l = 0; l < nl; l++)
       memset(rxdataF_comp[symbol][l * n_rx], 0, sizeof(c16_t) * rx_size_symbol);
 
-    // Build c16_t** view into rxdataF_comp at the current symbol
-    c16_t *rxComp_ptrs[nl * n_rx];
-    for (int l = 0; l < nl; l++)
-      for (int a = 0; a < n_rx; a++)
-        rxComp_ptrs[l * n_rx + a] = rxdataF_comp[symbol][l * n_rx + a];
-
-    // Channel magnitude temporaries: one row per layer (MRC combined)
-    c16_t ch_mag_tmp[nl][rx_size_symbol] __attribute__((aligned(32)));
-    c16_t ch_magb_tmp[nl][rx_size_symbol] __attribute__((aligned(32)));
-    c16_t ch_magr_tmp[nl][rx_size_symbol] __attribute__((aligned(32)));
-    memset(ch_mag_tmp, 0, sizeof(ch_mag_tmp));
-    memset(ch_magb_tmp, 0, sizeof(ch_magb_tmp));
-    memset(ch_magr_tmp, 0, sizeof(ch_magr_tmp));
-
-    // Reinterpret flat dl_ch_estimates_ext as [nl][n_rx][rx_size_symbol]
-    c16_t (*chFext)[n_rx][rx_size_symbol] = (c16_t (*)[n_rx][rx_size_symbol])dl_ch_estimates_ext;
-
+    // Commented until ML based LLR is enabled
     const bool need_rho = false; //(nl == 2 && dlsch_config->qamModOrder <= 6);
     if (need_rho)
       memset(rho_dl[symbol], 0, sizeof(c16_t) * nl * nl * rx_size_symbol);
 
+    // Zero the mag destinations before accumulation
+    for (int l = 0; l < nl; l++) {
+      memset(ch_mag_ptrs[l],  0, sizeof(c16_t) * rx_size_symbol);
+      memset(ch_magb_ptrs[l], 0, sizeof(c16_t) * rx_size_symbol);
+      memset(ch_magr_ptrs[l], 0, sizeof(c16_t) * rx_size_symbol);
+    }
+    
     nr_channel_compensation(rx_size_symbol,
                             n_rx,
                             nl,
                             rxdataF_ext,
                             chFext,
-                            ch_mag_tmp,
-                            ch_magb_tmp,
-                            ch_magr_tmp,
+                            ch_mag_ptrs,
+                            ch_magb_ptrs,
+                            ch_magr_ptrs,
                             rxComp_ptrs,
                             need_rho ? (c16_t (*)[nl][rx_size_symbol])rho_dl[symbol] : NULL,
                             dlsch_config->qamModOrder,
                             0, // symbol already baked into rxComp_ptrs
                             *log2_maxh);
-
-    // Store MRC-combined magnitudes into per-layer slot (rx=0)
-    for (int l = 0; l < nl; l++) {
-      memcpy(dl_ch_mag[symbol][l * n_rx], ch_mag_tmp[l], sizeof(c16_t) * rx_size_symbol);
-      memcpy(dl_ch_magb[symbol][l * n_rx], ch_magb_tmp[l], sizeof(c16_t) * rx_size_symbol);
-      memcpy(dl_ch_magr[symbol][l * n_rx], ch_magr_tmp[l], sizeof(c16_t) * rx_size_symbol);
-    }
     stop_meas_nr_ue_phy(ue, DLSCH_CHANNEL_COMPENSATION_STATS);
     if (meas_enabled) {
       LOG_D(PHY,
@@ -1119,42 +1127,38 @@ int nr_rx_pdsch(PHY_VARS_NR_UE *ue,
   start_meas_nr_ue_phy(ue, DLSCH_MRC_MMSE_STATS);
   if (nb_re_pdsch) {
     const uint8_t qamModOrder = dlsch_config->qamModOrder;
-    if ((nl > 2) || (nl == 2 && !bMlTwoLayersNeeded)) {
-      nr_dlsch_mmse(rx_size_symbol, n_rx, nl, rxdataF_comp,
-                    dl_ch_mag[symbol], dl_ch_magb[symbol], dl_ch_magr[symbol],
-                    dl_ch_estimates_ext, qamModOrder, *log2_maxh, symbol, nb_re_pdsch, nvar);
-    } else if (nl == 2 && qamModOrder > 6) {
-      // 2-layer 256-QAM: nr_mmse_2layers expects compact [2][rx_size_symbol] ch_mag layout
-      c16_t ch_mag_2l[2][rx_size_symbol]  __attribute__((aligned(32)));
-      c16_t ch_magb_2l[2][rx_size_symbol] __attribute__((aligned(32)));
-      c16_t ch_magc_2l[2][rx_size_symbol] __attribute__((aligned(32)));
-      memcpy(ch_mag_2l[0],  dl_ch_mag[symbol][0 * n_rx],  sizeof(c16_t) * rx_size_symbol);
-      memcpy(ch_mag_2l[1],  dl_ch_mag[symbol][1 * n_rx],  sizeof(c16_t) * rx_size_symbol);
-      memcpy(ch_magb_2l[0], dl_ch_magb[symbol][0 * n_rx], sizeof(c16_t) * rx_size_symbol);
-      memcpy(ch_magb_2l[1], dl_ch_magb[symbol][1 * n_rx], sizeof(c16_t) * rx_size_symbol);
-      memcpy(ch_magc_2l[0], dl_ch_magr[symbol][0 * n_rx], sizeof(c16_t) * rx_size_symbol);
-      memcpy(ch_magc_2l[1], dl_ch_magr[symbol][1 * n_rx], sizeof(c16_t) * rx_size_symbol);
 
-      c16_t *rxComp_2l[nl * n_rx];
-      for (int l = 0; l < nl; l++)
-        for (int a = 0; a < n_rx; a++)
-          rxComp_2l[l * n_rx + a] = rxdataF_comp[symbol][l * n_rx + a];
-
-      c16_t (*chFext_2l)[n_rx][rx_size_symbol] = (c16_t (*)[n_rx][rx_size_symbol])dl_ch_estimates_ext;
-      nr_mmse_2layers(rxComp_2l, rx_size_symbol, n_rx,
-                      ch_mag_2l, ch_magb_2l, ch_magc_2l, chFext_2l,
-                      freq_alloc->num_rbs, qamModOrder, *log2_maxh,
-                      0, nb_re_pdsch, nvar);
-
-      memcpy(dl_ch_mag[symbol][0 * n_rx],  ch_mag_2l[0],  sizeof(c16_t) * rx_size_symbol);
-      memcpy(dl_ch_mag[symbol][1 * n_rx],  ch_mag_2l[1],  sizeof(c16_t) * rx_size_symbol);
-      memcpy(dl_ch_magb[symbol][0 * n_rx], ch_magb_2l[0], sizeof(c16_t) * rx_size_symbol);
-      memcpy(dl_ch_magb[symbol][1 * n_rx], ch_magb_2l[1], sizeof(c16_t) * rx_size_symbol);
-      memcpy(dl_ch_magr[symbol][0 * n_rx], ch_magc_2l[0], sizeof(c16_t) * rx_size_symbol);
-      memcpy(dl_ch_magr[symbol][1 * n_rx], ch_magc_2l[1], sizeof(c16_t) * rx_size_symbol);
+    if ((nl > 2) || (nl == 2 && !bMlTwoLayersNeeded))
+    {
+      nr_dlsch_mmse(rx_size_symbol,
+                    n_rx,
+                    nl,
+                    rxdataF_comp,
+                    dl_ch_mag[symbol],
+                    dl_ch_magb[symbol], 
+                    dl_ch_magr[symbol],
+                    dl_ch_estimates_ext, 
+                    qamModOrder, 
+                    *log2_maxh, 
+                    symbol, 
+                    nb_re_pdsch, 
+                    nvar);
     }
-    // nl == 2 && qamModOrder <= 6: ML-LLR path, no MMSE needed
-    // nl == 1: single-layer, no MMSE
+    else if (nl == 2 && qamModOrder > 6)
+    {
+      nr_mmse_2layers(rxComp_ptrs,
+                      rx_size_symbol, 
+                      n_rx,
+                      ch_mag_ptrs,
+                      ch_magb_ptrs, 
+                      ch_magr_ptrs, 
+                      chFext,
+                      freq_alloc->num_rbs, 
+                      qamModOrder, 
+                      *log2_maxh,
+                      0, 
+                      nb_re_pdsch, nvar);
+    }
   }
   stop_meas_nr_ue_phy(ue, DLSCH_MRC_MMSE_STATS);
 
@@ -1167,8 +1171,6 @@ int nr_rx_pdsch(PHY_VARS_NR_UE *ue,
           symbol,
           ue->phy_cpu_stats.cpu_time_stats[DLSCH_MRC_MMSE_STATS].p_time / (cpuf * 1000.0));
   }
-
-
 
   /* Store the valid DL RE's */
   dl_valid_re[symbol] = nb_re_pdsch;
@@ -1200,6 +1202,7 @@ int nr_rx_pdsch(PHY_VARS_NR_UE *ue,
                              dlsch);
     dl_valid_re[symbol] -= ptrs_re_per_slot[0][symbol];
   }
+
   /* at last symbol in a slot calculate LLR's for whole slot */
   if (symbol == (startSymbIdx + nbSymb - 1)) {
     /* create LLR layer buffer */
@@ -1215,7 +1218,7 @@ int nr_rx_pdsch(PHY_VARS_NR_UE *ue,
       if (nl == 2 && qamModOrder <= 6 && bMlTwoLayersNeeded) {
         // 2-layer QPSK/16QAM/64QAM: joint ML-LLR using inter-layer Tx correlation
         // rho_dl[llr_sym] is laid out as [nl*nl][rx_size_symbol]:
-        //   index 1 = rho[0][1], index nl (=2) = rho[1][0]
+        // index 1 = rho[0][1], index nl (=2) = rho[1][0]
         nr_compute_ML_llr(rxdataF_comp[llr_sym][0 * n_rx],
                           rxdataF_comp[llr_sym][1 * n_rx],
                           dl_ch_mag[llr_sym][0 * n_rx],

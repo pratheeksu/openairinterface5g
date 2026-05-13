@@ -246,14 +246,21 @@ static void inner_rx(PHY_VARS_gNB *gNB,
   for (int i = 0; i < nb_layer; i++)
     memset(&pusch_vars->rxdataF_comp[i*nb_rx_ant][symbol * buffer_length], 0, sizeof(int32_t) * buffer_length);
 
+  c16_t *maga_ptrs[nb_layer], *magb_ptrs[nb_layer], *magc_ptrs[nb_layer];
+  for (int l = 0; l < nb_layer; l++) {
+    maga_ptrs[l] = rxF_ch_maga[l];
+    magb_ptrs[l] = rxF_ch_magb[l];
+    magc_ptrs[l] = rxF_ch_magc[l];
+  }
+
   nr_channel_compensation(buffer_length,
                           nb_rx_ant,
                           nb_layer,
                           rxFext,
                           chFext,
-                          rxF_ch_maga,
-                          rxF_ch_magb,
-                          rxF_ch_magc,
+                          maga_ptrs,
+                          magb_ptrs,
+                          magc_ptrs,
                           pusch_vars->rxdataF_comp,
                           (nb_layer > 1) ? rho : NULL,
                           rel15_ul->qam_mod_order,
@@ -299,9 +306,9 @@ static void inner_rx(PHY_VARS_gNB *gNB,
       nr_mmse_2layers(pusch_vars->rxdataF_comp,
                             buffer_length,
                             nb_rx_ant,
-                            rxF_ch_maga,
-                            rxF_ch_magb,
-                            rxF_ch_magc,
+                            maga_ptrs,
+                            magb_ptrs,
+                            magc_ptrs,
                             chFext,
                             rel15_ul->rb_size,
                             rel15_ul->qam_mod_order,

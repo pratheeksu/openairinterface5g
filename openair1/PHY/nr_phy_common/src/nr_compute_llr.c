@@ -2008,9 +2008,9 @@ static void nr_construct_HhH_elements(c16_t *conjch00_ch00,
 uint8_t nr_mmse_2layers(c16_t **rxdataF_comp,
                                      uint32_t buffer_length,
                                      int nb_rx_ant,
-                                     c16_t ul_ch_mag[][buffer_length],
-                                     c16_t ul_ch_magb[][buffer_length],
-                                     c16_t ul_ch_magc[][buffer_length],
+                                     c16_t **ul_ch_mag,
+                                     c16_t **ul_ch_magb,
+                                     c16_t **ul_ch_magc,
                                      c16_t ul_ch_estimates_ext[][nb_rx_ant][buffer_length],
                                      unsigned short nb_rb,
                                      unsigned char mod_order,
@@ -2296,12 +2296,12 @@ uint8_t nr_mmse_2layers(c16_t **rxdataF_comp,
       QAM_amp128b = simde_mm_set1_epi16(QAM256_n2);
       QAM_amp128c = simde_mm_set1_epi16(QAM256_n3);
     }
-    ul_ch_mag128_0 = (simde__m128i *)&ul_ch_mag[0];
-    ul_ch_mag128b_0 = (simde__m128i *)&ul_ch_magb[0];
-    ul_ch_mag128c_0 = (simde__m128i *)&ul_ch_magc[0];
-    ul_ch_mag128_1 = (simde__m128i *)&ul_ch_mag[1];
-    ul_ch_mag128b_1 = (simde__m128i *)&ul_ch_magb[1];
-    ul_ch_mag128c_1 = (simde__m128i *)&ul_ch_magc[1];
+    ul_ch_mag128_0 = (simde__m128i *)ul_ch_mag[0];
+    ul_ch_mag128b_0 = (simde__m128i *)ul_ch_magb[0];
+    ul_ch_mag128c_0 = (simde__m128i *)ul_ch_magc[0];
+    ul_ch_mag128_1 = (simde__m128i *)ul_ch_mag[1];
+    ul_ch_mag128b_1 = (simde__m128i *)ul_ch_magb[1];
+    ul_ch_mag128c_1 = (simde__m128i *)ul_ch_magc[1];
   }
 
   for (int rb = 0; rb < 3 * nb_rb_0; rb++) {
