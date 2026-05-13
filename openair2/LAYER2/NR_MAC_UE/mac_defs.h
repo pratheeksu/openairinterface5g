@@ -547,6 +547,7 @@ typedef struct NR_UE_MAC_INST_s {
 
   si_schedInfo_t si_SchedInfo;
   nr_ue_paging_cfg_t paging_cfg;
+  bool pending_pcch_from_prnti;
   ssb_list_info_t ssb_list;
 
   NR_UE_ServingCell_Info_t sc_info;

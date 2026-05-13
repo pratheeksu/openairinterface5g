@@ -976,6 +976,7 @@ static int nr_ue_process_dci_dl_10(NR_UE_MAC_INST_t *mac,
   if (rnti_type == TYPE_P_RNTI_) {
     const int ret = nr_ue_process_dci_dl_10_p_rnti(mac, frame, slot, dci, dlsch_pdu, current_DL_BWP);
     if (ret >= 0) {
+      mac->pending_pcch_from_prnti = true;
       LOG_D(NR_MAC_DCI,
             "[%04d.%02d] P-RNTI DCI accepted: SMI=%d short_msg=0x%02x rb_start=%d rb_len=%d start_sym=%d n_sym=%d mcs=%d "
             "tbs=%d\n",
@@ -4382,7 +4383,42 @@ void nr_ue_send_sdu(NR_UE_MAC_INST_t *mac, nr_downlink_indication_t *dl_info, in
   // Processing MAC PDU
   // it parses MAC CEs subheaders, MAC CEs, SDU subheaderds and SDUs
   switch (dl_info->rx_ind->rx_indication_body[pdu_id].pdu_type) {
-    case FAPI_NR_RX_PDU_TYPE_DLSCH :
+    case FAPI_NR_RX_PDU_TYPE_DLSCH: {
+      fapi_nr_pdsch_pdu_t *pdsch_pdu = &dl_info->rx_ind->rx_indication_body[pdu_id].pdsch_pdu;
+      const fapi_nr_dl_config_request_t *dl_config = get_dl_config_request(mac, dl_info->slot);
+      bool is_paging_dlsch = false;
+      // A paging DLSCH is identified by the matching P-RNTI entry in the DL config.
+      for (int i = 0; i < dl_config->number_pdus; i++) {
+        const fapi_nr_dl_config_request_pdu_t *conf = &dl_config->dl_config_list[i];
+        if (conf->pdu_type == FAPI_NR_DL_CONFIG_TYPE_DLSCH && conf->dlsch_config_pdu.rnti == P_RNTI) {
+          is_paging_dlsch = true;
+          break;
+        }
+      }
+      if (is_paging_dlsch || mac->pending_pcch_from_prnti) {
+        const bool has_pdu = pdsch_pdu->pdu != NULL;
+        const bool valid_pcch = pdsch_pdu->ack_nack && has_pdu && pdsch_pdu->pdu_length > 0;
+        if (valid_pcch) {
+          LOG_D(NR_MAC,
+                "[%04d.%02d] Received PCCH on P-RNTI, forwarding %d bytes to RRC\n",
+                dl_info->frame,
+                dl_info->slot,
+                pdsch_pdu->pdu_length);
+          mac->pending_pcch_from_prnti = false;
+          send_pcch_rrc(mac->ue_id, pdsch_pdu->pdu, pdsch_pdu->pdu_length, NULL);
+        } else {
+          LOG_W(NR_MAC,
+                "[%04d.%02d] Skipping PCCH forwarding on P-RNTI (ack_nack=%d, pdu_present=%d, pdu_len=%d)\n",
+                dl_info->frame,
+                dl_info->slot,
+                pdsch_pdu->ack_nack,
+                has_pdu,
+                pdsch_pdu->pdu_length);
+          /* Keep pending flag for paging: paging grants may be followed by later
+           * successful HARQ/LDPC decodes, while this particular reception failed. */
+        }
+        break;
+      }
       // start or restart dataInactivityTimer if any MAC entity receives a MAC SDU for DTCH logical channel,
       // DCCH logical channel, or CCCH logical channel
       if (mac->data_inactivity_timer)
@@ -4394,6 +4430,7 @@ void nr_ue_send_sdu(NR_UE_MAC_INST_t *mac, nr_downlink_indication_t *dl_info, in
       }
       nr_ue_process_mac_pdu(mac, dl_info, pdu_id);
       break;
+    }
     case FAPI_NR_RX_PDU_TYPE_RAR :
       nr_ue_process_rar(mac, dl_info, pdu_id);
       break;
