@@ -1632,46 +1632,6 @@ uint8_t unpack_stop_response(uint8_t **ppReadPackedMsg, uint8_t *end, void *msg,
          && unpack_tlv_list(NULL, 0, ppReadPackedMsg, end, config, &(pNfapiMsg->vendor_extension));
 }
 
-uint8_t pack_measurement_request(void *msg, uint8_t **ppWritePackedMsg, uint8_t *end, nfapi_p4_p5_codec_config_t *config)
-{
-  nfapi_measurement_request_t *pNfapiMsg = (nfapi_measurement_request_t *)msg;
-  return pack_tlv(NFAPI_MEASUREMENT_REQUEST_DL_RS_XTX_POWER_TAG,
-                  &(pNfapiMsg->dl_rs_tx_power),
-                  ppWritePackedMsg,
-                  end,
-                  &pack_uint16_tlv_value)
-         && pack_tlv(NFAPI_MEASUREMENT_REQUEST_RECEIVED_INTERFERENCE_POWER_TAG,
-                     &(pNfapiMsg->received_interference_power),
-                     ppWritePackedMsg,
-                     end,
-                     &pack_uint16_tlv_value)
-         && pack_tlv(NFAPI_MEASUREMENT_REQUEST_THERMAL_NOISE_POWER_TAG,
-                     &(pNfapiMsg->thermal_noise_power),
-                     ppWritePackedMsg,
-                     end,
-                     &pack_uint16_tlv_value)
-         && pack_vendor_extension_tlv(pNfapiMsg->vendor_extension, ppWritePackedMsg, end, config);
-}
-
-uint8_t unpack_measurement_request(uint8_t **ppReadPackedMsg, uint8_t *end, void *msg, nfapi_p4_p5_codec_config_t *config)
-{
-  nfapi_measurement_request_t *pNfapiMsg = (nfapi_measurement_request_t *)msg;
-
-  unpack_tlv_t unpack_fns[] = {
-      {NFAPI_MEASUREMENT_REQUEST_DL_RS_XTX_POWER_TAG, &pNfapiMsg->dl_rs_tx_power, &unpack_uint16_tlv_value},
-      {NFAPI_MEASUREMENT_REQUEST_RECEIVED_INTERFERENCE_POWER_TAG,
-       &pNfapiMsg->received_interference_power,
-       &unpack_uint16_tlv_value},
-      {NFAPI_MEASUREMENT_REQUEST_THERMAL_NOISE_POWER_TAG, &pNfapiMsg->thermal_noise_power, &unpack_uint16_tlv_value},
-  };
-  return unpack_tlv_list(unpack_fns,
-                         sizeof(unpack_fns) / sizeof(unpack_tlv_t),
-                         ppReadPackedMsg,
-                         end,
-                         config,
-                         &(pNfapiMsg->vendor_extension));
-}
-
 uint8_t pack_uint32_tlv_value(void *tlv, uint8_t **ppWritePackedMsg, uint8_t *end)
 {
   nfapi_uint32_tlv_t *value = (nfapi_uint32_tlv_t *)tlv;
