@@ -1594,6 +1594,69 @@ byte_array_t do_NR_Paging(const nr_paging_params_t *params)
   return msg;
 }
 
+/** @brief Decode an NR PCCH message into nr_paging_params_t records.
+ * @param pcch PCCH SDU as byte_array_t (buffer + length)
+ * @param out_params output array of decoded paging records
+ * @param out_count on success, number of records written to out_params
+ * @return -1 on decode/validation error, 0 on success */
+int nr_pcch_decode(const byte_array_t pcch, nr_paging_params_t *out_params, int *out_count)
+{
+  *out_count = 0;
+  NR_PCCH_Message_t *pcch_msg = NULL;
+  asn_dec_rval_t dec_rval = uper_decode_complete(NULL, &asn_DEF_NR_PCCH_Message, (void **)&pcch_msg, pcch.buf, pcch.len);
+
+  if ((dec_rval.code != RC_OK) || (dec_rval.consumed == 0)) {
+    LOG_E(NR_RRC,
+          "Failed to decode PCCH message (%zu bytes, dec_rval.code=%d, dec_rval.consumed=%zu)\n",
+          pcch.len,
+          dec_rval.code,
+          dec_rval.consumed);
+    ASN_STRUCT_FREE(asn_DEF_NR_PCCH_Message, pcch_msg);
+    return -1;
+  }
+
+  if (pcch_msg->message.present != NR_PCCH_MessageType_PR_c1) {
+    LOG_E(NR_RRC, "PCCH message (%zu bytes) is not a paging message\n", pcch.len);
+    ASN_STRUCT_FREE(asn_DEF_NR_PCCH_Message, pcch_msg);
+    return -1;
+  }
+
+  if (pcch_msg->message.choice.c1->present != NR_PCCH_MessageType__c1_PR_paging) {
+    LOG_E(NR_RRC, "PCCH message (%zu bytes) is not a paging message\n", pcch.len);
+    ASN_STRUCT_FREE(asn_DEF_NR_PCCH_Message, pcch_msg);
+    return -1;
+  }
+
+  NR_Paging_t *paging = pcch_msg->message.choice.c1->choice.paging;
+  if (paging->pagingRecordList == NULL || paging->pagingRecordList->list.count == 0) {
+    LOG_E(NR_RRC, "PCCH message (%zu bytes) has no paging records\n", pcch.len);
+    ASN_STRUCT_FREE(asn_DEF_NR_PCCH_Message, pcch_msg);
+    return -1;
+  }
+
+  int n = 0;
+  for (int i = 0; i < paging->pagingRecordList->list.count && n < NR_PCCH_MAX_PAGING_RECORDS; i++) {
+    NR_PagingRecord_t *record = paging->pagingRecordList->list.array[i];
+    nr_paging_params_t *p = &out_params[n];
+    *p = (nr_paging_params_t){0};
+    p->ue_identity_type = record->ue_Identity.present;
+    p->access_type = (record->accessType != NULL && *record->accessType == NR_PagingRecord__accessType_non3GPP);
+    if (record->ue_Identity.present == NR_PagingUE_Identity_PR_ng_5G_S_TMSI) {
+      BIT_STRING_t *ng_5g_s_tmsi = &record->ue_Identity.choice.ng_5G_S_TMSI;
+      DevAssert(ng_5g_s_tmsi->size >= 6);
+      BUFFER_TO_INT32(ng_5g_s_tmsi->buf + 2, p->ue_identity.m_tmsi);
+    } else if (record->ue_Identity.present == NR_PagingUE_Identity_PR_fullI_RNTI) {
+      BIT_STRING_t *i_rnti = &record->ue_Identity.choice.fullI_RNTI;
+      DevAssert(i_rnti->size == NR_PAGING_FULL_I_RNTI_SIZE);
+      memcpy(p->ue_identity.full_i_rnti, i_rnti->buf, NR_PAGING_FULL_I_RNTI_SIZE);
+    }
+    n++;
+  }
+  *out_count = n;
+  ASN_STRUCT_FREE(asn_DEF_NR_PCCH_Message, pcch_msg);
+  return 0;
+}
+
 /* \brief generate HandoverPreparationInformation to be sent to the DU for
  * handover. Takes uecap_buf in encoded form as (1) this is the form present at
  * the CU already (2) we have to clone this information anyway, so can take it

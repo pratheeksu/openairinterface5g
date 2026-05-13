@@ -3,6 +3,7 @@
  */
 
 #include <gtest/gtest.h>
+#include <cstring>
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -25,6 +26,9 @@ extern "C" {
 #include "NR_InterFreqNeighCellInfo.h"
 #include "NR_InterFreqNeighCellList.h"
 #include "asn_application.h"
+#include "NR_PCCH-Message.h"
+#include "NR_PagingRecord.h"
+#include "openair3/UTILS/conversions.h"
 RAN_CONTEXT_t RC;
 #ifdef __cplusplus
 }
@@ -111,20 +115,67 @@ TEST(nr_asn1, rrc_reestablishment)
   EXPECT_GT(do_RRCReestablishment(nh_ncc, buf, 1000, 0), 0);
 }
 
-TEST(nr_asn1, paging)
+static void encode_decode_paging(nr_paging_params_t params, nr_paging_params_t *decoded_params)
 {
-  nr_paging_params_t params = {};
-  params.ue_identity_type = NR_PagingUE_Identity_PR_ng_5G_S_TMSI;
-  params.ue_identity.m_tmsi = 0;
-  params.access_type = false;
-  params.paging_cause = NULL;
-
   byte_array_t msg = do_NR_Paging(&params);
+  ASSERT_NE(msg.buf, nullptr);
+  ASSERT_GT(msg.len, 0u);
 
-  EXPECT_GT(msg.len, 0);
-  EXPECT_NE(msg.buf, nullptr);
+  int count = 0;
+  int dec_ret = nr_pcch_decode(msg, decoded_params, &count);
+  ASSERT_EQ(dec_ret, 0);
+  ASSERT_GE(count, 1);
 
   free_byte_array(msg);
+}
+
+/* Encode NR Paging (PCCH) with do_NR_Paging, validate with nr_pcch_decode (same decoder as UE). */
+TEST(nr_asn1, paging)
+{
+  nr_paging_params_t decoded_params[NR_PCCH_MAX_PAGING_RECORDS];
+
+  /* ng-5G-S-TMSI: enc/dec */
+  const uint32_t test_tmsis[] = {0, 0xFFFFFFFF, 0x12345678, 0xABCDEF00, 0x00000001};
+
+  for (size_t i = 0; i < sizeofArray(test_tmsis); i++) {
+    nr_paging_params_t params = {.ue_identity_type = NR_PagingUE_Identity_PR_ng_5G_S_TMSI,
+                                 .ue_identity = {.m_tmsi = test_tmsis[i]},
+                                 .access_type = false,
+                                 .paging_cause = NULL};
+    encode_decode_paging(params, decoded_params);
+    ASSERT_EQ(decoded_params[0].ue_identity_type, NR_PagingUE_Identity_PR_ng_5G_S_TMSI);
+    EXPECT_EQ(decoded_params[0].ue_identity.m_tmsi, test_tmsis[i]) << "Decoded M-TMSI should match original TMSI";
+  }
+
+  /* accessType enc/dec: encode with access_type true */
+  {
+    nr_paging_params_t params = {.ue_identity_type = NR_PagingUE_Identity_PR_ng_5G_S_TMSI,
+                                 .ue_identity = {.m_tmsi = 0xDEADBEEF},
+                                 .access_type = true,
+                                 .paging_cause = NULL};
+    encode_decode_paging(params, decoded_params);
+    EXPECT_TRUE(decoded_params[0].access_type);
+  }
+
+  /* fullI-RNTI (40 bits): encode/decode roundtrip */
+  const uint8_t test_full_i_rntis[][NR_PAGING_FULL_I_RNTI_SIZE] = {
+      {0x00, 0x00, 0x00, 0x00, 0x00},
+      {0xFF, 0xFF, 0xFF, 0xFF, 0xFF},
+      {0x12, 0x34, 0x56, 0x78, 0x9A},
+  };
+
+  for (size_t i = 0; i < sizeofArray(test_full_i_rntis); i++) {
+    nr_paging_params_t params = {.ue_identity_type = NR_PagingUE_Identity_PR_fullI_RNTI,
+                                 .ue_identity = {.full_i_rnti = {0}},
+                                 .access_type = false,
+                                 .paging_cause = NULL};
+    memcpy(params.ue_identity.full_i_rnti, test_full_i_rntis[i], NR_PAGING_FULL_I_RNTI_SIZE);
+
+    encode_decode_paging(params, decoded_params);
+    ASSERT_EQ(decoded_params[0].ue_identity_type, NR_PagingUE_Identity_PR_fullI_RNTI);
+    ASSERT_EQ(memcmp(decoded_params[0].ue_identity.full_i_rnti, test_full_i_rntis[i], NR_PAGING_FULL_I_RNTI_SIZE), 0)
+        << "Decoded fullI-RNTI should match original";
+  }
 }
 
 void free_RRCReconfiguration_params(nr_rrc_reconfig_param_t params)

@@ -172,6 +172,7 @@ typedef struct {
 } nr_paging_params_t;
 
 byte_array_t do_NR_Paging(const nr_paging_params_t *params);
+int nr_pcch_decode(const byte_array_t pcch, nr_paging_params_t *out_params, int *out_count);
 
 byte_array_t get_HandoverPreparationInformation(nr_rrc_reconfig_param_t *params);
 byte_array_t get_HandoverCommandMessage(nr_rrc_reconfig_param_t *params);

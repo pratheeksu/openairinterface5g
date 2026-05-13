@@ -71,6 +71,9 @@
 // SDAP
 #define MAX_QOS_FLOWS 64
 
+/** Maximum number of PagingRecords in one PCCH Paging message (TS 38.331) */
+#define NR_PCCH_MAX_PAGING_RECORDS 16
+
 // SDAP/5G NAS NOS1
 #define DEFAULT_NOS1_PDU_ID 10
 
