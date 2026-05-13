@@ -387,4 +387,7 @@ typedef struct {
 bool check_rb_in_bitmap(const freq_alloc_bitmap_t *alloc, int rb);
 freq_alloc_bitmap_t set_start_end_from_bitmap(int size, int alloc_size, const uint8_t bitmap[alloc_size]);
 freq_alloc_bitmap_t set_bitmap_from_start_size(int start, int size);
+
+#include "nr_channel_compensation.h"
+#include "nr_compute_llr.h"
 #endif

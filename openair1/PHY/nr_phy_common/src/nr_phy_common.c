@@ -5,6 +5,8 @@
 #include "nr_phy_common.h"
 #include "bits.h"
 #include <complex.h>
+#include "PHY/sse_intrin.h"
+#include "PHY/impl_defs_top.h"
 #ifdef __aarch64__
 #define USE_128BIT
 #endif
@@ -561,3 +563,4 @@ int nr_get_ssb_start_sc(int scs, int ssb_offset_point_a, int ssb_sco, frequency_
   return ssb_start_subcarrier;
 
 }
+
