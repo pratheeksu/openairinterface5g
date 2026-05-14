@@ -31,7 +31,7 @@ void nr_fill_srs(PHY_VARS_gNB *gNB, frame_t frame, slot_t slot, nfapi_nr_srs_pdu
 {
   NR_gNB_SRS_job_t srs = {.frame = frame, .slot = slot, .srs_pdu = *srs_pdu};
   if (gNB->common_vars.beam_id) {
-    const uint8_t l0 = gNB->frame_parms.symbols_per_slot - 1 - srs_pdu->time_start_position;
+    const uint8_t l0 = srs_pdu->time_start_position; // L2 already sends the absolute symbol index
     int bitmap = SL_to_bitmap(l0, 1 << srs_pdu->num_symbols);
     int fapi_beam_idx = srs_pdu->beamforming.prgs_list[0].dig_bf_interface_list[0].beam_idx;
     srs.beam_nb = beam_index_allocation(gNB->enable_analog_das,
@@ -57,7 +57,7 @@ int nr_get_srs_signal(PHY_VARS_gNB *gNB,
   const NR_DL_FRAME_PARMS *frame_parms = &gNB->frame_parms;
 
   const uint16_t n_symbols = (slot % RU_RX_SLOT_DEPTH) * frame_parms->symbols_per_slot; // number of symbols until this slot
-  const uint8_t l0 = frame_parms->symbols_per_slot - 1 - srs_pdu->time_start_position; // starting symbol in this slot
+  const uint8_t l0 = srs_pdu->time_start_position; // starting symbol in this slot (L2 sends absolute symbol index)
   const uint64_t symbol_offset = (n_symbols + l0) * frame_parms->ofdm_symbol_size;
   const uint64_t subcarrier_offset = frame_parms->first_carrier_offset + srs_pdu->bwp_start * NR_NB_SC_PER_RB;
 
