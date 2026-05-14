@@ -1579,14 +1579,9 @@ int main(int argc, char *argv[])
 
               start_meas(&channel_stats);
               multipath_channel_float(UE2gNB[u], tx_sig_for_cpu, r_re_tmp, r_im_tmp, slot_length, 0, (n_trials == 1) ? 1 : 0);
+              // Add interference from multiple UEs
+              add_rx_signals_simde(r_re, r_im, r_re_tmp, r_im_tmp, n_rx, slot_length);
               stop_meas(&channel_stats);
-
-              for (int aarx = 0; aarx < n_rx; aarx++) {
-                for (int i = 0; i < slot_length; i++) {
-                  r_re[aarx][i] += r_re_tmp[aarx][i];
-                  r_im[aarx][i] += r_im_tmp[aarx][i];
-                }
-              }
 
               free(tx_sig_for_cpu);
             }
