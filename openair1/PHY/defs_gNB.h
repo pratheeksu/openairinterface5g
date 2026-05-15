@@ -11,7 +11,7 @@
 
 #include "common/platform_constants.h"
 #include "defs_nr_common.h"
-#include "PHY/nr_phy_common/inc/nr_phy_common.h"
+#include "common/utils/bits.h"
 #include "CODING/nrPolar_tools/nr_polar_pbch_defs.h"
 #include "openair2/NR_PHY_INTERFACE/NR_IF_Module.h"
 #include "PHY/CODING/nrLDPC_coding/nrLDPC_coding_interface.h"

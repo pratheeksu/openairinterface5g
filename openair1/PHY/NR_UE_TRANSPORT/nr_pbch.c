@@ -286,7 +286,6 @@ void nr_generate_pbch_llr(const PHY_VARS_NR_UE *ue,
                           const c16_t dl_ch_estimates[frame_parms->nb_antennas_rx][frame_parms->ofdm_symbol_size],
                           int16_t pbch_e_rx[NR_POLAR_PBCH_E])
 {
-  TracyCZone(ctx, true);
   const int symbol_offset = nr_get_ssb_start_symbol(frame_parms, i_ssb) % (NR_SYMBOLS_PER_SLOT);
   const int nb_re = (symbolSSB == 2) ? 72 : 180;
 
@@ -377,6 +376,7 @@ int nr_pbch_decode(PHY_VARS_NR_UE *ue,
                    int *ret_symbol_offset,
                    fapiPbch_t *result)
 {
+  TracyCZone(ctx, true);
   if (ue) {
     UEscopeCopy(ue, pbchLlr, pbch_e_rx, sizeof(int16_t), frame_parms->nb_antennas_rx, NR_POLAR_PBCH_E, 0);
   }

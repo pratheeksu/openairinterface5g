@@ -5,7 +5,7 @@
 #ifndef __NR_ESTIMATION_DEFS__H__
 #define __NR_ESTIMATION_DEFS__H__
 
-#include "PHY/nr_phy_common/inc/nr_phy_common.h"
+#include "common/utils/bits.h"
 #include "PHY/defs_nr_UE.h"
 
 /** @addtogroup _PHY_PARAMETER_ESTIMATION_BLOCKS_
