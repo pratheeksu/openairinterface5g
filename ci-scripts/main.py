@@ -220,14 +220,18 @@ def ExecuteActionWithParam(action, ctx, node):
 		command = test.findtext('command')
 		# Allow referencing repository workspace path in XML via %%workspace%%
 		command = command.replace("%%workspace%%", CONTAINERS.eNBSourceCodePath)
-		success = cls_oaicitest.Custom_Command(HTML, node, command)
+		wd = test.findtext('workdir')
+		wd = wd.replace("%%workspace%%", CONTAINERS.eNBSourceCodePath) if wd else None
+		success = cls_oaicitest.Custom_Command(HTML, node, command, wd)
 
 	elif action == 'Custom_Script':
 		script = test.findtext('script')
 		args = test.findtext('args')
 		# Allow referencing repository workspace path in XML via %%workspace%%
 		script = script.replace("%%workspace%%", CONTAINERS.eNBSourceCodePath)
-		success = cls_oaicitest.Custom_Script(HTML, node, script, args)
+		wd = test.findtext('workdir')
+		wd = wd.replace("%%workspace%%", CONTAINERS.eNBSourceCodePath) if wd else None
+		success = cls_oaicitest.Custom_Script(HTML, node, script, args, wd)
 
 	elif action == 'Pull_Cluster_Image':
 		tag_prefix = test.findtext('tag_prefix') or ""
