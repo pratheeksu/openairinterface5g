@@ -1263,7 +1263,17 @@ void config_uldci(const NR_UE_ServingCell_Info_t *sc_info,
 
       // antenna_ports.val = 0 for transform precoder is disabled, dmrs-Type=1, maxLength=1, Rank=1/2/3/4
       // Antenna Ports
-      dci_pdu_rel15->antenna_ports.val = 0;
+      // dci_pdu_rel15->antenna_ports.val = 0;
+      // MU-MIMO HACK
+      if (pusch_pdu->rb_size == 106) {
+        if (pusch_pdu->dmrs_ports == 1) {
+          dci_pdu_rel15->antenna_ports.val = 0;
+        } else {
+          dci_pdu_rel15->antenna_ports.val = 1;
+        }
+      } else {
+        dci_pdu_rel15->antenna_ports.val = 0;
+      }
 
       // DMRS sequence initialization
       dci_pdu_rel15->dmrs_sequence_initialization.val = pusch_pdu->scid;

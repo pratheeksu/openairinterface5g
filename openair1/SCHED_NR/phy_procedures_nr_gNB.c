@@ -1232,6 +1232,7 @@ int phy_procedures_gNB_uespec_RX(PHY_VARS_gNB *gNB, int frame_rx, int slot_rx, N
     int beam_nb = -1;
     for (int u = 0; u < gsz; u++) {
       int ulsch_id = group_jobs[g][u];
+      LOG_I(NR_PHY, "Group %d, Group size %d, ulsch_id %d\n", g, gsz, ulsch_id);
       pusch_vars_group[u] = &gNB->pusch_vars[ulsch_id];
       ulsch_pdu_group[u] = &gNB->ulsch[ulsch_id].harq_process->ulsch_pdu;
       unav_res_group[u] = &gNB->ulsch[ulsch_id].unav_res;
