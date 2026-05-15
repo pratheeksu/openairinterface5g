@@ -103,9 +103,13 @@ pipeline {
           }
           if (params.eNB_CommitID == 'latest' || params.eNB_Branch == 'latest') {
             echo "Detecting latest commit and branch from repo"
-            def gitInfo = sh(script: './ci-scripts/get-latest-ref.sh', returnStdout: true).trim().split('\n')
-            eNB_Branch = gitInfo[0]
-            eNB_CommitID = gitInfo[1]
+            sh "git fetch"
+            def latest_integration = sh(script: "git for-each-ref --format='%(refname:short) %(committerdate:unix)' refs/remotes/origin/integration_* | sort -k2 -nr | head -n1 | cut -d' ' -f1", returnStdout: true).trim()
+            def dev_date = sh(script: "git log origin/develop -1 --format=%ct", returnStdout: true).trim().toInteger()
+            def int_date = sh(script: "git log ${latest_integration} -1 --format=%ct", returnStdout: true).trim().toInteger()
+            def selected_ref = (dev_date > int_date) ? "origin/develop" : latest_integration
+            eNB_Branch = selected_ref.replaceFirst("^origin/", "")
+            eNB_CommitID = sh(script: "git rev-parse ${selected_ref}", returnStdout: true).trim()
             echo "Found branch ${eNB_Branch}, commit ${eNB_CommitID}"
           } else {
             eNB_Branch = params.eNB_Branch
