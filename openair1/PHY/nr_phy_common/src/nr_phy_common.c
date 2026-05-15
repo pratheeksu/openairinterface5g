@@ -521,7 +521,7 @@ void nr_fo_compensation(double fo_Hz, int samples_per_ms, int sample_offset, con
   const c16_t rot_vec = get_sin_cos(CHUNK * phase_inc);
   while (size > CHUNK) {
     mult_complex_vectors(rxdata_in, rot, rxdata_out, CHUNK, 14);
-    rotate_cpx_vector(rot, &rot_vec, rot, CHUNK, 14);
+    rotate_cpx_vector(rot, rot_vec, rot, CHUNK, 14);
     rxdata_in += CHUNK;
     rxdata_out += CHUNK;
     size -= CHUNK;

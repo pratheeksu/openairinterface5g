@@ -262,7 +262,7 @@ bool nr_search_ssb_common(nr_ssb_search_params_t *params)
   return true;
 }
 
-void nr_scan_ssb(void *arg)
+static void nr_scan_ssb(void *arg)
 {
   /*   Initial synchronisation
    *

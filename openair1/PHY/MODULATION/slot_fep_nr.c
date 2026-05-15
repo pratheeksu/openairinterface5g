@@ -180,8 +180,8 @@ void apply_nr_rotation_symbol_RX(const int symbols_per_slot,
   c16_t *this_symbol = rxdataF;
 
   if (nb_rb & 1) {
-    rotate_cpx_vector(this_symbol, &rot2, this_symbol, (nb_rb + 1) * 6, 15);
-    rotate_cpx_vector(this_symbol + first_carrier_offset - 6, &rot2, this_symbol + first_carrier_offset - 6, (nb_rb + 1) * 6, 15);
+    rotate_cpx_vector(this_symbol, rot2, this_symbol, (nb_rb + 1) * 6, 15);
+    rotate_cpx_vector(this_symbol + first_carrier_offset - 6, rot2, this_symbol + first_carrier_offset - 6, (nb_rb + 1) * 6, 15);
     mult_cpx_vector(this_symbol, shift_rot, this_symbol, (nb_rb + 1) * 6, 15);
     mult_cpx_vector(this_symbol + first_carrier_offset - 6,
                     shift_rot + first_carrier_offset - 6,
@@ -189,8 +189,8 @@ void apply_nr_rotation_symbol_RX(const int symbols_per_slot,
                     (nb_rb + 1) * 6,
                     15);
   } else {
-    rotate_cpx_vector(this_symbol, &rot2, this_symbol, nb_rb * 6, 15);
-    rotate_cpx_vector(this_symbol + first_carrier_offset, &rot2, this_symbol + first_carrier_offset, nb_rb * 6, 15);
+    rotate_cpx_vector(this_symbol, rot2, this_symbol, nb_rb * 6, 15);
+    rotate_cpx_vector(this_symbol + first_carrier_offset, rot2, this_symbol + first_carrier_offset, nb_rb * 6, 15);
     mult_cpx_vector(this_symbol, shift_rot, this_symbol, nb_rb * 6, 15);
     mult_cpx_vector(this_symbol + first_carrier_offset,
                     shift_rot + first_carrier_offset,
