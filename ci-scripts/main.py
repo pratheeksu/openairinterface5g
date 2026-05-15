@@ -169,7 +169,7 @@ def ExecuteActionWithParam(action, ctx, node):
 		script = test.findtext('script')
 		options = test.findtext('options')
 		if action == 'DeployWithScript':
-			deploymentTag = cls_containerize.CreateTag(RAN.ranCommitID, RAN.ranBranch, RAN.ranAllowMerge)
+			deploymentTag = cls_containerize.CreateTag(RAN.commitID, RAN.branch, RAN.merge)
 			success = cls_oaicitest.DeployWithScript(HTML, node, script, options, deploymentTag)
 		elif action == 'UndeployWithScript':
 			success = cls_oaicitest.UndeployWithScript(HTML, ctx, node, script, options)
