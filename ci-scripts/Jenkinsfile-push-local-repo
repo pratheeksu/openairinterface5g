@@ -67,8 +67,7 @@ pipeline {
     stage('Create temporary branch for CI') {
       steps {
         script {
-          def shortCommit = params.eNB_CommitID.take(8)
-          env.NEW_BRANCH = "${params.eNB_Branch}-${shortCommit}"
+          env.NEW_BRANCH = "${params.eNB_Branch}-${params.eNB_CommitID}"
           echo "New branch: ${env.NEW_BRANCH}"
         }
         sh """
