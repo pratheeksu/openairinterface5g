@@ -503,8 +503,6 @@ class OaiCiTest():
 					logging.warning(f'Iperf3 server on port {port} detected and terminated')
 				cmd_svr.run(f'{cn.getCmdPrefix()} timeout -vk3 {t} iperf3 -s -B {svrIP} -p {port} -1 {jsonReport} >> /dev/null &', timeout=t)
 			client_ret = cmd_ue.run(f'{ue.getCmdPrefix()} timeout -vk3 {t} {iperf_ue} -c {svrIP} {iperf_opt} {jsonReport} {serverReport} -O 5 >> {client_filename}', timeout=t, reportNonZero=False)
-			if client_ret.returncode != 0:
-				return (False, f'{ue_header}\nIperf client command failed on {bindIP} -> {svrIP}:{port} (return code: {client_ret.returncode})')
 			dest_filename = archiveArtifact(cmd_ue, ctx, client_filename)
 		if udpIperf:
 			status, msg = Iperf_analyzeV3UDP(dest_filename, self.iperf_bitrate_threshold, self.iperf_packetloss_threshold, target_bitrate)
@@ -512,6 +510,10 @@ class OaiCiTest():
 			status, msg = Iperf_analyzeV3BIDIRJson(dest_filename)
 		else:
 			status, msg = Iperf_analyzeV3TCPJson(dest_filename, self.iperf_tcp_rate_target)
+
+		# add some diagnostic messages if the actual iperf command returned non-zero
+		if client_ret.returncode != 0:
+			msg = f'{msg}\nIperf client command failed on {bindIP} -> {svrIP}:{port} (return code: {client_ret.returncode})'
 
 		return (status, f'{ue_header}\n{msg}')
 
