@@ -21,7 +21,6 @@
 #ifdef LDPC_CUDA
 #include <cuda_runtime.h>
 #endif
-extern uint32_t use_gpu;
 
 void RCconfig_nrUE_prs(void *cfg)
 {
@@ -265,7 +264,6 @@ int init_nr_ue_signal(PHY_VARS_NR_UE *ue, int nb_connected_gNB)
   if (IS_SA_MODE(get_softmodem_params()))
     ue->received_config_request = false;
 
-  ue->use_gpu = use_gpu;
 #ifdef LDPC_CUDA
   for (int j=0;j<10;j++) {
     for (int i=0;i<2;i++) {

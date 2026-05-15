@@ -265,7 +265,7 @@ Once you have this information you can start the `nr-uesoftmodem` process:
 
 ```bash
 cd ~/oai-nr-ue/openairinterface5g/cmake_targets/
-sudo ./nr-uesoftmodem -O ~/oai-nr-ue/nr-ue.conf -C 3350010000 -r 106 --ssb 513 --numerology 1 --band 78 --thread-pool -1 --num-dl-actors 6 --num-ul-actors 2 -E --loader.ldpc.shlibversion _cuda --usrp-tx-thread-config 1 --use_gpu 1 --ue-fo-compensation
+sudo ./nr-uesoftmodem -O ~/oai-nr-ue/nr-ue.conf -C 3350010000 -r 106 --ssb 513 --numerology 1 --band 78 --thread-pool -1 --num-dl-actors 6 --num-ul-actors 2 -E --loader.ldpc.shlibversion _cuda --usrp-tx-thread-config 1 --ue-fo-compensation
 ```
 
 **Command for DGX Spark**: 
@@ -275,7 +275,7 @@ sudo ./nr-uesoftmodem -O ~/oai-nr-ue/nr-ue.conf -C 3350010000 -r 106 --ssb 513 -
 ```bash
 cd ~/oai-nr-ue/openairinterface5g/cmake_targets/
 
-sudo taskset -c "5-9,15-19" ./nr-uesoftmodem -O ~/oai-nr-ue/nr-ue.conf -C 3350010000 -r 106 --ssb 513 --numerology 1 --band 78 --thread-pool -1 -E  --loader.ldpc.shlibversion _cuda --use_gpu 1 --ue-fo-compensation
+sudo taskset -c "5-9,15-19" ./nr-uesoftmodem -O ~/oai-nr-ue/nr-ue.conf -C 3350010000 -r 106 --ssb 513 --numerology 1 --band 78 --thread-pool -1 -E  --loader.ldpc.shlibversion _cuda --ue-fo-compensation
 ```
 
 In the above command task-set allows running the UE only on the performance cores. 
@@ -300,7 +300,6 @@ The parallelism/offload settings are:
 - `--num-dl-actors 6`: use 6 DL actor threads, parallel RX/PDSCH processing workers.
 - `--num-ul-actors 2`: use 2 UL actor threads, parallel TX/PUSCH/PUCCH preparation and transmit workers.
 - `--loader.ldpc.shlibversion_cuda`: load the CUDA-backed LDPC shared library variant.
-- `--use_gpu 1`: enable GPU offload in the PHY/LDPC path, if you want to disable it and use just CPU then replace 1 with 0.
 
 When the UE starts it starts with highest gains, but sometimes you would need to adjust the tx/rx gains based on the UEs position from the RU/gNB. To manipulate the gains you can use the below options: 
 
@@ -410,7 +409,7 @@ To start the `nr-uesoftmodem` process:
 **Command for DGX Spark**: 
 
 ```bash
-sudo devlink dev reload pci/<HOST_PCI_ADDR> && sudo taskset -c "5-19" ./nr-uesoftmodem --ue-fo-compensation --thread-pool 15,16,17,18,19 --loader.ldpc.shlibversion _cuda --use_gpu 1 -O ~/oai-nr-ue/nr-ue.conf --usrp-args "addr=192.168.80.251,use_dpdk=1" -C 3350010000 -r 273 --numerology 1 --band 78 --ssb 1515 --usrp-tx-thread-config 1
+sudo devlink dev reload pci/<HOST_PCI_ADDR> && sudo taskset -c "5-19" ./nr-uesoftmodem --ue-fo-compensation --thread-pool 15,16,17,18,19 --loader.ldpc.shlibversion _cuda -O ~/oai-nr-ue/nr-ue.conf --usrp-args "addr=192.168.80.251,use_dpdk=1" -C 3350010000 -r 273 --numerology 1 --band 78 --ssb 1515 --usrp-tx-thread-config 1
 ```
 
 DPDK deployment have some issues currently and we need to reload the pci interface before every run. The devlink command `sudo devlink dev reload pci/<HOST_PCI_ADDR>` is doing that. 

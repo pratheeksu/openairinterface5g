@@ -43,7 +43,6 @@ int64_t uplink_frequency_offset[MAX_NUM_CCs][4];
 uint64_t downlink_frequency[MAX_NUM_CCs][4];
 
 double cpuf;
-uint32_t use_gpu=0;
 
 uint8_t const nr_rv_round_map[4] = {0, 2, 3, 1};
 // needed for some functions

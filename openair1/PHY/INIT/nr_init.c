@@ -29,7 +29,6 @@
 #ifdef LDPC_CUDA
 #include <cuda_runtime.h>
 #endif
-extern uint32_t use_gpu;
 
 static void init_DLSCH_struct(PHY_VARS_gNB *gNB);
 static void destroy_DLSCH_struct(const PHY_VARS_gNB *gNB);
@@ -97,8 +96,7 @@ void phy_init_nr_gNB(PHY_VARS_gNB *gNB)
   nfapi_nr_config_request_scf_t *cfg = &gNB->gNB_config;
   NR_gNB_COMMON *const common_vars = &gNB->common_vars;
   common_vars->analog_bf = cfg->analog_beamforming_ve.analog_bf_vendor_ext.value;
-  gNB->use_gpu = use_gpu;
-  LOG_I(PHY, "L1 configured with%s analog beamforming, use_gpu = %d\n", common_vars->analog_bf ? "" : "out",use_gpu);
+  LOG_I(PHY, "L1 configured with%s analog beamforming\n", common_vars->analog_bf ? "" : "out");
   if (common_vars->analog_bf) {
     // True only if nrmac->beam_info.beam_mode == FAPI_ANALOG_BEAM, thus analog_beamforming=2
     common_vars->num_beams_period = cfg->analog_beamforming_ve.num_beams_period_vendor_ext.value;
@@ -393,7 +391,7 @@ static void init_DLSCH_struct(PHY_VARS_gNB *gNB)
   gNB->dlsch = calloc(gNB->max_nb_pdsch, sizeof(*gNB->dlsch));
   for (int i = 0; i < gNB->max_nb_pdsch; i++) {
     LOG_D(PHY, "Allocating Transport Channel Buffers for DLSCH %d/%d\n", i, gNB->max_nb_pdsch);
-    gNB->dlsch[i] = new_gNB_dlsch(fp, grid_size,gNB->use_gpu);
+    gNB->dlsch[i] = new_gNB_dlsch(fp, grid_size);
   }
 }
 
@@ -403,7 +401,7 @@ static void destroy_DLSCH_struct(const PHY_VARS_gNB *gNB)
   const nfapi_nr_config_request_scf_t *cfg = &gNB->gNB_config;
   const uint16_t grid_size = cfg->carrier_config.dl_grid_size[fp->numerology_index].value;
   for (int i = 0; i < gNB->max_nb_pdsch; i++) {
-    free_gNB_dlsch(&gNB->dlsch[i], grid_size, fp,gNB->use_gpu);
+    free_gNB_dlsch(&gNB->dlsch[i], grid_size, fp);
   }
   free(gNB->dlsch);
 }

@@ -104,7 +104,6 @@ instance_t CUuniqInstance=0;
 // NTN cellSpecificKoffset-r17, but in slots for DL SCS
 unsigned int NTN_UE_Koffset = 0;
 
-extern uint32_t use_gpu;
 void nr_derive_key_ng_ran_star(uint16_t pci, uint64_t nr_arfcn_dl, const uint8_t key[32], uint8_t *key_ng_ran_star)
 {
 }
@@ -595,9 +594,6 @@ int main(int argc, char *argv[])
       cpu_meas_enabled = 1;
       break;
 
-    case 'Q':
-      use_gpu=1;
-      break;
     case 'L':
       loglvl = atoi(optarg);
       break;
@@ -695,7 +691,6 @@ int main(int argc, char *argv[])
       printf("-M Use limited buffer rate-matching\n");
       printf("-P Print ULSCH performances\n");
       //printf("-Q If -F used, read parameters from file\n");
-      printf("-Q Enable GPU\n");
       printf("-R Maximum number of available resorce blocks (N_RB_DL)\n");
       printf("-T Enable PTRS, arguments list: Number of arguments=2 L_PTRS{0,1,2} K_PTRS{2,4}, e.g. -T 0,2 \n");
       printf("-U Change DMRS Config, arguments list: Number of arguments=4, DMRS Mapping Type{0=A,1=B}, DMRS AddPos{0:3}, DMRS Config Type{1,2}, Number of CDM groups without data{1,2,3} e.g. -U 0,2,0,1 \n");

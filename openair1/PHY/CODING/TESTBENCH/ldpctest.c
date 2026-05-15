@@ -34,8 +34,6 @@ static double modulated_input[MAX_NUM_NR_DLSCH_SEGMENTS_PER_LAYER * 4][68 * 384]
 #define MAX_TRIALS 20000
 static int8_t Failure_Mask[MAX_TRIALS][(MAX_NUM_NR_DLSCH_SEGMENTS_PER_LAYER * 4)] = {0};
 
-uint32_t use_gpu=0;
-
 int PARALLEL_PATH = 0;//control decoder path
 
 // 4-bit quantizer

@@ -21,7 +21,7 @@ services:
         environment:
             TZ: Europe/Paris
             USE_B2XX: 'yes'
-            USE_ADDITIONAL_OPTIONS:  --usrp-args type=b200 -C 3350010000 -r 78 --numerology 1 --band 78 --ssb 345 --ue-fo-compensation --uicc0.imsi 001040000000001 --uicc0.pdu_sessions.[0].dnn oai.ipv4 --thread-pool 5,6,7,8,9 --ue-txgain 15 --ue-rxgain 90 --loader.ldpc.shlibversion _cuda --use_gpu 1 -A 60
+            USE_ADDITIONAL_OPTIONS:  --usrp-args type=b200 -C 3350010000 -r 78 --numerology 1 --band 78 --ssb 345 --ue-fo-compensation --uicc0.imsi 001040000000001 --uicc0.pdu_sessions.[0].dnn oai.ipv4 --thread-pool 5,6,7,8,9 --ue-txgain 15 --ue-rxgain 90 --loader.ldpc.shlibversion _cuda -A 60
         cpuset: "3-11"
         volumes:
             - ../../conf_files/ue.sa.conf:/opt/oai-nr-ue/etc/nr-ue.conf
