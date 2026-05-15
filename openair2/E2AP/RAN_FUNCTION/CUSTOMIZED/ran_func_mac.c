@@ -103,11 +103,26 @@ void read_mac_setup_sm(void* data)
   assert(0 !=0 && "Not supported");
 }
 
+extern void enable_dlsch_energy_saving_feature(int enable, int *cell_ids, int cell_ids_len);
 sm_ag_if_ans_t write_ctrl_mac_sm(void const* data)
 {
+
   assert(data != NULL);
-  printf("write_ctrl callback for MAC SM: operation not supported\n");
-  sm_ag_if_ans_t ans = {0};
+  // assert(data->type == MAC_CTRL_REQ_V0);
+
+  mac_ctrl_req_data_t const* mac_req_ctrl = (mac_ctrl_req_data_t const* )data; // &data->slice_req_ctrl;
+  mac_ctrl_msg_t const* msg = &mac_req_ctrl->msg;
+
+  if(msg->action){
+    if(msg->action==50){
+      enable_dlsch_energy_saving_feature(msg->es_toggle, msg->cell_ids, msg->cell_ids_len);
+    }
+  } else {
+    assert(0!=0 && "Only ES boolean is writable from mac!");
+  }
+
+  sm_ag_if_ans_t ans = {.type = CTRL_OUTCOME_SM_AG_IF_ANS_V0};
+  ans.ctrl_out.type = MAC_AGENT_IF_CTRL_ANS_V0;
   return ans;
 }
 

@@ -29,6 +29,13 @@
 
 #define MAX_NUM_DATA_REQ 1024
 
+#define MAX_CELL_IDS 16
+
+bool dlsch_es = false;
+int cell_ids[MAX_CELL_IDS];
+int cell_ids_len;
+
+
 int get_dl_tda(const gNB_MAC_INST *nrmac, int slot)
 {
   /* we assume that this function is mutex-protected from outside */
@@ -577,8 +584,39 @@ static void ack_reconfig(gNB_MAC_INST *mac, NR_UE_info_t *UE)
   configure_UE_BWP(mac, scc, UE, false, NR_SearchSpace__searchSpaceType_PR_common, -1, -1);
 }
 
-static bool dlsch_to_schedule(const NR_UE_sched_ctrl_t *sched_ctrl)
+static bool is_skippable(const NR_UE_sched_ctrl_t *sched_ctrl, NR_UE_DL_BWP_t *current_BWP)
 {
+  uint8_t mcs = sched_ctrl->dl_max_mcs;
+
+  int mcsTableIdx = 0;
+  int l = get_dl_nrOfLayers(sched_ctrl, current_BWP->dci_format);
+
+
+  uint32_t max_bytes_in_bwp = nr_compute_tbs(
+      nr_get_Qm_dl(mcs, mcsTableIdx),
+      nr_get_code_rate_dl(mcs, mcsTableIdx),
+      1,
+      10,
+      0,
+      0,
+      0,
+      l
+  ) / 8;
+  if (sched_ctrl->num_total_bytes > 0.6*max_bytes_in_bwp || sched_ctrl->estimated_ul_buffer > 0)
+    return false;
+  return true;
+}
+
+static bool dlsch_to_schedule(const NR_UE_sched_ctrl_t *sched_ctrl, int frame, NR_UE_DL_BWP_t *current_BWP, gNB_MAC_INST *mac)
+{
+  // Check ES is activated, and right cell is being considered
+  if(dlsch_es){
+    for(int i=0; i<cell_ids_len; i++){
+      if(mac->f1_config.setup_req[0].cell->info.nr_cellid == cell_ids[0] && is_skippable(sched_ctrl, current_BWP)){
+        return false;
+      }
+    }
+  }
   /* Check DL buffer, TA to be sent and  beam switch needed*/
   if (sched_ctrl->num_total_bytes > 0)
     return true;
@@ -685,8 +723,7 @@ static void pf_dl(gNB_MAC_INST *mac,
       }
 
       update_dlsch_buffer(pp_pdsch->frame, pp_pdsch->slot, UE);
-
-      if (!dlsch_to_schedule(sched_ctrl))
+      if (!dlsch_to_schedule(sched_ctrl,frame, current_BWP, mac))
         continue;
 
       /* Calculate coeff */
@@ -993,7 +1030,7 @@ nfapi_nr_dl_tti_pdsch_pdu_rel15_t *prepare_pdsch_pdu(nfapi_nr_dl_tti_request_pdu
   pdsch_pdu->precodingAndBeamforming.num_prgs = 1;
   pdsch_pdu->precodingAndBeamforming.prg_size = pdsch_pdu->rbSize;
   pdsch_pdu->precodingAndBeamforming.dig_bf_interfaces = 1;
-  pdsch_pdu->precodingAndBeamforming.prgs_list[0].pm_idx = sched_pdsch->pm_index; 
+  pdsch_pdu->precodingAndBeamforming.prgs_list[0].pm_idx = sched_pdsch->pm_index;
   pdsch_pdu->precodingAndBeamforming.prgs_list[0].dig_bf_interface_list[0].beam_idx = beam_index;
   return pdsch_pdu;
 }
@@ -1389,4 +1426,11 @@ void nr_schedule_ue_spec(module_id_t module_id,
 
   /* PREPROCESSOR */
   gNB_mac->pre_processor_dl(gNB_mac, &pdsch);
+}
+
+void enable_dlsch_energy_saving_feature(int enable, int cids[MAX_CELL_IDS], int cids_len){
+  printf(enable ? "[E2 AGENT]: Energy Saving feature activated" : "[E2 AGENT]: Energy Saving feature deactivated");
+  dlsch_es = (bool)enable;
+  cell_ids_len = (int)cids_len;
+  memcpy(cell_ids, cids, cell_ids_len * sizeof(int));
 }
