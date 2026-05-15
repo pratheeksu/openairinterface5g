@@ -2182,6 +2182,31 @@ static int  pf_ul(gNB_MAC_INST *nrmac,
                       >> 3;
     }
 
+    // MU-MIMO HACK
+    // ------------
+    bool is_user_data = false;
+    for (int lcid = 4; lcid <= 32; lcid++) {
+      if (iterator->UE->mac_stats.ul.lc_bytes[lcid] > 0) {
+        is_user_data = true;
+        break;
+      }
+    }
+
+    if (is_user_data) {
+      sched.rbStart = 0;
+      sched.rbSize = 106;
+      sched.tb_size = nr_compute_tbs(sched.Qm,
+                                     sched.R,
+                                     sched.rbSize,
+                                     sched.tda_info.nrOfSymbols,
+                                     sched.dmrs_info.N_PRB_DMRS * sched.dmrs_info.num_dmrs_symb,
+                                     0, // nb_rb_oh
+                                     0,
+                                     sched.nrOfLayers)
+                      >> 3;
+    }
+    // --------------
+
     LOG_D(NR_MAC,
           "rbSize %d (available_rb %d), TBS %d, est buf %d, sched_ul %d, B %d, CCE %d, num_dmrs_symb %d, N_PRB_DMRS %d\n",
           sched.rbSize,
@@ -2202,9 +2227,11 @@ static int  pf_ul(gNB_MAC_INST *nrmac,
     /* save allocation to FAPI structures */
     post_process_ulsch(nrmac, pp_pusch, iterator->UE, &sched);
 
-    n_rb_sched[beam.idx] -= sched.rbSize;
-    for (int rb = bi.bwpStart + sched.rbStart; rb < bi.bwpStart + sched.rbStart + sched.rbSize; rb++)
-      rballoc_mask[rb] |= slbitmap;
+    if (!is_user_data) { // HACK to remove prb mask for MU-MIMO
+      n_rb_sched[beam.idx] -= sched.rbSize;
+      for (int rb = bi.bwpStart + sched.rbStart; rb < bi.bwpStart + sched.rbStart + sched.rbSize; rb++)
+        rballoc_mask[rb] |= slbitmap;
+    }
 
     /* reduce max_num_ue once we are sure UE can be allocated, i.e., has CCE */
     remainUEs[beam.idx]--;
@@ -2252,7 +2279,20 @@ nfapi_nr_pusch_pdu_t *prepare_pusch_pdu(nfapi_nr_ul_tti_request_t *future_ul_tti
   pusch_pdu->nrOfLayers = sched_pusch->nrOfLayers;
   // DMRS
   pusch_pdu->num_dmrs_cdm_grps_no_data = sched_pusch->dmrs_info.num_dmrs_cdm_grps_no_data;
-  pusch_pdu->dmrs_ports = ((1 << sched_pusch->nrOfLayers) - 1);
+
+  // MU-MIMO HACK
+  if (sched_pusch->rbSize == 106) {
+    if (rnti % 2 == 0) {
+      pusch_pdu->dmrs_ports = 1;
+    } else {
+      pusch_pdu->dmrs_ports = 2;
+    }
+  } else {
+    // Normal SU-MIMO behavior for RRC Signaling
+    pusch_pdu->dmrs_ports = ((1 << sched_pusch->nrOfLayers) - 1);
+  }
+
+  // pusch_pdu->dmrs_ports = ((1 << sched_pusch->nrOfLayers) - 1);
   pusch_pdu->ul_dmrs_symb_pos = sched_pusch->dmrs_info.ul_dmrs_symb_pos;
   pusch_pdu->dmrs_config_type = sched_pusch->dmrs_info.dmrs_config_type;
   pusch_pdu->scid = sched_pusch->dmrs_info.scid; // DMRS sequence initialization [TS38.211, sec 6.4.1.1.1]
