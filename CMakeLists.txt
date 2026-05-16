@@ -392,7 +392,9 @@ target_link_libraries(lte_rrc PRIVATE nr_rrc)
 
 #NR RRC
 #######
-add_library(nr_rrc ${OPENAIR2_DIR}/RRC/NR/MESSAGES/asn1_msg.c)
+add_library(nr_rrc
+    ${OPENAIR2_DIR}/RRC/NR/MESSAGES/asn1_msg.c
+    ${OPENAIR2_DIR}/RRC/NR/rrc_gNB_measurements.c)
 target_link_libraries(nr_rrc PUBLIC asn1_nr_rrc asn1_lte_rrc rrc_cell_management)
 
 # S1AP
@@ -1206,6 +1208,7 @@ set(L2_NR_SRC
   ${NR_RRC_DIR}/rrc_gNB_cuup.c
   ${NR_RRC_DIR}/rrc_gNB_du.c
   ${NR_RRC_DIR}/rrc_gNB_mobility.c
+  ${NR_RRC_DIR}/rrc_gNB_nrdc.c
   )
 
 set(L2_SRC_UE
@@ -1281,6 +1284,7 @@ set (MAC_NR_SRC
   ${NR_GNB_MAC_DIR}/mac_rrc_ul_direct.c
   ${NR_GNB_MAC_DIR}/mac_rrc_ul_f1ap.c
   ${NR_GNB_MAC_DIR}/nr_radio_config.c
+  ${NR_GNB_MAC_DIR}/nrdc_mac_rrc_dl_handler.c
  )
 
 
@@ -1850,7 +1854,7 @@ target_link_libraries(nr-oru PRIVATE
   radio_common softmodem_common)
 target_link_libraries(nr-oru PRIVATE pthread m CONFIG_LIB rt ${T_LIB} utils
   barrier actor)
-target_link_libraries(nr-oru PRIVATE asn1_nr_rrc_hdrs asn1_lte_rrc_hdrs nr_phy_common time_management)
+target_link_libraries(nr-oru PRIVATE asn1_nr_rrc_hdrs asn1_lte_rrc_hdrs nr_phy_common time_management ds)
 
 # nr-softmodem
 ###################################################
@@ -2054,7 +2058,7 @@ add_executable(nr_dlsim
   ${PHY_INTERFACE_DIR}/queue_t.c
   )
 target_link_libraries(nr_dlsim PRIVATE
-  -Wl,--start-group UTIL SIMU PHY_NR_COMMON PHY_NR PHY_NR_UE SCHED_NR_LIB SCHED_NR_UE_LIB MAC_UE_NR MAC_NR_COMMON CONFIG_LIB L2_NR -Wl,--end-group
+  -Wl,--start-group UTIL SIMU PHY_NR_COMMON PHY_NR PHY_NR_UE SCHED_NR_LIB SCHED_NR_UE_LIB MAC_UE_NR MAC_NR_COMMON CONFIG_LIB L2_NR time_management_core -Wl,--end-group
   m pthread ${T_LIB} ITTI dl nr_ue_phy_meas physim_common NR_L2_UE
   softmodem_common
   )
@@ -2083,7 +2087,7 @@ add_executable(nr_ulsim
   )
 
 target_link_libraries(nr_ulsim PRIVATE
-  -Wl,--start-group UTIL SIMU PHY_NR_COMMON PHY_NR PHY_NR_UE SCHED_NR_LIB SCHED_NR_UE_LIB MAC_UE_NR MAC_NR_COMMON CONFIG_LIB L2_NR -Wl,--end-group
+  -Wl,--start-group UTIL SIMU PHY_NR_COMMON PHY_NR PHY_NR_UE SCHED_NR_LIB SCHED_NR_UE_LIB MAC_UE_NR MAC_NR_COMMON CONFIG_LIB L2_NR time_management_core -Wl,--end-group
   m pthread ${T_LIB} ITTI dl nr_ue_phy_meas physim_common softmodem_common NR_L2_UE
   )
 target_link_libraries(nr_ulsim PRIVATE asn1_nr_rrc_hdrs asn1_lte_rrc_hdrs)

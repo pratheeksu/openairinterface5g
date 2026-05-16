@@ -25,6 +25,7 @@
 #include "asn1_msg.h"
 #include "../nr_rrc_proto.h"
 #include "LAYER2/nr_pdcp/nr_pdcp_asn1_utils.h"
+#include "openair2/RRC/NR/rrc_gNB_measurements.h"
 
 #include "openair3/SECU/key_nas_deriver.h"
 
@@ -66,6 +67,7 @@
 #include "NR_HandoverPreparationInformation-IEs.h"
 #include "NR_HandoverCommand.h"
 #include "NR_UE-CapabilityRAT-ContainerList.h"
+#include "NR_UECapabilityEnquiry-v1560-IEs.h"
 #include "common/utils/nr/nr_common.h"
 #if defined(NR_Rel16)
   #include "NR_SCS-SpecificCarrier.h"
@@ -435,13 +437,31 @@ int do_NR_SA_UECapabilityEnquiry(uint8_t *const buffer, const uint8_t Transactio
   ue_capabilityrat_request->rat_Type = NR_RAT_Type_nr;
 
   sa_band_infoNR = (NR_FreqBandInformationNR_t*)calloc(1,sizeof(NR_FreqBandInformationNR_t));
-  sa_band_infoNR->bandNR = 78;
+  sa_band_infoNR->bandNR = 40;
   sa_band_info = (NR_FreqBandInformation_t*)calloc(1,sizeof(NR_FreqBandInformation_t));
   sa_band_info->present = NR_FreqBandInformation_PR_bandInformationNR;
   sa_band_info->choice.bandInformationNR = sa_band_infoNR;
   
   sa_band_list = (NR_FreqBandList_t *)calloc(1, sizeof(NR_FreqBandList_t));
   asn1cSeqAdd(&sa_band_list->list, sa_band_info);
+
+  sa_band_infoNR = (NR_FreqBandInformationNR_t*)calloc(1,sizeof(NR_FreqBandInformationNR_t));
+  sa_band_infoNR->bandNR = 78;
+  sa_band_info = (NR_FreqBandInformation_t*)calloc(1,sizeof(NR_FreqBandInformation_t));
+  sa_band_info->present = NR_FreqBandInformation_PR_bandInformationNR;
+  sa_band_info->choice.bandInformationNR = sa_band_infoNR;
+
+  asn1cSeqAdd(&sa_band_list->list, sa_band_info);
+
+  NR_FreqBandInformation_t *sa2_band_info;
+  NR_FreqBandInformationNR_t *sa2_band_infoNR;
+  sa2_band_infoNR = (NR_FreqBandInformationNR_t*)calloc(1,sizeof(NR_FreqBandInformationNR_t));
+  sa2_band_infoNR->bandNR = 257;
+  sa2_band_info = (NR_FreqBandInformation_t*)calloc(1,sizeof(NR_FreqBandInformation_t));
+  sa2_band_info->present = NR_FreqBandInformation_PR_bandInformationNR;
+  sa2_band_info->choice.bandInformationNR = sa2_band_infoNR;
+
+  asn1cSeqAdd(&sa_band_list->list, sa2_band_info);
 
   sa_band_filter = (NR_UE_CapabilityRequestFilterNR_t*)calloc(1,sizeof(NR_UE_CapabilityRequestFilterNR_t));
   sa_band_filter->frequencyBandListFilter = sa_band_list;
@@ -461,6 +481,34 @@ int do_NR_SA_UECapabilityEnquiry(uint8_t *const buffer, const uint8_t Transactio
   asn1cSeqAdd(&dl_dcch_msg.message.choice.c1->choice.ueCapabilityEnquiry->criticalExtensions.choice.ueCapabilityEnquiry->ue_CapabilityRAT_RequestList.list,
                    ue_capabilityrat_request);
 
+  /* NR-DC request */
+  NR_UECapabilityEnquiry_v1560_IEs_t nr_dc_cap = { 0 };
+  NR_UE_CapabilityRequestFilterCommon_t nr_dc_filter = { 0 };
+  nr_dc_cap.capabilityRequestFilterCommon = &nr_dc_filter;
+  nr_dc_filter.mrdc_Request = &(struct NR_UE_CapabilityRequestFilterCommon__mrdc_Request) {
+    .omitEN_DC = NULL,
+    .includeNR_DC = &(long){ NR_UE_CapabilityRequestFilterCommon__mrdc_Request__includeNR_DC_true },
+    .includeNE_DC = NULL
+  };
+
+  nr_dc_filter.ext2 = &(struct NR_UE_CapabilityRequestFilterCommon__ext2) {
+    .requestedCellGrouping_r16 = &(struct NR_UE_CapabilityRequestFilterCommon__ext2__requestedCellGrouping_r16) {
+      .list = { 0 }
+    }
+  };
+  NR_CellGrouping_r16_t nr_dc_combination = { 0 };
+  nr_dc_combination.mode_r16 = NR_CellGrouping_r16__mode_r16_async;
+  NR_FreqBandIndicatorNR_t b40 = 78;
+  NR_FreqBandIndicatorNR_t b257 = 257;
+  asn1cSeqAdd(&nr_dc_combination.mcg_r16.list, &b40);
+  asn1cSeqAdd(&nr_dc_combination.scg_r16.list, &b257);
+
+  asn1cSeqAdd(&nr_dc_filter.ext2->requestedCellGrouping_r16->list, &nr_dc_combination);
+
+  OCTET_STRING_t *nr_dc = calloc_or_fail(1, sizeof(*nr_dc));
+  nr_dc->size = uper_encode_to_new_buffer(&asn_DEF_NR_UECapabilityEnquiry_v1560_IEs, NULL, &nr_dc_cap, (void **)&nr_dc->buf);
+
+  dl_dcch_msg.message.choice.c1->choice.ueCapabilityEnquiry->criticalExtensions.choice.ueCapabilityEnquiry->ue_CapabilityEnquiryExt = nr_dc;
 
   if ( LOG_DEBUGFLAG(DEBUG_ASN1) ) {
     xer_fprint(stdout, &asn_DEF_NR_DL_DCCH_Message, (void *)&dl_dcch_msg);
@@ -1167,7 +1215,8 @@ static NR_MeasIdToAddMod_t *get_MeasId(NR_MeasId_t measId, NR_ReportConfigId_t r
   return measid;
 }
 
-NR_MeasConfig_t *get_MeasConfig(const NR_MeasTiming_t *mt,
+NR_MeasConfig_t *get_MeasConfig(gNB_RRC_UE_t *ue,
+                                const NR_MeasTiming_t *mt,
                                 int band,
                                 int nr_pci,
                                 NR_ReportConfigToAddMod_t *rc_PER,
@@ -1211,7 +1260,8 @@ NR_MeasConfig_t *get_MeasConfig(const NR_MeasTiming_t *mt,
   // cell-specific offsets, blacklisted cells to be ignored and whitelisted cells to consider for measurements.
 
   // Serving cell
-  NR_MeasObjectToAddMod_t *mo1 = get_MeasObject(ft, band, ft->carrierFreq, 1);
+  int serving_cell_measobj_id = allocate_measurement_object_id(ue);
+  NR_MeasObjectToAddMod_t *mo1 = get_MeasObject(ft, band, ft->carrierFreq, serving_cell_measobj_id);
   NR_MeasObjectNR_t *monr1 = mo1->measObject.choice.measObjectNR;
   monr1->cellsToAddModList = calloc_or_fail(1, sizeof(*monr1->cellsToAddModList));
   NR_CellsToAddMod_t *cell = calloc_or_fail(1, sizeof(*cell));
@@ -1219,10 +1269,16 @@ NR_MeasConfig_t *get_MeasConfig(const NR_MeasTiming_t *mt,
   ASN_SEQUENCE_ADD(&monr1->cellsToAddModList->list, cell);
   asn1cSeqAdd(&mc->measObjectToAddModList->list, mo1);
 
+  int *neighbour_measurement_object_id = NULL;
+  if (neigh_seq && neigh_seq->size)
+    neighbour_measurement_object_id = calloc_or_fail(neigh_seq->size, sizeof(int));
+
   // Neighbour cells
   if (neigh_seq) {
-    int mo_id = 2;
+    int i = 0;
     FOR_EACH_SEQ_ARR(nr_neighbour_cell_t *, neigh_cell, neigh_seq) {
+      int mo_id = allocate_measurement_object_id(ue);
+      neighbour_measurement_object_id[i] = mo_id;
       NR_MeasObjectToAddMod_t *mo_neighbour = get_MeasObject(ft,  neigh_cell->band, neigh_cell->absoluteFrequencySSB, mo_id);
       NR_MeasObjectNR_t *monr = mo_neighbour->measObject.choice.measObjectNR;
       monr->cellsToAddModList = calloc_or_fail(1, sizeof(*monr->cellsToAddModList));
@@ -1230,7 +1286,7 @@ NR_MeasConfig_t *get_MeasConfig(const NR_MeasTiming_t *mt,
       cell->physCellId = neigh_cell->physicalCellId;
       ASN_SEQUENCE_ADD(&monr->cellsToAddModList->list, cell);
       asn1cSeqAdd(&mc->measObjectToAddModList->list, mo_neighbour);
-      mo_id++;
+      i++;
     }
   }
 
@@ -1240,19 +1296,20 @@ NR_MeasConfig_t *get_MeasConfig(const NR_MeasTiming_t *mt,
   // object.
 
   // MeasId for Periodic report
-  int meas_idx = 0;
   if (rc_PER) {
-    for (; meas_idx < mc->measObjectToAddModList->list.count; meas_idx++) {
-      const NR_MeasObjectId_t measObjectId = mc->measObjectToAddModList->list.array[meas_idx]->measObjectId;
-      NR_MeasIdToAddMod_t *measid = get_MeasId(meas_idx + 1, rc_PER->reportConfigId, measObjectId);
+    for (int i = 0; i < mc->measObjectToAddModList->list.count; i++) {
+      const NR_MeasObjectId_t measObjectId = mc->measObjectToAddModList->list.array[i]->measObjectId;
+      int meas_idx = allocate_measurement_id(ue);
+      NR_MeasIdToAddMod_t *measid = get_MeasId(meas_idx, rc_PER->reportConfigId, measObjectId);
       asn1cSeqAdd(&mc->measIdToAddModList->list, measid);
     }
   }
 
   // MeasId for Event A2
   if (rc_A2) {
-    NR_MeasIdToAddMod_t *measid_A2 = get_MeasId(meas_idx + 1, rc_A2->reportConfigId, 1);
-    meas_idx++;
+    int meas_idx = allocate_measurement_id(ue);
+    int meas_obj_id = serving_cell_measobj_id;
+    NR_MeasIdToAddMod_t *measid_A2 = get_MeasId(meas_idx, rc_A2->reportConfigId, meas_obj_id);
     asn1cSeqAdd(&mc->measIdToAddModList->list, measid_A2);
   }
 
@@ -1264,8 +1321,9 @@ NR_MeasConfig_t *get_MeasConfig(const NR_MeasTiming_t *mt,
       /* check that there is a A3 configured for this neighbour */
       if (reportConfigId == -1)
         continue;
-      NR_MeasIdToAddMod_t *measid_A3 = get_MeasId(meas_idx + 1, reportConfigId, i + 2);
-      meas_idx++;
+      int meas_idx = allocate_measurement_id(ue);
+      int meas_obj_id = neighbour_measurement_object_id[i];
+      NR_MeasIdToAddMod_t *measid_A3 = get_MeasId(meas_idx, reportConfigId, meas_obj_id);
       asn1cSeqAdd(&mc->measIdToAddModList->list, measid_A3);
       i++;
     }
@@ -1279,6 +1337,8 @@ NR_MeasConfig_t *get_MeasConfig(const NR_MeasTiming_t *mt,
   asn1cCallocOne(qcnr->quantityConfigCell.ssb_FilterConfig.filterCoefficientRSRP, NR_FilterCoefficient_fc6);
   asn1cCallocOne(qcnr->quantityConfigCell.csi_RS_FilterConfig.filterCoefficientRSRP, NR_FilterCoefficient_fc6);
   asn1cSeqAdd(&mc->quantityConfig->quantityConfigNR_List->list, qcnr);
+
+  free(neighbour_measurement_object_id);
 
   return mc;
 }

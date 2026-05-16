@@ -1893,6 +1893,8 @@ static int  pf_ul(gNB_MAC_INST *nrmac,
   const int sched_slot = (slot + k2) % slots_per_frame;
   DevAssert(is_ul_slot(sched_slot, &nrmac->frame_structure));
 
+//  if (sched_slot%10 != 7) return 0;
+
   const int min_rb = nrmac->min_grant_prb;
   // UEs that could be scheduled
   UEsched_t UE_sched[MAX_MOBILES_PER_GNB + 1] = {0};

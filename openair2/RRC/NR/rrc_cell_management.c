@@ -127,6 +127,18 @@ nr_rrc_cell_container_t *get_cell_by_cell_id(struct rrc_cell_tree *cells, const 
   return RB_FIND(rrc_cell_tree, cells, &search_key);
 }
 
+/* return the first cell matching the wanted band */
+nr_rrc_cell_container_t *get_cell_by_band(struct rrc_cell_tree *cells, int band)
+{
+  nr_rrc_cell_container_t *cell;
+  RB_FOREACH(cell, rrc_cell_tree, cells) {
+    int cell_band = cell->info.mode == NR_MODE_TDD ? cell->info.tdd.dlul.band : cell->info.fdd.dl.band;
+    if (cell_band == band)
+      return cell;
+  }
+  return NULL;
+}
+
 /** @brief Add cell to global cell tree and increment rrc->num_cells on success
  * @param[in] rrc Pointer to RRC instance
  * @param[in] cell Pointer to cell container to add

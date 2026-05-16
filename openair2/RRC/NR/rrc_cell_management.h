@@ -38,6 +38,8 @@ nr_rrc_cell_container_t *get_cell_by_cell_id(struct rrc_cell_tree *cells, const 
 nr_rrc_cell_container_t *rrc_add_cell(gNB_RRC_INST *rrc, nr_rrc_cell_container_t *cell);
 void rrc_rm_cell(gNB_RRC_INST *rrc, nr_rrc_cell_container_t *cell);
 
+nr_rrc_cell_container_t *get_cell_by_band(struct rrc_cell_tree *cells, int band);
+
 // Cell management (DU-specific cell tree)
 nr_rrc_cell_container_t *rrc_get_cell_for_du(seq_arr_t *cells, uint64_t cell_id);
 nr_rrc_cell_container_t *rrc_get_cell_by_pci_for_du(const seq_arr_t *cells, uint16_t pci);
