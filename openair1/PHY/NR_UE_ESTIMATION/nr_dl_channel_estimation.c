@@ -800,7 +800,7 @@ void nr_pdcch_channel_estimation(const PHY_VARS_NR_UE *ue,
 
   for (int aarx = 0; aarx < ue->frame_parms.nb_antennas_rx; aarx++) {
     int k = coreset_start_subcarrier;
-    c16_t *pil = &pilot[dmrs_ref * 3];
+    c16_t *pil = &pilot[(dmrs_ref + coreset_start_rb) * 3];
     c16_t *rxF = &rxdataF[aarx][k + 1];
     c16_t *dl_ch = pdcch_dl_ch_estimates[aarx];
 

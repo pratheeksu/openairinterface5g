@@ -25,10 +25,10 @@ typedef struct nr_mac_config_s nr_mac_config_t;
 typedef struct nr_mac_timers nr_mac_timers_t;
 typedef struct measgap_config measgap_config_t;
 
-void nr_rrc_config_dl_tda(struct NR_PDSCH_TimeDomainResourceAllocationList *pdsch_TimeDomainAllocationList,
+void nr_rrc_config_dl_tda(NR_PDSCH_TimeDomainResourceAllocationList_t *pdsch_TimeDomainAllocationList,
                           frame_type_t frame_type,
                           NR_TDD_UL_DL_ConfigCommon_t *tdd_UL_DL_ConfigurationCommon,
-                          int curr_bwp);
+                          bool small_bwp);
 void nr_rrc_config_ul_tda(NR_ServingCellConfigCommon_t *scc, int min_fb_delay, int do_SRS);
 NR_SearchSpace_t *rrc_searchspace_config(bool is_common,
                                          int searchspaceid,
@@ -46,7 +46,7 @@ NR_BCCH_BCH_Message_t *get_new_MIB_NR(const NR_ServingCellConfigCommon_t *scc);
 void free_MIB_NR(NR_BCCH_BCH_Message_t *mib);
 int encode_MIB_NR(NR_BCCH_BCH_Message_t *mib, int frame, uint8_t *buf, int buf_size);
 int encode_MIB_NR_setup(NR_MIB_t *mib, int frame, uint8_t *buf, int buf_size);
-void configure_coreset_for_mux23(const NR_ServingCellConfigCommon_t *scc,
+bool configure_coreset_for_mux23(const NR_ServingCellConfigCommon_t *scc,
                                  int offset,
                                  int limit,
                                  int bwp_start,
