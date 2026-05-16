@@ -71,7 +71,7 @@ fi
 # Check unsigned commits
 # ----------------------------
 unsignedCommits=$(
-    for c in $(git rev-list "$TARGET_BRANCH".."$SOURCE_BRANCH"); do
+    for c in $(git rev-list "$TARGET_BRANCH".."$SOURCE_BRANCH" --no-merges); do
         if ! git log -1 --format=%B "$c" | grep -q "Signed-off-by:"; then
             git log -1 --format='%h' "$c"
         fi

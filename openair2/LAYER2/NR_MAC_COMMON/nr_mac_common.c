@@ -4129,19 +4129,16 @@ uint16_t compute_pucch_prb_size(uint8_t format,
               O_crc,
               nr_prbs);
 
-  if (format==2){
-    // TODO fix this for multiple CSI reports
-    for (int i = nr_prbs; i > 0; i--) {
-      // compute code rate factor for next prb value
-      int next_prb_factor = (i - 1) * n_symb * Qm * n_re_ctrl * r;
-      // if it does not sa
-      if (O_tot > next_prb_factor)
-        return i;
-    }
+  // TODO fix this for multiple CSI reports
+  for (int i = nr_prbs; i > 0; i--) {
+    // compute code rate factor for next prb value
+    int next_prb_factor = (i - 1) * n_symb * Qm * n_re_ctrl * r;
+    // if it does not sa
+    if (O_tot > next_prb_factor)
+      return i;
   }
-  else{
-    AssertFatal(1==0,"Not yet implemented");
-  }
+
+  AssertFatal(false , "Couldn't find adequate number of PRBs\n");
   return 0;
 }
 

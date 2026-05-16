@@ -35,7 +35,7 @@
 
 void free_gNB_ulsch(NR_gNB_ULSCH_t *ulsch, uint16_t N_RB_UL)
 {
-  uint16_t a_segments = MAX_NUM_NR_ULSCH_SEGMENTS_PER_LAYER * NR_MAX_NB_LAYERS; // number of segments to be allocated
+  uint16_t a_segments = MAX_NUM_NR_ULSCH_SEGMENTS; // number of segments to be allocated
 
   if (N_RB_UL != 273) {
     a_segments = a_segments * N_RB_UL;
@@ -61,7 +61,7 @@ void free_gNB_ulsch(NR_gNB_ULSCH_t *ulsch, uint16_t N_RB_UL)
 
 NR_gNB_ULSCH_t new_gNB_ulsch(uint8_t max_ldpc_iterations, uint16_t N_RB_UL)
 {
-  uint16_t a_segments = MAX_NUM_NR_ULSCH_SEGMENTS_PER_LAYER * NR_MAX_NB_LAYERS; // number of segments to be allocated
+  uint16_t a_segments = MAX_NUM_NR_ULSCH_SEGMENTS; // number of segments to be allocated
 
   if (N_RB_UL != 273) {
     a_segments = a_segments * N_RB_UL;

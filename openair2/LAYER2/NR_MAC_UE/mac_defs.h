@@ -299,7 +299,7 @@ typedef struct {
 typedef struct {
   int sched_frame;
   int sched_slot;
-  PUCCH_sched_t pucch_sched;
+  fapi_nr_ul_config_pucch_pdu pucch_pdu;
 } RA_PUCCH_SCHED_t;
 
 typedef struct {

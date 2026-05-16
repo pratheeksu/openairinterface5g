@@ -321,7 +321,7 @@ void term_nr_ue_signal(PHY_VARS_NR_UE *ue)
 
 void free_nr_ue_dl_harq(NR_DL_UE_HARQ_t harq_list[2][NR_MAX_HARQ_PROCESSES], int number_of_processes, int num_rb)
 {
-  uint16_t a_segments = MAX_NUM_NR_DLSCH_SEGMENTS_PER_LAYER*NR_MAX_NB_LAYERS;
+  uint16_t a_segments = MAX_NUM_NR_DLSCH_SEGMENTS;
   if (num_rb != 273) {
     a_segments = a_segments*num_rb;
     a_segments = (a_segments/273)+1;
@@ -343,7 +343,7 @@ void free_nr_ue_dl_harq(NR_DL_UE_HARQ_t harq_list[2][NR_MAX_HARQ_PROCESSES], int
 
 void free_nr_ue_ul_harq(NR_UL_UE_HARQ_t harq_list[NR_MAX_HARQ_PROCESSES], int number_of_processes, int num_rb, int num_ant_tx)
 {
-  int max_layers = (num_ant_tx < NR_MAX_NB_LAYERS) ? num_ant_tx : NR_MAX_NB_LAYERS;
+  int max_layers = min(num_ant_tx, NR_MAX_NB_LAYERS);
   uint16_t a_segments = MAX_NUM_NR_ULSCH_SEGMENTS_PER_LAYER*max_layers;  //number of segments to be allocated
 
   if (num_rb != 273) {
@@ -374,7 +374,7 @@ void term_nr_ue_transport(PHY_VARS_NR_UE *ue)
 
 void nr_init_dl_harq_processes(NR_DL_UE_HARQ_t harq_list[2][NR_MAX_HARQ_PROCESSES], int number_of_processes, int num_rb)
 {
-  int a_segments = MAX_NUM_NR_DLSCH_SEGMENTS_PER_LAYER*NR_MAX_NB_LAYERS;  //number of segments to be allocated
+  int a_segments = MAX_NUM_NR_DLSCH_SEGMENTS; // number of segments to be allocated
   if (num_rb != 273) {
     a_segments = a_segments*num_rb;
     a_segments = (a_segments/273)+1;
@@ -402,7 +402,7 @@ void nr_init_dl_harq_processes(NR_DL_UE_HARQ_t harq_list[2][NR_MAX_HARQ_PROCESSE
 
 void nr_init_ul_harq_processes(NR_UL_UE_HARQ_t harq_list[NR_MAX_HARQ_PROCESSES], int number_of_processes, int num_rb, int num_ant_tx)
 {
-  int max_layers = (num_ant_tx < NR_MAX_NB_LAYERS) ? num_ant_tx : NR_MAX_NB_LAYERS;
+  int max_layers = min(num_ant_tx, NR_MAX_NB_LAYERS);
   uint16_t a_segments = MAX_NUM_NR_ULSCH_SEGMENTS_PER_LAYER*max_layers;  //number of segments to be allocated
 
   if (num_rb != 273) {

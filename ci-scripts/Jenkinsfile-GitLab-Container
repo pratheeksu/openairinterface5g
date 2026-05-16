@@ -87,9 +87,6 @@ pipeline {
             // since a bit, in push events, gitlabUserEmail is not populated
             gitCommitAuthorEmailAddr = env.gitlabUserEmail
             echo "GitLab Usermail is ${gitCommitAuthorEmailAddr}"
-            // GitLab-Jenkins plugin integration is lacking to perform the merge by itself
-            // Doing it manually --> it may have merge conflicts
-
             // Validate MR commits: checks for missing Signed-off-by and merge commits
             def mrValidationLog = "signedCommit_${env.BUILD_NUMBER}.log"
             def mrValidationExitCode = sh(
@@ -104,7 +101,6 @@ pipeline {
             if (mrValidationExitCode >= 2) {
               error("${mrValidationMessage}")
             }
-            sh "./ci-scripts/doGitLabMerge.sh --src-branch ${env.gitlabSourceBranch} --src-commit ${env.gitlabMergeRequestLastCommit} --target-branch ${env.gitlabTargetBranch} --target-commit ${GIT_COMMIT}"
           } else {
             echo "Git Branch    is ${GIT_BRANCH}"
             echo "Git Commit    is ${GIT_COMMIT}"
@@ -115,29 +111,19 @@ pipeline {
           }
         }
       }
-      post {
-        failure {
-          script {
-            def message = "OAI " + JOB_NAME + " build (" + BUILD_ID + "): Merge Conflicts -- Cannot perform CI"
-            addGitLabMRComment comment: message
-            currentBuild.result = 'FAILURE'
-          }
-        }
-      }
     }
     stage ("Local-Repo-Push") {
       steps {
         script {
-          catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
-            triggerSlaveJob ('RAN-Local-Repo-Push', 'Local-Repo-Push')
-          }
+          triggerSlaveJob ('RAN-Local-Repo-Push', 'Local-Repo-Push')
         }
       }
       post {
         failure {
           script {
-            echo "Push to local repository KO"
-            failingStages += '\n * RAN-Local-Repo-Push'
+            def message = "OAI " + JOB_NAME + " build (" + BUILD_ID + "): Cannot perform CI - merge validation failed (merge conflict, git operation failure, or internal CI error)."
+            addGitLabMRComment comment: message
+            currentBuild.result = 'FAILURE'
           }
         }
       }
@@ -914,14 +900,13 @@ def triggerSlaveJob (jobName, gitlabStatusName) {
 
 def triggerCN5GSlaveJob (jobName, gitlabStatusName) {
   if ("MERGE".equals(env.gitlabActionType)) {
-    shortenShaOne = sh returnStdout: true, script: 'git log -1 --pretty=format:"%h" --abbrev=8 ' + env.gitlabMergeRequestLastCommit
-    shortenShaOne = shortenShaOne.trim()
-    branchName = env.gitlabSourceBranch.replaceAll("/", "-").trim()
-    fullRanTag = OAI_Registry + '/oai-gnb:' + env.gitlabSourceBranch + '-' + shortenShaOne
+    shaOne = sh returnStdout: true, script: 'git log -1 --pretty=format:"%H" ' + env.gitlabMergeRequestLastCommit
+    shaOne = shaOne.trim()
+    fullRanTag = OAI_Registry + '/oai-gnb:' + env.gitlabSourceBranch + '-' + shaOne
   } else {
-    shortenShaOne = sh returnStdout: true, script: 'git log -1 --pretty=format:"%h" --abbrev=8 ' + env.GIT_COMMIT
-    shortenShaOne = shortenShaOne.trim()
-    fullRanTag = OAI_Registry + '/oai-gnb:develop-' + shortenShaOne
+    shaOne = sh returnStdout: true, script: 'git log -1 --pretty=format:"%H" ' + env.GIT_COMMIT
+    shaOne = shaOne.trim()
+    fullRanTag = OAI_Registry + '/oai-gnb:develop-' + shaOne
   }
   // Workaround for the "cancelled" GitLab pipeline notification
   // The slave job is triggered with the propagate false so the following commands are executed

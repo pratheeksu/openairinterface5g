@@ -403,8 +403,8 @@ int main(int argc, char **argv)
 	//init_nr_ue_transport(UE, 0);
   UE->nrLDPC_coding_interface = gNB->nrLDPC_coding_interface;
 
-  NR_UE_DLSCH_t dlsch_ue[NR_MAX_NB_LAYERS > 4? 2:1] = {0};
-  int num_codeword = NR_MAX_NB_LAYERS > 4? 2:1;
+  NR_UE_DLSCH_t dlsch_ue[NR_MAX_NB_LAYERS > 4 ? 2 : 1] = {0};
+  int num_codeword = NR_MAX_NB_LAYERS > 4 ? 2 : 1;
   nr_ue_dlsch_init(dlsch_ue, num_codeword, 5);
   for (int i=0; i < num_codeword; i++)
     dlsch_ue[0].rnti = n_rnti;
@@ -487,9 +487,9 @@ int main(int argc, char **argv)
 
 	//printf("crc32: [0]->0x%08x\n",crc24c(test_input, 32));
 	// generate signal
-        unsigned char output[nb_rb * NR_SYMBOLS_PER_SLOT * NR_NB_SC_PER_RB * NR_MAX_NB_LAYERS] __attribute__((aligned(64)));
-        bzero(output, sizeof(output));
-	if (input_fd == NULL) {
+  unsigned char output[nb_rb * NR_SYMBOLS_PER_SLOT * NR_NB_SC_PER_RB * NR_MAX_NB_LAYERS] __attribute__((aligned(64)));
+  bzero(output, sizeof(output));
+        if (input_fd == NULL) {
 	  nr_dlsch_encoding(gNB, 1, dlsch, frame, slot, output, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
 	}
 
@@ -536,7 +536,7 @@ int main(int argc, char **argv)
 			exit(-1);
 #endif
 
-      int a_segments = MAX_NUM_NR_DLSCH_SEGMENTS_PER_LAYER*NR_MAX_NB_LAYERS;  //number of segments to be allocated
+      int a_segments = MAX_NUM_NR_DLSCH_SEGMENTS; // number of segments to be allocated
       int num_rb = dlsch0_ue->dlsch_config.number_rbs;
       if (num_rb != 273) {
         a_segments = a_segments*num_rb;
