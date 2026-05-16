@@ -403,10 +403,11 @@ static int vrtsim_connect(openair0_device_t *device)
   if (vrtsim_state->role == ROLE_SERVER) {
     parse_ue_config(vrtsim_state);
     compute_ue_antenna_offsets(vrtsim_state);
-    int num_tx_streams = 0;
-    int num_rx_streams = vrtsim_state->num_ues * device->openair0_cfg[0].rx_num_channels;
+    int num_tx_streams = 0;  // DL: gNB TX to all UEs
+    int num_rx_streams = 0;  // UL: all UEs TX to gNB
     for (int i = 0; i < vrtsim_state->num_ues; i++) {
-      num_tx_streams += vrtsim_state->ue_conf[i].rx_ant;
+      num_tx_streams += vrtsim_state->ue_conf[i].rx_ant;  // DL streams
+      num_rx_streams += vrtsim_state->ue_conf[i].tx_ant;  // UL streams
     }
     vrtsim_state->channel =
         shm_td_iq_channel_create(DEFAULT_CHANNEL_NAME, num_tx_streams, num_rx_streams);
@@ -539,21 +540,21 @@ static int vrtsim_connect(openair0_device_t *device)
                       u);
 
           cirdb_connect(u,
-                        device->openair0_cfg[0].tx_num_channels,
+                        vrtsim_state->ue_conf[u].tx_ant,
                         vrtsim_state->ue_conf[u].rx_ant,
                         &ue_sel,
                         &vrtsim_state->channel_desc[u]);
 
           channel_desc_t *cd = vrtsim_state->channel_desc[u];
           AssertFatal(cd != NULL, "CIRDB failed to create channel_desc for UE %d\n", u);
-          AssertFatal(cd->nb_tx == device->openair0_cfg[0].tx_num_channels,
+          AssertFatal(cd->nb_tx == vrtsim_state->ue_conf[u].tx_ant,
                       "CIRDB shape mismatch UE%d: nb_tx=%d expected %d\n",
-                      u, cd->nb_tx, device->openair0_cfg[0].tx_num_channels);
+                      u, cd->nb_tx, vrtsim_state->ue_conf[u].tx_ant);
           LOG_I(HW, "VRTSIM: UE %d channel_desc=%p ch_ps=%p ch=%p nb_tx=%d nb_rx=%d\n",
                 u, cd, cd->ch_ps, cd->ch, cd->nb_tx, cd->nb_rx);
           LOG_I(HW, "VRTSIM: UE %d CIRDB - Model %d (TDL-%c), antennas %dx%d, nb_rx=%d\n",
                 u, ue_sel.want_model_id, 'A' + ue_sel.want_model_id,
-                device->openair0_cfg[0].tx_num_channels, vrtsim_state->ue_conf[u].rx_ant, cd->nb_rx);
+                vrtsim_state->ue_conf[u].tx_ant, vrtsim_state->ue_conf[u].rx_ant, cd->nb_rx);
         }
         LOG_A(HW, "VRTSIM: Multi-UE channel taps via CIR DB\n");
       } else {
@@ -629,10 +630,10 @@ static int vrtsim_write_with_chanmod(vrtsim_state_t *vrtsim_state,
     num_chan_desc = vrtsim_state->num_ues;
   }
   int rx_antenna_offset = 0;
-  int nb_tx = nbAnt;
   for (int i = 0; i < num_chan_desc; i++) {
     channel_desc_t *chan_desc = vrtsim_state->channel_desc[i];
     AssertFatal(chan_desc, "Channel not provided\n");
+    int nb_tx = chan_desc->nb_tx;
     int nb_rx = chan_desc->nb_rx;
     size_t channel_length = chan_desc->channel_length;
     AssertFatal((channel_length - 1) < SAVED_SAMPLES_LEN,
@@ -822,24 +823,29 @@ static int vrtsim_read(openair0_device_t *device, openair0_timestamp_t *ptimesta
       for (int aarx = 0; aarx < nbAnt; aarx++)
         memset(samplesVoid[aarx], 0, nsamps * sizeof(sample_t));
       for (int u = 0; u < vrtsim_state->num_ues; u++) {
-        for (int aarx = 0; aarx < nbAnt; aarx++) {
-          int stream = u * nbAnt + aarx;
-          sample_t buffer[nsamps];
-          int ret = shm_td_iq_channel_rx(vrtsim_state->channel,
-                                         vrtsim_state->last_received_sample,
-                                         nsamps,
-                                         stream,
-                                         buffer);
-          if (ret == CHANNEL_ERROR_TOO_LATE) {
-            vrtsim_state->rx_samples_late += nsamps;
-          } else if (ret == CHANNEL_ERROR_TOO_EARLY) {
-            vrtsim_state->rx_early += 1;
-          }
-          int16_t *out = (int16_t *)samplesVoid[aarx];
-          int16_t *in  = (int16_t *)buffer;
-          for (int i = 0; i < nsamps * 2; i++) {
-            int32_t sum = (int32_t)out[i] + (int32_t)in[i];
-            out[i] = (int16_t)((sum > 32767) ? 32767 : (sum < -32768) ? -32768 : sum);
+        int ue_tx_ant = vrtsim_state->ue_conf[u].tx_ant;
+        int tx_offset = vrtsim_state->ue_conf[u].tx_offset;
+        for (int tx_ant = 0; tx_ant < ue_tx_ant; tx_ant++) {
+          int stream = tx_offset + tx_ant;
+          // Combine UE TX antenna onto all gNB RX antennas
+          for (int aarx = 0; aarx < nbAnt; aarx++) {
+            sample_t buffer[nsamps];
+            int ret = shm_td_iq_channel_rx(vrtsim_state->channel,
+                                           vrtsim_state->last_received_sample,
+                                           nsamps,
+                                           stream,
+                                           buffer);
+            if (ret == CHANNEL_ERROR_TOO_LATE) {
+              vrtsim_state->rx_samples_late += nsamps;
+            } else if (ret == CHANNEL_ERROR_TOO_EARLY) {
+              vrtsim_state->rx_early += 1;
+            }
+            int16_t *out = (int16_t *)samplesVoid[aarx];
+            int16_t *in  = (int16_t *)buffer;
+            for (int i = 0; i < nsamps * 2; i++) {
+              int32_t sum = (int32_t)out[i] + (int32_t)in[i];
+              out[i] = (int16_t)((sum > 32767) ? 32767 : (sum < -32768) ? -32768 : sum);
+            }
           }
         }
       }
