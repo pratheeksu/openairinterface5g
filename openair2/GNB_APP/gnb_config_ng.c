@@ -11,6 +11,12 @@
 #include "sctp_default_values.h"
 #include "gnb_paramdef.h"
 #include "common/config/config_userapi.h"
+#include <stdio.h>
+#include <unistd.h>
+#include <arpa/inet.h>
+#include <sys/socket.h>
+#include <sys/types.h>
+#include <netdb.h>
 
 int RCconfig_NR_NG(MessageDef *msg_p, uint32_t i)
 {
@@ -95,8 +101,32 @@ int RCconfig_NR_NG(MessageDef *msg_p, uint32_t i)
 
             for (int l = 0; l < NGParamList.numelt; l++) {
               NGAP_REGISTER_GNB_REQ(msg_p).nb_amf += 1;
-              strcpy(NGAP_REGISTER_GNB_REQ(msg_p).amf_ip_address[l].ipv4_address,
-                     *(NGParamList.paramarray[l][GNB_AMF_IPV4_ADDRESS_IDX].strptr));
+              struct in_addr tmp;
+              int ret = inet_pton(AF_INET, *(NGParamList.paramarray[l][GNB_AMF_IPV4_ADDRESS_IDX].strptr), &tmp);
+              if (ret == 0) {
+                const char *port_str = "2152";
+                struct addrinfo hints, *res;
+                memset(&hints, 0x00, sizeof(hints));
+                hints.ai_family = AF_UNSPEC;
+                hints.ai_socktype = SOCK_STREAM;
+                int h_addr;
+                char buf[INET_ADDRSTRLEN];
+                LOG_I(GNB_APP, "Domain Name detected: %s\n", *(NGParamList.paramarray[l][GNB_AMF_IPV4_ADDRESS_IDX].strptr));
+                h_addr = getaddrinfo(*(NGParamList.paramarray[l][GNB_AMF_IPV4_ADDRESS_IDX].strptr), port_str, &hints, &res);
+                if (h_addr != 0) {
+                  LOG_W(GNB_APP, "Invalid AMF address\n");
+                  exit(-1);
+                }
+                struct sockaddr_in *addr = (struct sockaddr_in *)res->ai_addr;
+                inet_ntop(AF_INET, &addr->sin_addr, buf, INET_ADDRSTRLEN);
+                strcpy(NGAP_REGISTER_GNB_REQ(msg_p).amf_ip_address[l].ipv4_address, buf);
+                LOG_I(GNB_APP, "Resolved IPv4 address: %s\n", buf);
+                freeaddrinfo(res);
+              } else {
+                strcpy(NGAP_REGISTER_GNB_REQ(msg_p).amf_ip_address[l].ipv4_address,
+                       *(NGParamList.paramarray[l][GNB_AMF_IPV4_ADDRESS_IDX].strptr));
+              }
+
               NGAP_REGISTER_GNB_REQ(msg_p).amf_ip_address[l].ipv4 = 1;
               NGAP_REGISTER_GNB_REQ(msg_p).amf_ip_address[l].ipv6 = 0;
               /* if no broadcasst_plmn array is defined, fill default values */
@@ -130,7 +160,31 @@ int RCconfig_NR_NG(MessageDef *msg_p, uint32_t i)
               char *save = NULL;
               char *address = strtok_r(cidr, "/", &save);
               strcpy(NGAP_REGISTER_GNB_REQ(msg_p).gnb_ip_address.ipv4_address, address);
-              LOG_I(GNB_APP, "Parsed IPv4 address for NG AMF: %s\n", address);
+              LOG_I(GNB_APP, "Parsed gNB local IPv4 address for NG AMF: %s\n", address);
+            } else {
+              int sock = socket(AF_INET, SOCK_DGRAM, 0);
+              if (sock < 0) {
+                LOG_E(GNB_APP, "Failed to create socket for auto-detecting gNB IPv4 address\n");
+              }
+
+              struct sockaddr_in dst;
+              dst.sin_family = AF_INET;
+              dst.sin_port = htons(0);
+              inet_pton(AF_INET, NGAP_REGISTER_GNB_REQ(msg_p).amf_ip_address[0].ipv4_address, &dst.sin_addr);
+              connect(sock, (struct sockaddr *)&dst, sizeof(dst));
+              if (connect(sock, (struct sockaddr *)&dst, sizeof(dst)) < 0) {
+                LOG_E(GNB_APP, "Failed to connect socket for auto-detecting gNB IPv4 address\n");
+                close(sock);
+              }
+
+              struct sockaddr_in src;
+              socklen_t len = sizeof(src);
+              getsockname(sock, (struct sockaddr *)&src, &len);
+              char buf[INET_ADDRSTRLEN];
+              inet_ntop(AF_INET, &src.sin_addr, buf, sizeof(buf));
+              close(sock);
+              strcpy(NGAP_REGISTER_GNB_REQ(msg_p).gnb_ip_address.ipv4_address, buf);
+              LOG_I(GNB_APP, "Auto-detected  gNB local IPv4 address for NG AMF: %s\n", buf);
             }
 
             NGAP_REGISTER_GNB_REQ(msg_p).gnb_ip_address.ipv6 = 0;
