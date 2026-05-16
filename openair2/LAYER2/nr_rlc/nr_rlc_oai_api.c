@@ -403,6 +403,28 @@ int nr_rlc_module_init(nr_rlc_op_mode_t mode)
   return 0;
 }
 
+static void deliver_sdu_srb0(void *_ue, nr_rlc_entity_t *entity, char *buf, int size)
+{
+  nr_rlc_ue_t *ue = _ue;
+  AssertFatal(entity == ue->srb0, "Error! Function to deliver SRB0 called for a different entity\n");
+  uint8_t *message_buffer;
+  int is_gnb = nr_rlc_manager_get_gnb_flag(nr_rlc_ue_manager);
+  if (is_gnb) {
+    bool rlc_split = nr_rlc_manager_rlc_is_split(nr_rlc_ue_manager);
+    task_id_t dest = rlc_split ? TASK_DU_F1 : TASK_RRC_GNB;
+    message_buffer = itti_malloc(TASK_RLC_ENB, dest, size);
+    memcpy(message_buffer, buf, size);
+    ue->send_initial_srb0(ue->ue_id, message_buffer, size);
+  } else {
+    AssertFatal(size > 0 && size < CCCH_SDU_SIZE, "invalid CCCH SDU size %d\n", size);
+    MessageDef *message_p = itti_alloc_new_message(TASK_MAC_UE, 0, NR_RRC_MAC_CCCH_DATA_IND);
+    memset(NR_RRC_MAC_CCCH_DATA_IND(message_p).sdu, 0, size);
+    memcpy(NR_RRC_MAC_CCCH_DATA_IND(message_p).sdu, buf, size);
+    NR_RRC_MAC_CCCH_DATA_IND(message_p).sdu_size = size;
+    itti_send_msg_to_task(TASK_RRC_NRUE, ue->ue_id, message_p);
+  }
+}
+
 static void deliver_sdu(void *_ue, nr_rlc_entity_t *entity, char *buf, int size)
 {
   nr_rlc_ue_t *ue = _ue;
@@ -412,7 +434,7 @@ static void deliver_sdu(void *_ue, nr_rlc_entity_t *entity, char *buf, int size)
   uint8_t *memblock;
   int i;
 
-  /* is it SRB? */
+  /* is it a SRB != 0 */
   for (i = 0; i < sizeofArray(ue->srb); i++) {
     if (entity == ue->srb[i]) {
       is_srb = 1;
@@ -450,31 +472,21 @@ rb_found:
   /* CU (PDCP, RRC, SDAP) use a different ID than RNTI, so below set the CU UE
    * ID if in gNB, else use RNTI normally */
   ctx.rntiMaybeUEid = ue->ue_id;
-  if (is_gnb) {
-    f1_ue_data_t ue_data = du_get_f1_ue_data(ue->ue_id);
-    ctx.rntiMaybeUEid = ue_data.secondary_ue;
-  }
-
   ctx.enb_flag = is_gnb;
 
   if (is_gnb) {
+    f1_ue_data_t ue_data = du_get_f1_ue_data(ue->ue_id);
+    ctx.rntiMaybeUEid = ue_data.secondary_ue;
     T(T_ENB_RLC_UL,
       T_INT(0 /*ctxt_pP->module_id*/),
       T_INT(ue->ue_id), T_INT(rb_id), T_INT(size));
-
-    // if (NODE_IS_DU(type) && is_srb == 0) {
-    //   LOG_D(RLC, "call proto_agent_send_pdcp_data_ind() \n");
-    //   proto_agent_send_pdcp_data_ind(&ctx, is_srb, 0, rb_id, size, memblock);
-    //   return;
-    // }
-
     bool rlc_split = nr_rlc_manager_rlc_is_split(nr_rlc_ue_manager);
     if (rlc_split) {
       if(is_srb) {
         MessageDef *msg;
         msg = itti_alloc_new_message(TASK_RLC_ENB, 0, F1AP_UL_RRC_MESSAGE);
-        uint8_t *message_buffer = itti_malloc (TASK_RLC_ENB, TASK_DU_F1, size);
-        memcpy (message_buffer, buf, size);
+        uint8_t *message_buffer = itti_malloc(TASK_RLC_ENB, TASK_DU_F1, size);
+        memcpy(message_buffer, buf, size);
         F1AP_UL_RRC_MESSAGE(msg).gNB_CU_ue_id = ctx.rntiMaybeUEid;
         F1AP_UL_RRC_MESSAGE(msg).gNB_DU_ue_id = ue->ue_id;
         F1AP_UL_RRC_MESSAGE(msg).srb_id = rb_id;
@@ -902,43 +914,15 @@ void nr_rlc_add_drb(int ue_id, int drb_id, const NR_RLC_BearerConfig_t *rlc_Bear
   LOG_I(RLC, "Added DRB to UE %d\n", ue_id);
 }
 
-struct srb0_data {
-  int ue_id;
-  void *data;
-  void (*send_initial_ul_rrc_message)(int ue_id, const uint8_t *sdu, sdu_size_t sdu_len, void *data);
-};
-
-void deliver_sdu_srb0(void *deliver_sdu_data, nr_rlc_entity_t *entity, char *buf, int size)
-{
-  UNUSED(entity);
-  struct srb0_data *s0 = (struct srb0_data *)deliver_sdu_data;
-  s0->send_initial_ul_rrc_message(s0->ue_id, (unsigned char *)buf, size, s0->data);
-}
-
-bool nr_rlc_activate_srb0(int ue_id,
-                          void *data,
-                          void (*send_initial_ul_rrc_message)(int ue_id, const uint8_t *sdu, sdu_size_t sdu_len, void *data))
+void nr_rlc_init_ue(int ue_id, void (*send_initial_srb0)(int ue_id, const uint8_t *sdu, int sdu_len))
 {
   nr_rlc_manager_lock(nr_rlc_ue_manager);
   nr_rlc_ue_t *ue = nr_rlc_manager_get_ue(nr_rlc_ue_manager, ue_id);
-  if (ue->srb0 != NULL) {
-    LOG_W(RLC, "SRB0 already exists for UE %x, do nothing\n", ue_id);
-    nr_rlc_manager_unlock(nr_rlc_ue_manager);
-    return false;
-  }
-  struct srb0_data *srb0_data = calloc(1, sizeof(struct srb0_data));
-  AssertFatal(srb0_data, "out of memory\n");
-
-  srb0_data->ue_id = ue_id;
-  srb0_data->data = data;
-  srb0_data->send_initial_ul_rrc_message = send_initial_ul_rrc_message;
-
-  nr_rlc_entity_t *nr_rlc_tm = new_nr_rlc_entity_tm(10000, deliver_sdu_srb0, srb0_data);
+  nr_rlc_entity_t *nr_rlc_tm = new_nr_rlc_entity_tm(10000, deliver_sdu_srb0, ue);
   nr_rlc_ue_add_srb_rlc_entity(ue, 0, nr_rlc_tm);
-
-  LOG_I(RLC, "Activated srb0 for UE %d\n", ue_id);
+  ue->send_initial_srb0 = send_initial_srb0;
+  LOG_I(RLC, "RLC initialized for UE %d\n", ue_id);
   nr_rlc_manager_unlock(nr_rlc_ue_manager);
-  return true;
 }
 
 void nr_rlc_remove_ue(int ue_id)
