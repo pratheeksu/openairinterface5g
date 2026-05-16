@@ -92,18 +92,17 @@ static void tx_func(processingData_L1tx_t *info)
   pushNotifiedFIFO(&gNB->resp_L1, res);
 
   int tx_slot_type = nr_slot_select(cfg, frame_tx, slot_tx);
-  // TODO check for analog_bf_vendor_ext set to 1 is a workaround while no beam API for beam selection is implemented
-  if (tx_slot_type == NR_DOWNLINK_SLOT || tx_slot_type == NR_MIXED_SLOT || get_softmodem_params()->continuous_tx
-      || IS_SOFTMODEM_RFSIM || cfg->analog_beamforming_ve.analog_bf_vendor_ext.value) {
+  if (tx_slot_type == NR_DOWNLINK_SLOT || tx_slot_type == NR_MIXED_SLOT || get_softmodem_params()->continuous_tx || IS_SOFTMODEM_RFSIM) {
     start_meas(&info->gNB->phy_proc_tx);
     phy_procedures_gNB_TX(info->gNB, &sched_response.DL_req, &sched_response.TX_req, &sched_response.UL_dci_req, frame_tx,slot_tx);
-
-    PHY_VARS_gNB *gNB = info->gNB;
-    processingData_RU_t syncMsgRU;
-    syncMsgRU.frame_tx = frame_tx;
-    syncMsgRU.slot_tx = slot_tx;
-    syncMsgRU.ru = gNB->RU_list[0];
-    syncMsgRU.timestamp_tx = info->timestamp_tx;
+  }
+  processingData_RU_t syncMsgRU;
+  syncMsgRU.frame_tx = frame_tx;
+  syncMsgRU.slot_tx = slot_tx;
+  syncMsgRU.ru = gNB->RU_list[0];
+  syncMsgRU.timestamp_tx = info->timestamp_tx;
+  ru_ctrl_func((void *)&syncMsgRU);
+  if (tx_slot_type == NR_DOWNLINK_SLOT || tx_slot_type == NR_MIXED_SLOT || get_softmodem_params()->continuous_tx || IS_SOFTMODEM_RFSIM) {
     LOG_D(PHY, "gNB: %d.%d : calling RU TX function\n", syncMsgRU.frame_tx, syncMsgRU.slot_tx);
     ru_tx_func((void *)&syncMsgRU);
     stop_meas(&info->gNB->phy_proc_tx);

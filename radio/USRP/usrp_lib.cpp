@@ -80,6 +80,7 @@ typedef struct {
   int64_t rx_count;
   int wait_for_first_pps;
   int use_gps;
+  int prev_beam;
   //int first_tx;
   //int first_rx;
   //! timestamp of RX packet
@@ -313,6 +314,7 @@ static int trx_usrp_start(openair0_device_t *device)
   //s->first_tx = 1;
   //s->first_rx = 1;
   s->rx_timestamp = 0;
+  s->prev_beam = -1;
 
     //wait for next pps
   uhd::time_spec_t last_pps = s->usrp->get_time_last_pps();
@@ -357,6 +359,43 @@ static void trx_usrp_finish_rx(usrp_state_t *s)
   do {
     samples = s->rx_stream->recv(buff_ptrs, sizeof(buf)/4, s->rx_md);
   } while (samples > 0);
+}
+
+static int trx_set_beam(openair0_device_t *device, int *beams, int num_beams, openair0_timestamp_t timestamp)
+{
+  AssertFatal(beams, "Invalid input for beams %p, vector not present\n", beams);
+  AssertFatal(num_beams == 1, "Cannot handle more than 1 concurrent beam in USRP\n");
+  usrp_state_t *s = (usrp_state_t *)device->priv;
+  // to keep consistent with previous integration where we sent beam information to GPIO
+  // only if it changed to avoid unnecessary timing issues that the procedure may cause
+  if (beams[0] == s->prev_beam)
+    return 0;
+  else
+    s->prev_beam = beams[0];
+  int gpio = 0;
+  switch (device->openair0_cfg->gpio_controller) {
+    case RU_GPIO_CONTROL_GENERIC:
+      AssertFatal(beams[0] < 8, "Only 3 bits available for setting beams\n");
+      gpio = s->prev_beam | TX_GPIO_CHANGE;
+      break;
+    case RU_GPIO_CONTROL_INTERDIGITAL:
+      // TODO
+      break;
+    default:
+      AssertFatal(false, "illegal GPIO controller for beam handling %d\n", device->openair0_cfg->gpio_controller);
+  }
+  radio_tx_gpio_flag_t flags_gpio = (radio_tx_gpio_flag_t) gpio;
+  // bit 13 enables gpio
+  timestamp -= device->openair0_cfg->command_line_sample_advance + device->openair0_cfg->tx_sample_advance;
+  s->tx_md.time_spec = uhd::time_spec_t::from_ticks(timestamp, s->sample_rate);
+
+  VCD_SIGNAL_DUMPER_DUMP_FUNCTION_BY_NAME(VCD_SIGNAL_DUMPER_FUNCTIONS_BEAM_SWITCHING_GPIO, 1);
+  // push GPIO bits
+  s->usrp->set_command_time(s->tx_md.time_spec);
+  s->usrp->set_gpio_attr(s->gpio_bank, "OUT", flags_gpio, MAN_MASK);
+  s->usrp->clear_command_time();
+  VCD_SIGNAL_DUMPER_DUMP_FUNCTION_BY_NAME(VCD_SIGNAL_DUMPER_FUNCTIONS_BEAM_SWITCHING_GPIO, 0);
+  return 0;
 }
 
 static void trx_usrp_write_reset(openair0_thread_t *wt);
@@ -418,7 +457,6 @@ static int trx_usrp_write(openair0_device_t *device,
   int nsamps2;  // aligned to upper 32 or 16 byte boundary
 
   radio_tx_burst_flag_t flags_burst = (radio_tx_burst_flag_t) (flags & 0xf);
-  radio_tx_gpio_flag_t flags_gpio = (radio_tx_gpio_flag_t) ((flags >> 4) & 0x1fff);
 
   int end;
   openair0_thread_t *write_thread = &device->write_thread;
@@ -480,16 +518,6 @@ static int trx_usrp_write(openair0_device_t *device,
       s->tx_md.time_spec = uhd::time_spec_t::from_ticks(timestamp, s->sample_rate);
       s->tx_count++;
 
-      VCD_SIGNAL_DUMPER_DUMP_FUNCTION_BY_NAME(VCD_SIGNAL_DUMPER_FUNCTIONS_BEAM_SWITCHING_GPIO, 1);
-      // bit 13 enables gpio
-      if ((flags_gpio & TX_GPIO_CHANGE) != 0) {
-        // push GPIO bits
-        s->usrp->set_command_time(s->tx_md.time_spec);
-        s->usrp->set_gpio_attr(s->gpio_bank, "OUT", flags_gpio, MAN_MASK);
-        s->usrp->clear_command_time();
-      }
-      VCD_SIGNAL_DUMPER_DUMP_FUNCTION_BY_NAME(VCD_SIGNAL_DUMPER_FUNCTIONS_BEAM_SWITCHING_GPIO, 0);
-
       if (cc > 1) {
         std::vector<void *> buff_ptrs;
 
@@ -524,7 +552,7 @@ static int trx_usrp_write(openair0_device_t *device,
       write_package[end].cc = cc;
       write_package[end].first_packet = first_packet_state;
       write_package[end].last_packet = last_packet_state;
-      write_package[end].flags_gpio = flags_gpio;
+      //write_package[end].flags_gpio = flags_gpio;
       for (int i = 0; i < cc; i++)
         write_package[end].buff[i] = buff[i];
       write_thread->count_write++;
@@ -1519,6 +1547,7 @@ extern "C" {
   LOG_I(HW,"Device timestamp: %f...\n", s->usrp->get_time_now().get_real_secs());
   device->trx_write_func = trx_usrp_write;
   device->trx_read_func  = trx_usrp_read;
+  device->trx_set_beams2 = trx_set_beam;
   s->sample_rate = openair0_cfg[0].sample_rate;
 
   // TODO:

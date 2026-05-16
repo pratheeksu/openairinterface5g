@@ -347,17 +347,28 @@ static void rx_rf(RU_t *ru, int *frame, int *slot)
   AssertFatal(*slot < fp->slots_per_frame && *slot >= 0, "slot %d is illegal (%d)\n", *slot, fp->slots_per_frame);
 
   start_meas(&ru->rx_fhaul);
-  int nb = ru->nb_rx * ru->num_beams_period;
-  void *rxp[nb];
-  for (int i = 0; i < nb; i++)
-    rxp[i] = (void *)&ru->common.rxdata[i][get_samples_slot_timestamp(fp, *slot)];
-
   openair0_timestamp_t old_ts = proc->timestamp_rx;
-  LOG_D(PHY,"Reading %d samples for slot %d (%p)\n", samples_per_slot, *slot, rxp[0]);
-
   openair0_timestamp_t ts;
   unsigned int rxs;
-  rxs = ru->rfdevice.trx_read_func(&ru->rfdevice, &ts, rxp, samples_per_slot, nb);
+  metadata mt = {.slot = *slot, .frame = *frame};
+  if (ru->num_beams_period > 1) {
+    void *rxp_flat[ru->num_beams_period * ru->nb_rx];
+    void **rxp[ru->num_beams_period];
+    for (int j = 0; j < ru->num_beams_period; j++) {
+      for (int i = 0; i < ru->nb_rx; i++)
+        rxp_flat[i + j * ru->nb_rx] = (void *)&ru->common.rxdata[i + j * ru->nb_rx][get_samples_slot_timestamp(fp, *slot)];
+      rxp[j] = &rxp_flat[j * ru->nb_rx];
+    }
+    rxs = ru->rfdevice.trx_read_beams_func(&ru->rfdevice, &ts, (void ***)rxp, samples_per_slot, ru->nb_rx, ru->num_beams_period);
+    gNBscopeCopyWithMetadata(ru, gNbTimeDomainSamples, rxp[0][0], sizeof(c16_t), 1, samples_per_slot, 0, &mt);
+  } else {
+    void *rxp[ru->nb_rx];
+    for (int i = 0; i < ru->nb_rx; i++)
+      rxp[i] = (void *)&ru->common.rxdata[i][get_samples_slot_timestamp(fp, *slot)];
+    rxs = ru->rfdevice.trx_read_func(&ru->rfdevice, &ts, rxp, samples_per_slot, ru->nb_rx);
+    gNBscopeCopyWithMetadata(ru, gNbTimeDomainSamples, rxp[0], sizeof(c16_t), 1, samples_per_slot, 0, &mt);
+  }
+
   proc->timestamp_rx = ts-ru->ts_offset;
 
   if (rxs != samples_per_slot)
@@ -422,17 +433,28 @@ static void rx_rf(RU_t *ru, int *frame, int *slot)
     proc->first_rx = 0;
     *frame = proc->frame_rx;
     *slot  = proc->tti_rx;
+    samples_per_slot = get_samples_per_slot(*slot, fp); // slot number might change depending on the timestamp
 
     // Align to slot boundary
     uint64_t samples_to_slot_boundary = 0;
     uint64_t sample_offset_within_frame = proc->timestamp_rx % fp->samples_per_frame;
     uint64_t sample_offset_within_slot = sample_offset_within_frame - get_samples_slot_timestamp(fp, *slot);
     if (sample_offset_within_slot > 0) {
-      samples_to_slot_boundary = get_samples_per_slot(*slot, fp) - sample_offset_within_slot;
+      samples_to_slot_boundary = samples_per_slot - sample_offset_within_slot;
       LOG_A(NR_PHY, "Aligning to the slot boundary %lu\n", samples_to_slot_boundary);
-
       // Read and discard the samples in the first_rx to align to the slot boundary
-      rxs = ru->rfdevice.trx_read_func(&ru->rfdevice, &ts, rxp, samples_to_slot_boundary, nb);
+      if (ru->num_beams_period > 1) {
+        void *rxp_skip_b[ru->num_beams_period][ru->nb_rx];
+        rxs = ru->rfdevice.trx_read_beams_func(&ru->rfdevice,
+                                               &ts,
+                                               (void ***)rxp_skip_b,
+                                               samples_to_slot_boundary,
+                                               ru->nb_rx,
+                                               ru->num_beams_period);
+      } else {
+        void *rxp_skip[ru->nb_rx];
+        rxs = ru->rfdevice.trx_read_func(&ru->rfdevice, &ts, rxp_skip, samples_to_slot_boundary, ru->nb_rx);
+      }
       if (rxs != samples_to_slot_boundary)
         LOG_E(PHY, "rx_rf: Asked for %ld samples, got %d from USRP\n", samples_to_slot_boundary, rxs);
 
@@ -442,59 +464,92 @@ static void rx_rf(RU_t *ru, int *frame, int *slot)
       *slot = (*slot + 1) % fp->slots_per_frame;
     }
   }
-
-  metadata mt = {.slot = *slot, .frame = *frame};
-  gNBscopeCopyWithMetadata(ru, gNbTimeDomainSamples, rxp[0], sizeof(c16_t), 1, samples_per_slot, 0, &mt);
-
   stop_meas(&ru->rx_fhaul);
 }
 
-static radio_tx_gpio_flag_t get_gpio_flags(RU_t *ru, int slot)
+static void ctrl_rf(RU_t *ru, int frame, int slot, uint64_t timestamp)
 {
-  radio_tx_gpio_flag_t flags_gpio = 0;
   NR_DL_FRAME_PARMS *fp = ru->nr_frame_parms;
-  openair0_config_t *cfg0 = &ru->openair0_cfg;
+  int num_events = 0;
+  int event_symbol[fp->symbols_per_slot];
+  int event_counts[fp->symbols_per_slot];
+  int beam_events[fp->symbols_per_slot][ru->num_beams_period];
 
-  switch (cfg0->gpio_controller) {
-    case RU_GPIO_CONTROL_GENERIC:
-      // currently we switch beams at the beginning of a slot and we take the beam index of the first symbol of this slot
-      // we only send the beam to the gpio if the beam is different from the previous slot
+  int last_applied_beams[ru->num_beams_period];
+  for (int i = 0; i < ru->num_beams_period; i++)
+    last_applied_beams[i] = -1;
 
-      if (ru->common.beam_id) {
-        int prev_slot = (slot - 1 + fp->slots_per_frame) % fp->slots_per_frame;
-        const int *beam_ids = ru->common.beam_id[0];
-        int prev_beam = beam_ids[prev_slot * fp->symbols_per_slot];
-        int beam = beam_ids[slot * fp->symbols_per_slot];
-        if (prev_beam != beam) {
-          flags_gpio = beam | TX_GPIO_CHANGE; // enable change of gpio
-          LOG_I(HW, "slot %d, beam %d\n", slot, ru->common.beam_id[0][slot * fp->symbols_per_slot]);
-        }
-      }
-      break;
+  int first_available_sym = 0;
+  bool idle_beam = true;
+  for (int j = 0; j < fp->symbols_per_slot; j++) {
+    int current_beams[ru->num_beams_period];
+    int active_count = 0;
+    bool differs = false;
 
-    case RU_GPIO_CONTROL_INTERDIGITAL: {
-      // the beam index is written in bits 8-10 of the flags
-      // bit 11 enables the gpio programming
-      int beam = 0;
-      if ((slot % 10 == 0) && ru->common.beam_id && (ru->common.beam_id[0][slot * fp->symbols_per_slot] < 64)) {
-        // beam = ru->common.beam_id[0][slot*fp->symbols_per_slot] | 64;
-        beam = 1024; // hardcoded now for beam32 boresight
-        // beam = 127; //for the sake of trying beam63
-        LOG_D(HW, "slot %d, beam %d\n", slot, beam);
-      }
-      flags_gpio = beam | TX_GPIO_CHANGE;
-      // flags_gpio |= beam << 8; // MSB 8 bits are used for beam
-      LOG_I(HW, "slot %d, beam %d, flags_gpio %d\n", slot, beam, flags_gpio);
-      break;
+    for (int i = 0; i < ru->num_beams_period; i++) {
+      current_beams[i] = ru->common.beam_id[i][slot * fp->symbols_per_slot + j];
+      if (current_beams[i] != last_applied_beams[i])
+        differs = true;
+      if (current_beams[i] != -1)
+        active_count++;
     }
-    default:
-      AssertFatal(false, "illegal GPIO controller %d\n", cfg0->gpio_controller);
+
+    if (active_count > 0) {
+      if (differs) {
+        event_symbol[num_events] = first_available_sym;
+        event_counts[num_events] = 0;
+        for (int i = 0; i < ru->num_beams_period; i++) {
+          if (current_beams[i] != -1) {
+            beam_events[num_events][event_counts[num_events]] = current_beams[i];
+            event_counts[num_events]++;
+          }
+          last_applied_beams[i] = current_beams[i];
+        }
+        num_events++;
+      }
+      idle_beam = false;
+      first_available_sym = j;
+    } else {
+      if (!idle_beam) {
+        first_available_sym = j;
+        idle_beam = true;
+        for (int i = 0; i < ru->num_beams_period; i++)
+          last_applied_beams[i] = -1;
+      }
+    }
   }
 
-  return flags_gpio;
+  nfapi_nr_config_request_scf_t *cfg = &ru->config;
+  uint64_t slot_base_ts = timestamp + ru->ts_offset;
+  if (cfg->cell_config.frame_duplex_type.value == TDD
+      && nr_slot_select(cfg, frame, slot % fp->slots_per_frame) == NR_DOWNLINK_SLOT
+      && nr_slot_select(cfg, frame, (slot + fp->slots_per_frame - 1) % fp->slots_per_frame) == NR_UPLINK_SLOT
+      && !get_softmodem_params()->continuous_tx && !IS_SOFTMODEM_RFSIM) {
+    slot_base_ts -= ru->sf_extension;
+  }
+
+  for (int e = 0; e < num_events; e++) {
+    if (e > 0 && event_symbol[e] == event_symbol[e-1])
+      continue;
+
+    uint64_t symbol_offset = 0;
+    if (event_symbol[e] > 0)
+      symbol_offset = get_samples_symbol_duration(fp, slot, 0, event_symbol[e]);
+
+    uint64_t event_ts = slot_base_ts + symbol_offset;
+    for (int n = 0; n < event_counts[e]; n++)
+      LOG_D(NR_PHY,
+            "RU Control [%d.%d]: Trigger Sym %d, Beam %d at TS %lu\n",
+            frame,
+            slot,
+            event_symbol[e],
+            beam_events[e][n],
+            event_ts);
+    ru->rfdevice.trx_set_beams2(&ru->rfdevice, beam_events[e], event_counts[e], event_ts);
+  }
 }
 
-void tx_rf(RU_t *ru, int frame,int slot, uint64_t timestamp)
+static void tx_rf(RU_t *ru, int frame, int slot, uint64_t timestamp)
 {
   RU_proc_t *proc = &ru->proc;
   NR_DL_FRAME_PARMS *fp = ru->nr_frame_parms;
@@ -509,7 +564,6 @@ void tx_rf(RU_t *ru, int frame,int slot, uint64_t timestamp)
   int sf_extension = 0;
   int siglen = get_samples_per_slot(slot, fp);
   radio_tx_burst_flag_t flags_burst = TX_BURST_INVALID;
-  radio_tx_gpio_flag_t flags_gpio = 0;
 
   if (cfg->cell_config.frame_duplex_type.value == TDD && !get_softmodem_params()->continuous_tx && !IS_SOFTMODEM_RFSIM) {
     int slot_type = nr_slot_select(cfg,frame,slot%fp->slots_per_frame);
@@ -553,24 +607,41 @@ void tx_rf(RU_t *ru, int frame,int slot, uint64_t timestamp)
     flags_burst = proc->first_tx == 1 ? TX_BURST_START : TX_BURST_MIDDLE;
   }
 
-  if (ru->openair0_cfg.gpio_controller != RU_GPIO_CONTROL_NONE)
-    flags_gpio = get_gpio_flags(ru, slot);
-
-  const int flags = flags_burst | (flags_gpio << 4);
   proc->first_tx = 0;
 
-  int nt = ru->nb_tx * ru->num_beams_period;
-  void *txp[nt];
-  for (int i = 0; i < nt; i++)
-    txp[i] = (void *)&ru->common.txdata[i][get_samples_slot_timestamp(fp, slot)] - sf_extension * sizeof(int32_t);
+  double sig_en = 0;
+  uint32_t txs;
+  if (ru->num_beams_period > 1) {
+    void *txp_flat[ru->num_beams_period * ru->nb_tx];
+    void **txp[ru->num_beams_period];
+    for (int b = 0; b < ru->num_beams_period; b++) {
+      for (int i = 0; i < ru->nb_tx; i++)
+        txp_flat[b * ru->nb_tx + i] = (void *)&ru->common.txdata[i + b * ru->nb_tx][get_samples_slot_timestamp(fp, slot)] - sf_extension * sizeof(int32_t);
+      txp[b] = &txp_flat[b * ru->nb_tx];
+    }
+    sig_en = (double)signal_energy(txp[0][0], siglen + sf_extension);
+    txs = ru->rfdevice.trx_write_beams_func(&ru->rfdevice,
+                                            timestamp + ru->ts_offset - sf_extension,
+                                            (void ***)txp,
+                                            siglen + sf_extension,
+                                            ru->nb_tx,
+                                            ru->num_beams_period,
+                                            flags_burst);
+  } else {
+    void *txp[ru->nb_tx];
+    for (int i = 0; i < ru->nb_tx; i++)
+      txp[i] = (void *)&ru->common.txdata[i][get_samples_slot_timestamp(fp, slot)] - sf_extension * sizeof(int32_t);
 
-  // prepare tx buffer pointers
-  uint32_t txs = ru->rfdevice.trx_write_func(&ru->rfdevice,
-                                             timestamp + ru->ts_offset - sf_extension,
-                                             txp,
-                                             siglen + sf_extension,
-                                             nt,
-                                             flags);
+    sig_en = (double)signal_energy(txp[0], siglen + sf_extension);
+    // prepare tx buffer pointers
+    txs = ru->rfdevice.trx_write_func(&ru->rfdevice,
+                                      timestamp + ru->ts_offset - sf_extension,
+                                      txp,
+                                      siglen + sf_extension,
+                                      ru->nb_tx,
+                                      flags_burst);
+  }
+
   LOG_D(PHY,
         "[TXPATH] RU %d tx_rf, writing to TS %lu, %d.%d, unwrapped_frame %d, slot %d, flags %d, siglen+sf_extension %d, "
         "returned %d, E %f\n",
@@ -580,10 +651,10 @@ void tx_rf(RU_t *ru, int frame,int slot, uint64_t timestamp)
         slot,
         proc->frame_tx_unwrap,
         slot,
-        flags,
+        flags_burst,
         siglen + sf_extension,
         txs,
-        10 * log10((double)signal_energy(txp[0], siglen + sf_extension)));
+        10 * log10(sig_en));
 }
 
 static void fill_rf_config(RU_t *ru, char *rf_config_file)
@@ -735,6 +806,25 @@ int setup_RU_buffers(RU_t *ru)
   }
 
   return(0);
+}
+
+void ru_ctrl_func(void *param)
+{
+  processingData_RU_t *info = (processingData_RU_t *) param;
+  int frame = info->frame_tx;
+  int slot = info->slot_tx;
+  LOG_D(PHY,"ru_ctrl_func: frame = %d, slot = %d\n", frame, slot);
+  RU_t *ru = info->ru;
+  NR_DL_FRAME_PARMS *fp = ru->nr_frame_parms;
+  if (ru->gNB_list[0]->common_vars.analog_bf) {
+    for (int i = 0; i < ru->num_beams_period; i++) {
+      memcpy((void*) &ru->common.beam_id[i][slot * fp->symbols_per_slot],
+             (void*) &ru->gNB_list[0]->common_vars.beam_id[i][slot * fp->symbols_per_slot],
+             (fp->symbols_per_slot) * sizeof(int));
+    }
+  }
+  if (ru->fh_south_ctrl)
+    ru->fh_south_ctrl(ru, frame, slot, info->timestamp_tx);
 }
 
 void ru_tx_func(void *param)
@@ -1132,6 +1222,7 @@ void set_function_spec_param(RU_t *ru)
         ru->rfdevice.host_type   = RAU_HOST;
         ru->fh_south_in            = rx_rf;                 // local synchronous RF RX
         ru->fh_south_out           = tx_rf;                 // local synchronous RF TX
+        ru->fh_south_ctrl = ctrl_rf; // local sunchronous RF control
         ru->start_rf               = start_rf;              // need to start the local RF interface
         ru->stop_rf                = stop_rf;
         ru->start_write_thread     = start_write_thread;                  // starting RF TX in different thread
