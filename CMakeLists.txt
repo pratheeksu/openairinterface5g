@@ -2201,6 +2201,7 @@ if(ENABLE_TESTS)
 
   find_package(benchmark)
   if (NOT benchmark_FOUND)
+    add_compile_options(-Wno-maybe-uninitialized)
     message(STATUS "benchmark package not found, will download benchmark automatically. To prevent that install google benchmark on your system (libbenchmark-dev)")
     CPMAddPackage(
       NAME benchmark
@@ -2220,6 +2221,11 @@ add_subdirectory(openair2)
 add_subdirectory(openair3)
 add_subdirectory(radio)
 add_subdirectory(tests)
+
+add_boolean_option(OAI_FRONTHAUL OFF "Whether to configure OAI fronthaul library" OFF)
+if(OAI_FRONTHAUL)
+  add_subdirectory(fronthaul)
+endif()
 
 if(TARGET oai_cuda_lib)
     message(STATUS "CUDA library 'oai_cuda_lib' found, linking to targets...")
