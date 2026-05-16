@@ -66,14 +66,17 @@ static void clear_beam_information(NR_beam_info_t *beam_info, int frame, int slo
   if (beam_info->beam_mode == NO_BEAM_MODE)
     return;
   // initialization done only once
-  AssertFatal(beam_info->beam_allocation_size >= 0, "Beam information not initialized\n");
-  int idx_to_clear = (frame * slots_per_frame + slot) / beam_info->beam_duration;
-  idx_to_clear = (idx_to_clear + beam_info->beam_allocation_size - 1) % beam_info->beam_allocation_size;
-  if (slot % beam_info->beam_duration == 0) {
+  AssertFatal(beam_info->beam_allocation_size[0] >= 0
+              && beam_info->beam_allocation_size[1] >= 0,
+              "Beam information not initialized\n");
+  int idx_to_clear = (frame * slots_per_frame + slot) / beam_info->beam_slot_duration;
+  idx_to_clear = (idx_to_clear + beam_info->beam_allocation_size[0] - 1) % beam_info->beam_allocation_size[0];
+  if (slot % beam_info->beam_slot_duration == 0) {
     // resetting previous period allocation
     LOG_D(NR_MAC, "%d.%d Clear beam information for index %d\n", frame, slot, idx_to_clear);
     for (int i = 0; i < beam_info->beams_per_period; i++)
-      beam_info->beam_allocation[i][idx_to_clear] = -1;
+      for (int k = 0; k < beam_info->beam_allocation_size[1]; k++)
+        beam_info->beam_allocation[i][idx_to_clear][k] = -1;
   }
 }
 

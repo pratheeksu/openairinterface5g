@@ -446,10 +446,15 @@ uint64_t get_ssb_bitmap(const NR_ServingCellConfigCommon_t *scc);
 uint64_t get_ssb_bitmap_and_len(const NR_ServingCellConfigCommon_t *scc, uint8_t *len);
 void fill_beam_index_list(NR_ServingCellConfigCommon_t *scc, const nr_mac_config_t *config, gNB_MAC_INST *mac);
 int get_beam_from_ssbidx(gNB_MAC_INST *mac, int ssb_idx);
-int16_t get_allocated_beam(const NR_beam_info_t *beam_info, int frame, int slot, int slots_per_frame, int beam_number_in_period);
 uint16_t convert_to_fapi_beam(const uint16_t beam_idx, const nr_beam_mode_t mode);
-NR_beam_alloc_t beam_allocation_procedure(NR_beam_info_t *beam_info, int frame, int slot, int16_t beam_index, int slots_per_frame);
-void reset_beam_status(NR_beam_info_t *beam_info, int frame, int slot, int16_t beam_index, int slots_per_frame, bool new_beam);
+NR_beam_alloc_t beam_allocation_procedure(NR_beam_info_t *beam_info,
+                                          int frame,
+                                          int slot,
+                                          int start_symbol,
+                                          int nb_symbols,
+                                          int16_t beam_index,
+                                          int slots_per_frame);
+void reset_beam_status(NR_beam_info_t *beam_info, int frame, int slot, int16_t beam_alloc, int slots_per_frame, uint16_t new_beam);
 int beam_selection_procedures(gNB_MAC_INST *mac, NR_UE_info_t *UE);
 void beam_switching_procedure(gNB_MAC_INST *mac, NR_UE_info_t *UE, int new_beam_index);
 void nr_sr_reporting(gNB_MAC_INST *nrmac, frame_t frameP, slot_t slotP);

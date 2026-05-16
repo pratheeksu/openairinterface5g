@@ -188,14 +188,16 @@ void schedule_nr_mib(module_id_t module_idP, frame_t frameP, slot_t slotP, nfapi
         if (is_ssb_configured(scc, i_ssb)) {
           uint16_t ssb_start_symbol = get_ssb_start_symbol(band, scs, i_ssb);
           // if start symbol is in current slot, schedule current SSB, fill VRB map and call get_type0_PDCCH_CSS_config_parameters
-          if ((ssb_start_symbol / 14) == rel_slot) {
+          if ((ssb_start_symbol / NR_SYMBOLS_PER_SLOT) == rel_slot) {
+            const uint16_t alloc_beam_idx = get_beam_from_ssbidx(gNB, i_ssb);
             NR_beam_alloc_t beam = beam_allocation_procedure(&gNB->beam_info,
                                                              frameP,
                                                              slotP,
-                                                             get_beam_from_ssbidx(gNB, i_ssb),
+                                                             ssb_start_symbol % NR_SYMBOLS_PER_SLOT,
+                                                             4,
+                                                             alloc_beam_idx,
                                                              slots_per_frame);
             AssertFatal(beam.idx >= 0, "Cannot allocate SSB %d in any available beam\n", i_ssb);
-            const uint16_t alloc_beam_idx = get_allocated_beam(&gNB->beam_info, frameP, slotP, slots_per_frame, beam.idx);
             const uint16_t fapi_beam = convert_to_fapi_beam(alloc_beam_idx, gNB->beam_info.beam_mode);
             schedule_ssb(frameP, slotP, scc, dl_req, i_ssb, fapi_beam, ssbSubcarrierOffset, offset_pointa, mib_pdu);
             fill_ssb_vrb_map(cc, prb_offset, ssbSubcarrierOffset, ssb_start_symbol, CC_id, beam.idx);
@@ -510,17 +512,24 @@ void schedule_nr_sib1(module_id_t module_idP,
                   "Trying to schedule SIB1 for SSB %d in slot %d which is not DL. Check searchSpaceZero configuration.\n",
                   type0_PDCCH_CSS_config->ssb_index,
                   slotP);
-      const int n_slots_frame = gNB_mac->frame_structure.numb_slots_frame;
-      int beam_index = get_beam_from_ssbidx(gNB_mac, i);
-      NR_beam_alloc_t beam = beam_allocation_procedure(&gNB_mac->beam_info, frameP, slotP, beam_index, n_slots_frame);
-      AssertFatal(beam.idx >= 0, "Cannot allocate SIB1 corresponding to SSB %d in any available beam\n", i);
-      LOG_D(NR_MAC,"(%d.%d) SIB1 transmission: ssb_index %d\n", frameP, slotP, type0_PDCCH_CSS_config->ssb_index);
       NR_sched_pdcch_t sched_pdcch = set_pdcch_structure(NULL,
                                                          &gNB_mac->sched_ctrlSIB1->search_space[i],
                                                          &gNB_mac->sched_ctrlSIB1->coreset,
                                                          scc,
                                                          NULL,
                                                          type0_PDCCH_CSS_config);
+      const int n_slots_frame = gNB_mac->frame_structure.numb_slots_frame;
+      int beam_index = get_beam_from_ssbidx(gNB_mac, i);
+      // DCI BEAM
+      NR_beam_alloc_t beam = beam_allocation_procedure(&gNB_mac->beam_info,
+                                                       frameP,
+                                                       slotP,
+                                                       sched_pdcch.StartSymbolIndex,
+                                                       sched_pdcch.DurationSymbols,
+                                                       beam_index,
+                                                       n_slots_frame);
+      AssertFatal(beam.idx >= 0, "Cannot allocate DCI for SIB1 corresponding to SSB %d in any available beam\n", i);
+      LOG_D(NR_MAC,"(%d.%d) SIB1 transmission: ssb_index %d\n", frameP, slotP, type0_PDCCH_CSS_config->ssb_index);
 
       int nr_of_candidates, aggregation_level;
       for (int c = 0; c < 3; c++) {
@@ -560,6 +569,16 @@ void schedule_nr_sib1(module_id_t module_idP,
                              gNB_mac->sib1_pdsch[i].time_domain_allocation,
                              i,
                              CC_id);
+
+      // PDSCH BEAM
+      NR_beam_alloc_t beam_sib = beam_allocation_procedure(&gNB_mac->beam_info,
+                                                           frameP,
+                                                           slotP,
+                                                           gNB_mac->sib1_pdsch[i].tda_info.startSymbolIndex,
+                                                           gNB_mac->sib1_pdsch[i].tda_info.nrOfSymbols,
+                                                           beam_index,
+                                                           n_slots_frame);
+      AssertFatal(beam_sib.idx >= 0, "Cannot allocate SIB1 corresponding to SSB %d in any available beam\n", i);
       int tb_size = gNB_mac->sib1_pdsch[i].tb_size;
       AssertFatal(res && tb_size > 0, "Couldn't allocate TB for SIB1 for an already allocated TDA\n");
       nfapi_nr_dl_tti_request_body_t *dl_req = &DL_req->dl_tti_request_body;
@@ -635,8 +654,6 @@ static void other_sib_sched_control(module_id_t module_idP,
   NR_ServingCellConfigCommon_t *scc = gNB_mac->common_channels[0].ServingCellConfigCommon;
   int n_slots_frame = gNB_mac->frame_structure.numb_slots_frame;
   beam_index = get_beam_from_ssbidx(gNB_mac, beam_index);
-  NR_beam_alloc_t beam = beam_allocation_procedure(&gNB_mac->beam_info, frame, slot, beam_index, n_slots_frame);
-  AssertFatal(beam.idx >= 0, "Cannot allocate otherSIB corresponding for SSB number %d in any available beam\n", beam_index);
   LOG_D(NR_MAC, "(%d.%d) otherSIB payload %d transmission for ssb number %d\n", frame, slot, payload_idx, beam_index);
 
   NR_COMMON_channels_t *cc = &gNB_mac->common_channels[0];
@@ -664,6 +681,16 @@ static void other_sib_sched_control(module_id_t module_idP,
     gNB_mac->sched_pdcch_otherSI = calloc(1, sizeof(*gNB_mac->sched_pdcch_otherSI));
     *gNB_mac->sched_pdcch_otherSI = set_pdcch_structure(gNB_mac, ss, coreset, scc, NULL, type0_PDCCH_CSS_config);
   }
+  // DCI BEAM
+  NR_beam_alloc_t beam = beam_allocation_procedure(&gNB_mac->beam_info,
+                                                   frame,
+                                                   slot,
+                                                   gNB_mac->sched_pdcch_otherSI->StartSymbolIndex,
+                                                   gNB_mac->sched_pdcch_otherSI->DurationSymbols,
+                                                   beam_index,
+                                                   n_slots_frame);
+  AssertFatal(beam.idx >= 0, "Cannot allocate otherSIB corresponding for SSB number %d in any available beam\n", beam_index);
+
   int cce_index = find_pdcch_candidate(gNB_mac,
                                        0,
                                        aggregation_level,
@@ -687,7 +714,17 @@ static void other_sib_sched_control(module_id_t module_idP,
   sched_pdsch_otherSI.pm_index = 0;
   sched_pdsch_otherSI.mcs = 0; // starting from mcs 0
 
-  uint16_t *vrb_map = cc->vrb_map[beam.idx];
+  // PDSCH BEAM
+  NR_beam_alloc_t si_beam = beam_allocation_procedure(&gNB_mac->beam_info,
+                                                      frame,
+                                                      slot,
+                                                      tda_info.startSymbolIndex,
+                                                      tda_info.nrOfSymbols,
+                                                      beam_index,
+                                                      n_slots_frame);
+  AssertFatal(si_beam.idx >= 0, "Cannot allocate otherSIB corresponding for SSB number %d in any available beam\n", beam_index);
+
+  uint16_t *vrb_map = cc->vrb_map[si_beam.idx];
   uint8_t *sib_bcch_pdu = cc->other_sib_bcch_pdu[payload_idx];
   int num_total_bytes = cc->other_sib_bcch_length[payload_idx];
   bool success = update_rb_mcs_tbs(&sched_pdsch_otherSI, num_total_bytes, vrb_map);

@@ -3270,9 +3270,6 @@ void nr_csirs_scheduling(int Mod_idP, frame_t frame, slot_t slot, nfapi_nr_dl_tt
         if((frame * n_slots_frame + slot - offset) % period == 0) {
 
           LOG_D(NR_MAC,"Scheduling CSI-RS in frame %d slot %d Resource ID %ld\n", frame, slot, nzpcsi->nzp_CSI_RS_ResourceId);
-          NR_beam_alloc_t beam_csi = beam_allocation_procedure(&gNB_mac->beam_info, frame, slot, UE->UE_beam_index, n_slots_frame);
-          AssertFatal(beam_csi.idx >= 0, "Cannot allocate CSI-RS in any available beam\n");
-          uint16_t *vrb_map = gNB_mac->common_channels[CC_id].vrb_map[beam_csi.idx];
           UE_info->sched_csirs |= (1 << dl_bwp->bwp_id);
 
           nfapi_nr_dl_tti_request_pdu_t *dl_tti_csirs_pdu = &dl_req->dl_tti_pdu_list[dl_req->nPDUs];
@@ -3319,79 +3316,68 @@ void nr_csirs_scheduling(int Mod_idP, frame_t frame, slot_t slot, nfapi_nr_dl_tt
             csirs_pdu_rel15->freq_density--;
           csirs_pdu_rel15->scramb_id = nzpcsi->scramblingID;
           csirs_pdu_rel15->power_control_offset = nzpcsi->powerControlOffset + 8;
+          int n_symb_l0 = 0;
+          int n_symb_l1 = 0;
           if (nzpcsi->powerControlOffsetSS)
             csirs_pdu_rel15->power_control_offset_ss = *nzpcsi->powerControlOffsetSS;
           else
             csirs_pdu_rel15->power_control_offset_ss = 1; // 0 dB
-          switch(resourceMapping.frequencyDomainAllocation.present){
+          switch(resourceMapping.frequencyDomainAllocation.present) {
             case NR_CSI_RS_ResourceMapping__frequencyDomainAllocation_PR_row1:
               csirs_pdu_rel15->row = 1;
               csirs_pdu_rel15->freq_domain = ((resourceMapping.frequencyDomainAllocation.choice.row1.buf[0])>>4)&0x0f;
-              for (int rb = csirs_pdu_rel15->start_rb; rb < (csirs_pdu_rel15->start_rb + csirs_pdu_rel15->nr_of_rbs); rb++)
-                vrb_map[rb] |= SL_to_bitmap(csirs_pdu_rel15->symb_l0, 1);
+              n_symb_l0 = 1;
               break;
             case NR_CSI_RS_ResourceMapping__frequencyDomainAllocation_PR_row2:
               csirs_pdu_rel15->row = 2;
               csirs_pdu_rel15->freq_domain = (((resourceMapping.frequencyDomainAllocation.choice.row2.buf[1]>>4)&0x0f) |
                                              ((resourceMapping.frequencyDomainAllocation.choice.row2.buf[0]<<4)&0xff0));
-              for (int rb = csirs_pdu_rel15->start_rb; rb < (csirs_pdu_rel15->start_rb + csirs_pdu_rel15->nr_of_rbs); rb++)
-                vrb_map[rb] |= SL_to_bitmap(csirs_pdu_rel15->symb_l0, 1);
+              n_symb_l0 = 1;
               break;
             case NR_CSI_RS_ResourceMapping__frequencyDomainAllocation_PR_row4:
               csirs_pdu_rel15->row = 4;
               csirs_pdu_rel15->freq_domain = ((resourceMapping.frequencyDomainAllocation.choice.row4.buf[0])>>5)&0x07;
-              for (int rb = csirs_pdu_rel15->start_rb; rb < (csirs_pdu_rel15->start_rb + csirs_pdu_rel15->nr_of_rbs); rb++)
-                vrb_map[rb] |= SL_to_bitmap(csirs_pdu_rel15->symb_l0, 1);
+              n_symb_l0 = 1;
               break;
             case NR_CSI_RS_ResourceMapping__frequencyDomainAllocation_PR_other:
               csirs_pdu_rel15->freq_domain = ((resourceMapping.frequencyDomainAllocation.choice.other.buf[0])>>2)&0x3f;
               // determining the row of table 7.4.1.5.3-1 in 38.211
-              switch(resourceMapping.nrofPorts){
+              switch(resourceMapping.nrofPorts) {
                 case NR_CSI_RS_ResourceMapping__nrofPorts_p1:
-                  AssertFatal(1==0,"Resource with 1 CSI port shouldn't be within other rows\n");
+                  AssertFatal(false, "Resource with 1 CSI port shouldn't be within other rows\n");
                   break;
                 case NR_CSI_RS_ResourceMapping__nrofPorts_p2:
                   csirs_pdu_rel15->row = 3;
-                  for (int rb = csirs_pdu_rel15->start_rb; rb < (csirs_pdu_rel15->start_rb + csirs_pdu_rel15->nr_of_rbs); rb++)
-                    vrb_map[rb] |= SL_to_bitmap(csirs_pdu_rel15->symb_l0, 1);
+                  n_symb_l0 = 1;
                   break;
                 case NR_CSI_RS_ResourceMapping__nrofPorts_p4:
                   csirs_pdu_rel15->row = 5;
-                  for (int rb = csirs_pdu_rel15->start_rb; rb < (csirs_pdu_rel15->start_rb + csirs_pdu_rel15->nr_of_rbs); rb++)
-                    vrb_map[rb] |= SL_to_bitmap(csirs_pdu_rel15->symb_l0, 2);
+                  n_symb_l0 = 2;
                   break;
                 case NR_CSI_RS_ResourceMapping__nrofPorts_p8:
                   if (resourceMapping.cdm_Type == NR_CSI_RS_ResourceMapping__cdm_Type_cdm4_FD2_TD2) {
                     csirs_pdu_rel15->row = 8;
-                    for (int rb = csirs_pdu_rel15->start_rb; rb < (csirs_pdu_rel15->start_rb + csirs_pdu_rel15->nr_of_rbs); rb++)
-                      vrb_map[rb] |= SL_to_bitmap(csirs_pdu_rel15->symb_l0, 2);
-                  }
-                  else{
+                    n_symb_l0 = 2;
+                  } else {
                     int num_k = 0;
                     for (int k=0; k<6; k++)
                       num_k+=(((csirs_pdu_rel15->freq_domain)>>k)&0x01);
                     if(num_k==4) {
                       csirs_pdu_rel15->row = 6;
-                      for (int rb = csirs_pdu_rel15->start_rb; rb < (csirs_pdu_rel15->start_rb + csirs_pdu_rel15->nr_of_rbs); rb++)
-                        vrb_map[rb] |= SL_to_bitmap(csirs_pdu_rel15->symb_l0, 1);
-                    }
-                    else {
+                      n_symb_l0 = 1;
+                    } else {
                       csirs_pdu_rel15->row = 7;
-                      for (int rb = csirs_pdu_rel15->start_rb; rb < (csirs_pdu_rel15->start_rb + csirs_pdu_rel15->nr_of_rbs); rb++)
-                        vrb_map[rb] |= SL_to_bitmap(csirs_pdu_rel15->symb_l0, 2);
+                      n_symb_l0 = 2;
                     }
                   }
                   break;
                 case NR_CSI_RS_ResourceMapping__nrofPorts_p12:
                   if (resourceMapping.cdm_Type == NR_CSI_RS_ResourceMapping__cdm_Type_cdm4_FD2_TD2) {
                     csirs_pdu_rel15->row = 10;
-                    for (int rb = csirs_pdu_rel15->start_rb; rb < (csirs_pdu_rel15->start_rb + csirs_pdu_rel15->nr_of_rbs); rb++)
-                      vrb_map[rb] |= SL_to_bitmap(csirs_pdu_rel15->symb_l0, 2);
-                  }
-                  else {
+                    n_symb_l0 = 2;
+                  } else {
                     csirs_pdu_rel15->row = 9;
-                    for (int rb = csirs_pdu_rel15->start_rb; rb < (csirs_pdu_rel15->start_rb + csirs_pdu_rel15->nr_of_rbs); rb++)
-                      vrb_map[rb] |= SL_to_bitmap(csirs_pdu_rel15->symb_l0, 1);
+                    n_symb_l0 = 2;
                   }
                   break;
                 case NR_CSI_RS_ResourceMapping__nrofPorts_p16:
@@ -3399,53 +3385,69 @@ void nr_csirs_scheduling(int Mod_idP, frame_t frame, slot_t slot, nfapi_nr_dl_tt
                     csirs_pdu_rel15->row = 12;
                   else
                     csirs_pdu_rel15->row = 11;
-                  for (int rb = csirs_pdu_rel15->start_rb; rb < (csirs_pdu_rel15->start_rb + csirs_pdu_rel15->nr_of_rbs); rb++)
-                    vrb_map[rb] |= SL_to_bitmap(csirs_pdu_rel15->symb_l0, 2);
+                  n_symb_l0 = 2;
                   break;
                 case NR_CSI_RS_ResourceMapping__nrofPorts_p24:
                   if (resourceMapping.cdm_Type == NR_CSI_RS_ResourceMapping__cdm_Type_cdm4_FD2_TD2) {
                     csirs_pdu_rel15->row = 14;
-                    for (int rb = csirs_pdu_rel15->start_rb; rb < (csirs_pdu_rel15->start_rb + csirs_pdu_rel15->nr_of_rbs); rb++)
-                      vrb_map[rb] |= (SL_to_bitmap(csirs_pdu_rel15->symb_l0, 2) | SL_to_bitmap(csirs_pdu_rel15->symb_l1, 2));
-                  }
-                  else{
+                    n_symb_l0 = 2;
+                    n_symb_l1 = 2;
+                  } else {
                     if (resourceMapping.cdm_Type == NR_CSI_RS_ResourceMapping__cdm_Type_cdm8_FD2_TD4) {
                       csirs_pdu_rel15->row = 15;
-                      for (int rb = csirs_pdu_rel15->start_rb; rb < (csirs_pdu_rel15->start_rb + csirs_pdu_rel15->nr_of_rbs); rb++)
-                        vrb_map[rb] |= SL_to_bitmap(csirs_pdu_rel15->symb_l0, 3);
-                    }
-                    else {
+                      n_symb_l0 = 4;
+                    } else {
                       csirs_pdu_rel15->row = 13;
-                      for (int rb = csirs_pdu_rel15->start_rb; rb < (csirs_pdu_rel15->start_rb + csirs_pdu_rel15->nr_of_rbs); rb++)
-                        vrb_map[rb] |= (SL_to_bitmap(csirs_pdu_rel15->symb_l0, 2) | SL_to_bitmap(csirs_pdu_rel15->symb_l1, 2));
+                      n_symb_l0 = 2;
+                      n_symb_l1 = 2;
                     }
                   }
                   break;
                 case NR_CSI_RS_ResourceMapping__nrofPorts_p32:
                   if (resourceMapping.cdm_Type == NR_CSI_RS_ResourceMapping__cdm_Type_cdm4_FD2_TD2) {
                     csirs_pdu_rel15->row = 17;
-                    for (int rb = csirs_pdu_rel15->start_rb; rb < (csirs_pdu_rel15->start_rb + csirs_pdu_rel15->nr_of_rbs); rb++)
-                      vrb_map[rb] |= (SL_to_bitmap(csirs_pdu_rel15->symb_l0, 2) | SL_to_bitmap(csirs_pdu_rel15->symb_l1, 2));
-                  }
-                  else{
+                    n_symb_l0 = 2;
+                    n_symb_l1 = 2;
+                  } else {
                     if (resourceMapping.cdm_Type == NR_CSI_RS_ResourceMapping__cdm_Type_cdm8_FD2_TD4) {
                       csirs_pdu_rel15->row = 18;
-                      for (int rb = csirs_pdu_rel15->start_rb; rb < (csirs_pdu_rel15->start_rb + csirs_pdu_rel15->nr_of_rbs); rb++)
-                        vrb_map[rb] |= SL_to_bitmap(csirs_pdu_rel15->symb_l0, 3);
-                    }
-                    else {
+                      n_symb_l0 = 4;
+                    } else {
                       csirs_pdu_rel15->row = 16;
-                      for (int rb = csirs_pdu_rel15->start_rb; rb < (csirs_pdu_rel15->start_rb + csirs_pdu_rel15->nr_of_rbs); rb++)
-                        vrb_map[rb] |= (SL_to_bitmap(csirs_pdu_rel15->symb_l0, 2) | SL_to_bitmap(csirs_pdu_rel15->symb_l1, 2));
+                      n_symb_l0 = 2;
+                      n_symb_l1 = 2;
                     }
                   }
                   break;
               default:
-                AssertFatal(1==0,"Invalid number of ports in CSI-RS resource\n");
+                AssertFatal(false, "Invalid number of ports in CSI-RS resource\n");
               }
               break;
           default:
-            AssertFatal(1==0,"Invalid freqency domain allocation in CSI-RS resource\n");
+            AssertFatal(false, "Invalid freqency domain allocation in CSI-RS resource\n");
+          }
+          NR_beam_alloc_t beam_csi = beam_allocation_procedure(&gNB_mac->beam_info,
+                                                               frame,
+                                                               slot,
+                                                               csirs_pdu_rel15->symb_l0,
+                                                               n_symb_l0,
+                                                               UE->UE_beam_index,
+                                                               n_slots_frame);
+          AssertFatal(beam_csi.idx >= 0, "Cannot allocate CSI-RS in any available beam\n");
+          uint16_t *vrb_map = gNB_mac->common_channels[CC_id].vrb_map[beam_csi.idx];
+          for (int rb = csirs_pdu_rel15->start_rb; rb < (csirs_pdu_rel15->start_rb + csirs_pdu_rel15->nr_of_rbs); rb++)
+            vrb_map[rb] |= SL_to_bitmap(csirs_pdu_rel15->symb_l0, n_symb_l0);
+          if (n_symb_l1) {
+            NR_beam_alloc_t beam_csi1 = beam_allocation_procedure(&gNB_mac->beam_info,
+                                                                  frame,
+                                                                  slot,
+                                                                  csirs_pdu_rel15->symb_l1,
+                                                                  n_symb_l1,
+                                                                  UE->UE_beam_index,
+                                                                  n_slots_frame);
+            AssertFatal(beam_csi1.idx >= 0 && beam_csi1.idx == beam_csi.idx, "Cannot allocate CSI-RS in any available beam\n");
+            for (int rb = csirs_pdu_rel15->start_rb; rb < (csirs_pdu_rel15->start_rb + csirs_pdu_rel15->nr_of_rbs); rb++)
+              vrb_map[rb] |= SL_to_bitmap(csirs_pdu_rel15->symb_l1, n_symb_l1);
           }
           dl_req->nPDUs++;
         }
@@ -3715,32 +3717,57 @@ void fill_beam_index_list(NR_ServingCellConfigCommon_t *scc, const nr_mac_config
   }
 }
 
-static inline int get_beam_index(const NR_beam_info_t *beam_info, int frame, int slot, int slots_per_frame)
+static inline int get_beam_allocation_slot_index(const NR_beam_info_t *beam_info, int frame, int slot, int slots_per_frame)
 {
-  return ((frame * slots_per_frame + slot) / beam_info->beam_duration) % beam_info->beam_allocation_size;
+  return ((frame * slots_per_frame + slot) / beam_info->beam_slot_duration) % beam_info->beam_allocation_size[0];
 }
 
-NR_beam_alloc_t beam_allocation_procedure(NR_beam_info_t *beam_info, int frame, int slot, int16_t beam_index, int slots_per_frame)
+NR_beam_alloc_t beam_allocation_procedure(NR_beam_info_t *beam_info,
+                                          int frame,
+                                          int slot,
+                                          int start_symbol,
+                                          int nb_symbols,
+                                          int16_t beam_index,
+                                          int slots_per_frame)
 {
   // if no beam allocation for analog beamforming we always return beam index 0 (no multiple beams)
   if (beam_info->beam_mode == NO_BEAM_MODE)
-    return (NR_beam_alloc_t) {.new_beam = false, .idx = 0};
+    return (NR_beam_alloc_t) {.new_beam = 0, .idx = 0};
 
-  const int index = get_beam_index(beam_info, frame, slot, slots_per_frame);
+  const int index = get_beam_allocation_slot_index(beam_info, frame, slot, slots_per_frame);
+  int alloc_start = 0;
+  int alloc_end = 0;
+  if (beam_info->beam_allocation_size[1] > 1) {
+    int step_size = NR_SYMBOLS_PER_SLOT / beam_info->beam_allocation_size[1];
+    alloc_start = start_symbol / step_size;
+    alloc_end = (start_symbol + nb_symbols - 1) / step_size;
+  }
   for (int i = 0; i < beam_info->beams_per_period; i++) {
-    NR_beam_alloc_t beam_struct = {.new_beam = false, .idx = i};
-    int16_t *beam = &beam_info->beam_allocation[i][index];
-    if (*beam == -1) {
-      beam_struct.new_beam = true;
-      *beam = beam_index;
+    bool beam_found = true;
+    uint16_t new_beam = 0;
+    for (int j = alloc_start; j <= alloc_end; j++) {
+      int16_t beam = beam_info->beam_allocation[i][index][j];
+      if (beam != -1 && beam != beam_index) {
+        beam_found = false;
+        break;
+      } else if (beam == -1)
+        new_beam |= (1 << j);
     }
-    if (*beam == beam_index) {
-      LOG_D(NR_MAC, "%d.%d Using beam structure with index %d for beam %d (%s)\n", frame, slot, beam_struct.idx, beam_index, beam_struct.new_beam ? "new beam" : "old beam");
+    if (beam_found) {
+      NR_beam_alloc_t beam_struct = {.new_beam = new_beam, .idx = i};
+      for (int j = alloc_start; j <= alloc_end; j++)
+        beam_info->beam_allocation[i][index][j] = beam_index;
+      LOG_D(NR_MAC,
+            "%d.%d Using beam structure with index %d for beam %d (%s)\n",
+            frame,
+            slot,
+            beam_struct.idx,
+            beam_index,
+            beam_struct.new_beam ? "new beam" : "old beam");
       return beam_struct;
     }
   }
-
-  return (NR_beam_alloc_t) {.new_beam = false, .idx = -1};
+  return (NR_beam_alloc_t) {.new_beam = 0, .idx = -1};
 }
 
 uint16_t convert_to_fapi_beam(const uint16_t beam_idx, const nr_beam_mode_t mode)
@@ -3749,24 +3776,17 @@ uint16_t convert_to_fapi_beam(const uint16_t beam_idx, const nr_beam_mode_t mode
   return (mode == LOPHY_BEAM_IDX) ? SET_BIT(beam_idx, 15) : beam_idx;
 }
 
-int16_t get_allocated_beam(const NR_beam_info_t *beam_info, int frame, int slot, int slots_per_frame, int beam_number_in_period)
+void reset_beam_status(NR_beam_info_t *beam_info, int frame, int slot, int16_t beam_index, int slots_per_frame, uint16_t beam_alloc)
 {
-  int16_t beam_idx = 0;
-  if (beam_info->beam_mode != NO_BEAM_MODE) {
-    const int index = get_beam_index(beam_info, frame, slot, slots_per_frame);
-    beam_idx = beam_info->beam_allocation[beam_number_in_period][index];
-  }
-  return beam_idx;
-}
-
-void reset_beam_status(NR_beam_info_t *beam_info, int frame, int slot, int16_t beam_index, int slots_per_frame, bool new_beam)
-{
-  if(!new_beam) // need to reset only if the beam was allocated specifically for this instance
+  if(beam_alloc == 0) // need to reset only if the beam was allocated specifically for this instance
     return;
-  const int index = get_beam_index(beam_info, frame, slot, slots_per_frame);
+  const int index = get_beam_allocation_slot_index(beam_info, frame, slot, slots_per_frame);
   for (int i = 0; i < beam_info->beams_per_period; i++) {
-    if (beam_info->beam_allocation[i][index] == beam_index)
-      beam_info->beam_allocation[i][index] = -1;
+    for (int j = 0; j < NR_SYMBOLS_PER_SLOT; j++) {
+      if (IS_BIT_SET(beam_alloc, j))
+        if (beam_info->beam_allocation[i][index][j] == beam_index)
+          beam_info->beam_allocation[i][index][j] = -1;
+    }
   }
 }
 

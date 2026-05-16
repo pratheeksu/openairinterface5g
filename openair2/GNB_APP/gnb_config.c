@@ -1748,9 +1748,13 @@ void RCconfig_nr_macrlc(configmodule_interface_t *cfg)
         NR_beam_info_t *beam_info = &RC.nrmac[j]->beam_info;
         int beams_per_period = *gpd(params, np, MACRLC_BEAMS_PERIOD)->u8ptr;
         beam_info->beam_allocation = malloc16(beams_per_period * sizeof(beam_info->beam_allocation));
-        beam_info->beam_duration = *gpd(params, np, MACRLC_BEAM_DURATION)->u8ptr;
+        int duration = *gpd(params, np, MACRLC_BEAM_DURATION)->i8ptr;
+        AssertFatal(duration > -15 && duration != 0, "Invalid beam duration %d\n", duration);
+        beam_info->beam_slot_duration = duration > 0 ? duration : 1;
+        beam_info->beam_symbol_duration = duration < 0 ? -duration : 0;
         beam_info->beams_per_period = beams_per_period;
-        beam_info->beam_allocation_size = -1; // to be initialized once we have information on frame configuration
+        beam_info->beam_allocation_size[0] = -1; // to be initialized once we have information on frame configuration
+        beam_info->beam_allocation_size[1] = -1;
       }
       bool das_enabled = false;
       if (NFAPI_MODE == NFAPI_MONOLITHIC) {

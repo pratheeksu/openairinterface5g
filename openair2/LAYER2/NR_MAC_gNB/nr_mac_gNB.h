@@ -100,8 +100,14 @@ static const char *const nrra_text[] =
     {"IDLE", "Msg2", "WAIT_MsgA_PUSCH", "WAIT_Msg3", "Msg3_retransmission", "Msg4", "MsgB", "WAIT_Msg4_MsgB_ACK"};
 
 typedef struct {
+  bool valid;
+  int beam_idx;
+  int rbsize;
+} NR_rtx_ret_t;
+
+typedef struct {
   int idx;
-  bool new_beam;
+  uint16_t new_beam; // each bit a group of symbols
 } NR_beam_alloc_t;
 
 typedef struct nr_pdsch_AntennaPorts_t {
@@ -815,10 +821,11 @@ typedef enum {
 
 typedef struct {
   /// list of allocated beams per period
-  int16_t **beam_allocation;
-  int beam_duration; // in slots
+  int16_t ***beam_allocation;
+  int beam_slot_duration;
+  int beam_symbol_duration;
   int beams_per_period;
-  int beam_allocation_size;
+  int beam_allocation_size[2];
   nr_beam_mode_t beam_mode;
 } NR_beam_info_t;
 

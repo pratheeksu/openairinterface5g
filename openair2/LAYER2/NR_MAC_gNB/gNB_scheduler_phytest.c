@@ -95,10 +95,23 @@ void nr_preprocessor_phytest(gNB_MAC_INST *mac, post_process_pdsch_t *pp_pdsch)
       }
     }
   }
-  int beam_idx = get_beam_from_ssbidx(mac, ssb_idx_beam);
-  NR_beam_alloc_t beam = beam_allocation_procedure(&mac->beam_info, frame, slot, beam_idx, mac->frame_structure.numb_slots_frame);
-  AssertFatal(beam.idx > -1, "Can't allocate beam %d in phytest scheduler\n", beam_idx);
-  UE->UE_beam_index = get_allocated_beam(&mac->beam_info, frame, slot, mac->frame_structure.numb_slots_frame, beam.idx);
+  UE->UE_beam_index = get_beam_from_ssbidx(mac, ssb_idx_beam);
+  NR_beam_alloc_t dci_beam = beam_allocation_procedure(&mac->beam_info,
+                                                       frame,
+                                                       slot,
+                                                       sched_ctrl->sched_pdcch.StartSymbolIndex,
+                                                       sched_ctrl->sched_pdcch.DurationSymbols,
+                                                       UE->UE_beam_index,
+                                                       mac->frame_structure.numb_slots_frame);
+  AssertFatal(dci_beam.idx > -1, "Can't allocate DCI beam %d in phytest scheduler\n", UE->UE_beam_index);
+  NR_beam_alloc_t beam = beam_allocation_procedure(&mac->beam_info,
+                                                   frame,
+                                                   slot,
+                                                   tda_info.startSymbolIndex,
+                                                   tda_info.nrOfSymbols,
+                                                   UE->UE_beam_index,
+                                                   mac->frame_structure.numb_slots_frame);
+  AssertFatal(beam.idx > -1, "Can't allocate beam %d in phytest scheduler\n", UE->UE_beam_index);
 
   int rbStart = 0;
   int rbSize = 0;
@@ -125,7 +138,7 @@ void nr_preprocessor_phytest(gNB_MAC_INST *mac, post_process_pdsch_t *pp_pdsch)
                                slot,
                                UE->rnti,
                                &sched_ctrl->aggregation_level,
-                               beam.idx,
+                               dci_beam.idx,
                                sched_ctrl->search_space,
                                sched_ctrl->coreset,
                                &sched_ctrl->sched_pdcch,
@@ -147,7 +160,7 @@ void nr_preprocessor_phytest(gNB_MAC_INST *mac, post_process_pdsch_t *pp_pdsch)
 
   sched_ctrl->cce_index = CCEIndex;
 
-  fill_pdcch_vrb_map(mac, CC_id, &sched_ctrl->sched_pdcch, CCEIndex, sched_ctrl->aggregation_level, beam.idx);
+  fill_pdcch_vrb_map(mac, CC_id, &sched_ctrl->sched_pdcch, CCEIndex, sched_ctrl->aggregation_level, dci_beam.idx);
 
   NR_sched_pdsch_t sched_pdsch = {
       .rbSize = rbSize,

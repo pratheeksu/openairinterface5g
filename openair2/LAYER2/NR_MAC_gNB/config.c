@@ -832,15 +832,24 @@ static void initialize_beam_information(NR_beam_info_t *beam_info, int mu, int s
 
   int size = mu == 0 ? slots_per_frame << 1 : slots_per_frame;
   // slots in beam duration gives the number of consecutive slots tied the the same beam
-  AssertFatal(size % beam_info->beam_duration == 0,
+  AssertFatal(size % beam_info->beam_slot_duration == 0,
               "Beam duration %d should be divider of number of slots per frame %d\n",
-              beam_info->beam_duration,
+              beam_info->beam_slot_duration,
               slots_per_frame);
-  beam_info->beam_allocation_size = size / beam_info->beam_duration;
+  beam_info->beam_allocation_size[0] = size / beam_info->beam_slot_duration;
+  int symb_dur = beam_info->beam_symbol_duration ? beam_info->beam_symbol_duration : NR_SYMBOLS_PER_SLOT;
+  AssertFatal(NR_SYMBOLS_PER_SLOT % symb_dur == 0,
+              "Beam duration in symbols %d should be a divider of number of symbols per slot %d\n",
+              symb_dur,
+              NR_SYMBOLS_PER_SLOT);
+  beam_info->beam_allocation_size[1] = NR_SYMBOLS_PER_SLOT / symb_dur;
   for (int i = 0; i < beam_info->beams_per_period; i++) {
-    beam_info->beam_allocation[i] = malloc16(beam_info->beam_allocation_size * sizeof(*beam_info->beam_allocation));
-    for (int j = 0; j < beam_info->beam_allocation_size; j++)
-      beam_info->beam_allocation[i][j] = -1;
+    beam_info->beam_allocation[i] = malloc16(beam_info->beam_allocation_size[0] * sizeof(**beam_info->beam_allocation));
+    for (int j = 0; j < beam_info->beam_allocation_size[0]; j++) {
+      beam_info->beam_allocation[i][j] = malloc16(beam_info->beam_allocation_size[1] * sizeof(*beam_info->beam_allocation));
+      for (int k = 0; k < beam_info->beam_allocation_size[1]; k++)
+        beam_info->beam_allocation[i][j][k] = -1;
+    }
   }
 }
 

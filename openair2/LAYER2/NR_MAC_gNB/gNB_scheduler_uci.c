@@ -254,12 +254,6 @@ void nr_csi_meas_reporting(int Mod_idP,frame_t frame, slot_t slot)
       curr_pucch->active = true;
 
       int bwp_start = ul_bwp->BWPStart;
-
-      // going through the list of PUCCH resources to find the one indexed by resource_id
-      NR_beam_alloc_t beam = beam_allocation_procedure(&nrmac->beam_info, sched_frame, sched_slot, UE->UE_beam_index, n_slots_frame);
-      AssertFatal(beam.idx >= 0, "Cannot allocate CSI measurements on PUCCH in any available beam\n");
-      const int index = ul_buffer_index(sched_frame, sched_slot, n_slots_frame, nrmac->vrb_map_UL_size);
-      uint16_t *vrb_map_UL = &nrmac->common_channels[0].vrb_map_UL[beam.idx][index * MAX_BWP_SIZE];
       const int m = pucch_Config->resourceToAddModList->list.count;
       for (int j = 0; j < m; j++) {
         NR_PUCCH_Resource_t *pucchres = pucch_Config->resourceToAddModList->list.array[j];
@@ -267,11 +261,13 @@ void nr_csi_meas_reporting(int Mod_idP,frame_t frame, slot_t slot)
           continue;
         int start = pucchres->startingPRB;
         int len = 1;
-        uint64_t mask = 0;
+        int startingSymbolIndex = 0;
+        int nrofSymbols = 0;
         switch(pucchres->format.present){
           case NR_PUCCH_Resource__format_PR_format2:
             len = pucchres->format.choice.format2->nrofPRBs;
-            mask = SL_to_bitmap(pucchres->format.choice.format2->startingSymbolIndex, pucchres->format.choice.format2->nrofSymbols);
+            nrofSymbols = pucchres->format.choice.format2->nrofSymbols;
+            startingSymbolIndex = pucchres->format.choice.format2->startingSymbolIndex;
             curr_pucch->simultaneous_harqcsi = pucch_Config->format2->choice.setup->simultaneousHARQ_ACK_CSI;
             LOG_D(NR_MAC,
                   "%d.%d Allocating PUCCH format 2, startPRB %d, nPRB %d, simulHARQ %d, num_bits %d\n",
@@ -284,17 +280,30 @@ void nr_csi_meas_reporting(int Mod_idP,frame_t frame, slot_t slot)
             break;
           case NR_PUCCH_Resource__format_PR_format3:
             len = pucchres->format.choice.format3->nrofPRBs;
-            mask = SL_to_bitmap(pucchres->format.choice.format3->startingSymbolIndex, pucchres->format.choice.format3->nrofSymbols);
+            nrofSymbols = pucchres->format.choice.format3->nrofSymbols;
+            startingSymbolIndex = pucchres->format.choice.format3->startingSymbolIndex;
             curr_pucch->simultaneous_harqcsi = pucch_Config->format3->choice.setup->simultaneousHARQ_ACK_CSI;
             break;
           case NR_PUCCH_Resource__format_PR_format4:
-            mask = SL_to_bitmap(pucchres->format.choice.format4->startingSymbolIndex, pucchres->format.choice.format4->nrofSymbols);
+            nrofSymbols = pucchres->format.choice.format4->nrofSymbols;
+            startingSymbolIndex = pucchres->format.choice.format4->startingSymbolIndex;
             curr_pucch->simultaneous_harqcsi = pucch_Config->format4->choice.setup->simultaneousHARQ_ACK_CSI;
             break;
         default:
           AssertFatal(0, "Invalid PUCCH format type\n");
         }
+        NR_beam_alloc_t beam = beam_allocation_procedure(&nrmac->beam_info,
+                                                         sched_frame,
+                                                         sched_slot,
+                                                         startingSymbolIndex,
+                                                         nrofSymbols,
+                                                         UE->UE_beam_index,
+                                                         n_slots_frame);
+        AssertFatal(beam.idx >= 0, "Cannot allocate CSI measurements on PUCCH in any available beam\n");
+        const int index = ul_buffer_index(sched_frame, sched_slot, n_slots_frame, nrmac->vrb_map_UL_size);
+        uint16_t *vrb_map_UL = &nrmac->common_channels[0].vrb_map_UL[beam.idx][index * MAX_BWP_SIZE];
         // verify resources are free
+        uint64_t mask = SL_to_bitmap(startingSymbolIndex, nrofSymbols);
         for (int i = start; i < start + len; ++i) {
           if((vrb_map_UL[i+bwp_start] & mask) != 0) {
             LOG_E(NR_MAC,
@@ -1224,7 +1233,13 @@ int nr_acknack_scheduling(gNB_MAC_INST *mac,
     else { // unoccupied occasion
       // checking if in ul_slot the resources potentially to be assigned to this PUCCH are available
       set_pucch_allocation(ul_bwp, r_pucch, bwp_size, curr_pucch);
-      NR_beam_alloc_t beam = beam_allocation_procedure(&mac->beam_info, pucch_frame, pucch_slot, ue_beam, n_slots_frame);
+      NR_beam_alloc_t beam = beam_allocation_procedure(&mac->beam_info,
+                                                       pucch_frame,
+                                                       pucch_slot,
+                                                       curr_pucch->start_symb,
+                                                       curr_pucch->nr_of_symb,
+                                                       ue_beam,
+                                                       n_slots_frame);
       if (beam.idx < 0) {
         LOG_D(NR_MAC,
               "DL %4d.%2d, UL_ACK %4d.%2d beam resources for this occasion are already occupied, move to the following occasion\n",
@@ -1328,18 +1343,24 @@ void nr_sr_reporting(gNB_MAC_INST *nrmac, frame_t SFN, slot_t slot)
               slot);
         memset(curr_pucch, 0, sizeof(*curr_pucch));
         continue;
-      }
-      else {
-        NR_beam_alloc_t beam = beam_allocation_procedure(&nrmac->beam_info, SFN, slot, UE->UE_beam_index, n_slots_frame);
-        AssertFatal(beam.idx >= 0, "Cannot allocate SR in any available beam\n");
-        const int index = ul_buffer_index(SFN, slot, n_slots_frame, nrmac->vrb_map_UL_size);
-        uint16_t *vrb_map_UL = &nrmac->common_channels[CC_id].vrb_map_UL[beam.idx][index * MAX_BWP_SIZE];
+      } else {
         const int bwp_start = ul_bwp->BWPStart;
         const int bwp_size = ul_bwp->BWPSize;
         set_pucch_allocation(ul_bwp, -1, bwp_size, curr_pucch);
+        NR_beam_alloc_t beam = beam_allocation_procedure(&nrmac->beam_info,
+                                                         SFN,
+                                                         slot,
+                                                         curr_pucch->start_symb,
+                                                         curr_pucch->nr_of_symb,
+                                                         UE->UE_beam_index,
+                                                         n_slots_frame);
+        AssertFatal(beam.idx >= 0, "Cannot allocate SR in any available beam\n");
+        const int index = ul_buffer_index(SFN, slot, n_slots_frame, nrmac->vrb_map_UL_size);
+        uint16_t *vrb_map_UL = &nrmac->common_channels[CC_id].vrb_map_UL[beam.idx][index * MAX_BWP_SIZE];
         bool ret = test_pucch0_vrb_occupation(curr_pucch, vrb_map_UL, bwp_start);
         if (!ret) {
           LOG_E(NR_MAC,"Cannot schedule SR. PRBs not available\n");
+          reset_beam_status(&nrmac->beam_info, SFN, slot, UE->UE_beam_index, n_slots_frame, beam.new_beam);
           continue;
         }
         curr_pucch->frame = SFN;

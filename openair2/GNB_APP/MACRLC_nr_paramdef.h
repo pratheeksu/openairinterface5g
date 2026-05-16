@@ -114,14 +114,12 @@
   {MACRLC_TRANSPORT_S_SHM_PREFIX,      NULL,                     0, .strptr=NULL, .defstrval="nvipc",         TYPE_STRING,  0}, \
   {MACRLC_TRANSPORT_S_POLL_CORE,       NULL,                     0, .i8ptr=NULL,  .defintval=-1,              TYPE_INT8,    0}, \
   {MACRLC_ANALOG_BEAMFORMING,          HLP_MACRLC_AB,            0, .strptr=NULL, .defstrval="none",          TYPE_STRING,  0}, \
-  {MACRLC_BEAM_DURATION,               HLP_MACRLC_BEAM_DURATION, 0, .u8ptr=NULL,  .defintval=1,               TYPE_UINT8,   0}, \
+  {MACRLC_BEAM_DURATION,               HLP_MACRLC_BEAM_DURATION, 0, .i8ptr=NULL,  .defintval=1,               TYPE_INT8,    0}, \
   {MACRLC_BEAMS_PERIOD,                HLP_MACRLC_BEAMS_PERIOD,  0, .u8ptr=NULL,  .defintval=1,               TYPE_UINT8,   0}, \
   {MACRLC_BEAM_WEIGHTS_LIST,           NULL,                     0, .iptr=NULL,   .defintarrayval=0,          TYPE_INTARRAY,0}, \
   {MACRLC_DBT_FILE,                    HLP_MACRLC_DBT_FILE,      0, .strptr=NULL, .defstrval=NULL,            TYPE_STRING,  0}, \
-  {MACRLC_PUSCH_RSSI_THRESHOLD,        HLP_MACRLC_PUSCH_RSSI_THRESHOLD, \
-                                                                               0, .iptr=NULL,   .defintval=0,               TYPE_INT,     0}, \
-  {MACRLC_PUCCH_RSSI_THRESHOLD,        HLP_MACRLC_PUCCH_RSSI_THRESHOLD, \
-                                                                               0, .iptr=NULL,   .defintval=0,               TYPE_INT,     0}, \
+  {MACRLC_PUSCH_RSSI_THRESHOLD,        HLP_MACRLC_PUSCH_RSSI_THRESHOLD, 0, .iptr=NULL, .defintval=0,          TYPE_INT,     0}, \
+  {MACRLC_PUCCH_RSSI_THRESHOLD,        HLP_MACRLC_PUCCH_RSSI_THRESHOLD, 0, .iptr=NULL, .defintval=0,          TYPE_INT,     0}, \
   {MACRLC_STATS_MAX_UE,                HLP_MACRLC_STATS_MAX_UE,  0, .iptr=NULL,   .defintval=8,               TYPE_INT,     0}, \
 }
 // clang-format off

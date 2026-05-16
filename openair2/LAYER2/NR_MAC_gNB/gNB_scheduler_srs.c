@@ -458,11 +458,11 @@ static void nr_configure_srs(gNB_MAC_INST *nrmac,
   }
   const uint16_t fapi_beam = convert_to_fapi_beam(UE->UE_beam_index, nrmac->beam_info.beam_mode);
   srs_pdu->beamforming.prgs_list[0].dig_bf_interface_list[0].beam_idx = fapi_beam;
-  NR_beam_alloc_t beam = beam_allocation_procedure(&nrmac->beam_info, frame, slot, UE->UE_beam_index, slots_per_frame);
-  AssertFatal(beam.idx >= 0, "Cannot allocate SRS in any available beam\n");
-  uint16_t *vrb_map_UL = &nrmac->common_channels[CC_id].vrb_map_UL[beam.idx][buffer_index * MAX_BWP_SIZE];
   uint16_t num = 1 << srs_pdu->num_symbols; // 0,1,2 means 1,2,4 symbols, see 222.10.04 table 3-105
   const uint8_t l0 = NR_SYMBOLS_PER_SLOT - 1 - srs_pdu->time_start_position;
+  NR_beam_alloc_t beam = beam_allocation_procedure(&nrmac->beam_info, frame, slot, l0, num, UE->UE_beam_index, slots_per_frame);
+  AssertFatal(beam.idx >= 0, "Cannot allocate SRS in any available beam\n");
+  uint16_t *vrb_map_UL = &nrmac->common_channels[CC_id].vrb_map_UL[beam.idx][buffer_index * MAX_BWP_SIZE];
   uint16_t mask = SL_to_bitmap(l0, num);
   DevAssert(mask != 0);
   for (int i = 0; i < srs_pdu->bwp_size; ++i) {
