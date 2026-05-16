@@ -21,9 +21,10 @@
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 // clang-format off
 #define CMDLINE_PARAMS_DESC_GNB { \
-  {"m" ,                    CONFIG_HLP_DLMCS_PHYTEST,  0,                .uptr=&target_dl_mcs,                .defintval=0,                     TYPE_UINT,   0},        \
   {"l" ,                    CONFIG_HLP_DLNL_PHYTEST,   0,                .uptr=&target_dl_Nl,                 .defintval=0,                     TYPE_UINT,   0},        \
   {"L" ,                    CONFIG_HLP_ULNL_PHYTEST,   0,                .uptr=&target_ul_Nl,                 .defintval=0,                     TYPE_UINT,   0},        \
+  {"p" ,                    CONFIG_HLP_DLPMI_PHYTEST,  0,                .uptr=&target_dl_pmi,                .defintval=0,                     TYPE_UINT,   0},        \
+  {"m" ,                    CONFIG_HLP_DLMCS_PHYTEST,  0,                .uptr=&target_dl_mcs,                .defintval=0,                     TYPE_UINT,   0},        \
   {"t" ,                    CONFIG_HLP_ULMCS_PHYTEST,  0,                .uptr=&target_ul_mcs,                .defintval=0,                     TYPE_UINT,   0},        \
   {"M" ,                    CONFIG_HLP_DLBW_PHYTEST,   0,                .uptr=&target_dl_bw,                 .defintval=0,                     TYPE_UINT,   0},        \
   {"T" ,                    CONFIG_HLP_ULBW_PHYTEST,   0,                .uptr=&target_ul_bw,                 .defintval=0,                     TYPE_UINT,   0},        \
@@ -36,9 +37,10 @@
 }
 // clang-format on
 
-extern uint32_t target_dl_mcs;
 extern uint32_t target_dl_Nl;
 extern uint32_t target_ul_Nl;
+extern uint32_t target_dl_pmi;
+extern uint32_t target_dl_mcs;
 extern uint32_t target_ul_mcs;
 extern uint32_t target_dl_bw;
 extern uint32_t target_ul_bw;

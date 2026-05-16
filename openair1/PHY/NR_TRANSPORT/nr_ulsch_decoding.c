@@ -270,7 +270,14 @@ int nr_ulsch_decoding(PHY_VARS_gNB *phy_vars_gNB,
     }
   }
 
+  int slot_type = nr_slot_select(&phy_vars_gNB->gNB_config, frame, nr_tti_rx);
+  if (slot_type == NR_UPLINK_SLOT) {
+    start_meas(&phy_vars_gNB->ulsch_decoding_stats);
+  }
   int ret_decoder = phy_vars_gNB->nrLDPC_coding_interface.nrLDPC_coding_decoder(&slot_parameters);
+  if (slot_type == NR_UPLINK_SLOT) {
+    stop_meas(&phy_vars_gNB->ulsch_decoding_stats);
+  }
 
   // post decode
   for (uint8_t pusch_id = 0; pusch_id < nb_pusch; pusch_id++) {
@@ -294,9 +301,11 @@ int nr_ulsch_decoding(PHY_VARS_gNB *phy_vars_gNB,
       }
       offset += ((harq_process->K >> 3) - (harq_process->F >> 3) - ((harq_process->C > 1) ? 3 : 0));
 
-      merge_meas(&phy_vars_gNB->ts_deinterleave, &nrLDPC_segment_decoding_parameters.ts_deinterleave);
-      merge_meas(&phy_vars_gNB->ts_rate_unmatch, &nrLDPC_segment_decoding_parameters.ts_rate_unmatch);
-      merge_meas(&phy_vars_gNB->ts_ldpc_decode, &nrLDPC_segment_decoding_parameters.ts_ldpc_decode);
+      if (slot_type == NR_UPLINK_SLOT) {
+        merge_meas(&phy_vars_gNB->ts_deinterleave, &nrLDPC_segment_decoding_parameters.ts_deinterleave);
+        merge_meas(&phy_vars_gNB->ts_rate_unmatch, &nrLDPC_segment_decoding_parameters.ts_rate_unmatch);
+        merge_meas(&phy_vars_gNB->ts_ldpc_decode, &nrLDPC_segment_decoding_parameters.ts_ldpc_decode);
+      }
     }
   }
 

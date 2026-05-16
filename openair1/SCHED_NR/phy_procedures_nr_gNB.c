@@ -291,7 +291,10 @@ void phy_procedures_gNB_TX(PHY_VARS_gNB *gNB,
   }
 
   //apply the OFDM symbol rotation here
-  start_meas(&gNB->phase_comp_stats);
+  int slot_type = nr_slot_select(&gNB->gNB_config, frame, slot);
+  if (slot_type == NR_DOWNLINK_SLOT) {
+    start_meas(&gNB->phase_comp_stats);
+  }
   for (int i = 0; i < gNB->common_vars.num_beams_period; ++i) {
     for (int aa = 0; aa < cfg->carrier_config.num_tx_ant.value; aa++) {
       if (gNB->phase_comp) {
@@ -312,7 +315,9 @@ void phy_procedures_gNB_TX(PHY_VARS_gNB *gNB,
         T_BUFFER(gNB->common_vars.txdataF[i][aa], fp->samples_per_slot_wCP * sizeof(int32_t)));
     }
   }
-  stop_meas(&gNB->phase_comp_stats);
+  if (slot_type == NR_DOWNLINK_SLOT) {
+    stop_meas(&gNB->phase_comp_stats);
+  }
 }
 
 static int nr_ulsch_procedures(PHY_VARS_gNB *gNB, int frame_rx, int slot_rx, int *ulsch_to_decode, int nb_pusch, NR_UL_IND_t *UL_INFO)
@@ -1171,8 +1176,10 @@ int phy_procedures_gNB_uespec_RX(PHY_VARS_gNB *gNB, int frame_rx, int slot_rx, N
     }
     gNB_I0_measurements(gNB, slot_rx, first_symb, num_symb, rb_mask_ul);
   }
-
-  start_meas(&gNB->phy_proc_rx);
+  int slot_type = nr_slot_select(&gNB->gNB_config, frame_rx, slot_rx);
+  if (slot_type == NR_UPLINK_SLOT) {
+    start_meas(&gNB->phy_proc_rx);
+  }
   UL_INFO->uci_ind.uci_list = UL_INFO->uci_pdu_list;
   UL_INFO->uci_ind.sfn = frame_rx;
   UL_INFO->uci_ind.slot = slot_rx;
@@ -1231,7 +1238,9 @@ int phy_procedures_gNB_uespec_RX(PHY_VARS_gNB *gNB, int frame_rx, int slot_rx, N
     stop_meas(&gNB->rx_srs_stats);
   }
 
-  stop_meas(&gNB->phy_proc_rx);
+  if (slot_type == NR_UPLINK_SLOT) {
+    stop_meas(&gNB->phy_proc_rx);
+  }
 
   if (n_pucch > 0 || num_pusch > 0) {
     UNUSED(ofdm_symbol_size); // only used if T activated

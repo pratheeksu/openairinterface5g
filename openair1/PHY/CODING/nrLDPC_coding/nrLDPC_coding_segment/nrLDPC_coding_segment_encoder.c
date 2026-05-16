@@ -338,10 +338,6 @@ static int nrLDPC_launch_TB_encoding(nrLDPC_slot_encoding_parameters_t *nrLDPC_s
 
   encoder_implemparams_t common_segment_params = {
     .n_segments = nrLDPC_TB_encoding_parameters->C,
-    .tinput = nrLDPC_slot_encoding_parameters->tinput,
-    .tprep = nrLDPC_slot_encoding_parameters->tprep,
-    .tparity = nrLDPC_slot_encoding_parameters->tparity,
-    .toutput = nrLDPC_slot_encoding_parameters->toutput,
     .Kb = nrLDPC_TB_encoding_parameters->Kb,
     .Zc = nrLDPC_TB_encoding_parameters->Z,
     .BG = nrLDPC_TB_encoding_parameters->BG,
@@ -430,8 +426,6 @@ int nrLDPC_coding_encoder(nrLDPC_slot_encoding_parameters_t *nrLDPC_slot_encodin
     uint32_t C = nrLDPC_TB_encoding_parameters->C;
     size_t n_seg = (C / 8 + ((C & 7) == 0 ? 0 : 1));
 
-    time_stats_t *toutput = nrLDPC_slot_encoding_parameters->toutput;
-
     for (int j = 0; j < n_seg; j++) {
       unsigned int macro_segment = j * 8;
       unsigned int macro_segment_end = (C > macro_segment + 8) ? macro_segment + 8 : C;
@@ -448,7 +442,8 @@ int nrLDPC_coding_encoder(nrLDPC_slot_encoding_parameters_t *nrLDPC_slot_encodin
         }
       }
 
-      if(toutput != NULL) start_meas(toutput);
+      time_stats_t *toutput = &nrLDPC_TB_encoding_parameters->segments[macro_segment].toutput;
+      start_meas(toutput);
  
       uint32_t Eoffset=0;
       for (int s=0; s<macro_segment; s++)
@@ -463,7 +458,7 @@ int nrLDPC_coding_encoder(nrLDPC_slot_encoding_parameters_t *nrLDPC_slot_encodin
                         nrLDPC_TB_encoding_parameters->output,
                         Eoffset);
 
-      if(toutput != NULL) stop_meas(toutput);
+      stop_meas(toutput);
     }
     nbTasks += n_seg;
   }

@@ -35,6 +35,7 @@ static bool is_xlsch_in_slot(uint64_t bitmap, uint32_t modval, slot_t slot)
 
 uint32_t target_dl_mcs = 9;
 uint32_t target_dl_Nl = 1;
+uint32_t target_dl_pmi = 0;
 uint32_t target_dl_bw = 50;
 uint64_t dlsch_slot_bitmap = (1<<1);
 uint32_t dlsch_slot_modval = 0;
@@ -158,7 +159,7 @@ void nr_preprocessor_phytest(gNB_MAC_INST *mac, post_process_pdsch_t *pp_pdsch)
       // tbSize further below
       .dl_harq_pid = sched_ctrl->retrans_dl_harq.head, // PID of HARQ awaiting retransmission, or -1 otherwise
       .pucch_allocation = alloc,
-      .pm_index = 0,
+      .pm_index = target_dl_pmi,
       .nrOfLayers = target_dl_Nl,
       .bwp_info = get_pdsch_bwp_start_size(mac, UE),
       .dmrs_parms = get_dl_dmrs_params(scc, dl_bwp, &tda_info, target_dl_Nl),

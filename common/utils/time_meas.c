@@ -2,6 +2,7 @@
  * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 #define _GNU_SOURCE
+#define DICHOTOMY
 #include <stdio.h>
 #include "time_meas.h"
 #include <math.h>
@@ -33,6 +34,11 @@ double get_cpu_freq_GHz(void)
   return cpu_freq_GHz;
 }
 
+
+static double StdDev(time_stats_t *ptr)
+{
+  return sqrt((double)ptr->diff_square * 1e-6 / ptr->trials - pow((double)ptr->diff / ptr->trials / 1000, 2));
+}
 
 
 void print_meas_now(time_stats_t *ts, const char *name, FILE *file_name)
@@ -92,6 +98,45 @@ void print_meas(time_stats_t *ts,
   }
 }
 
+size_t print_meas_log_header(time_stats_t *total_exec_time,
+                             time_stats_t *sf_exec_time,
+                             char *output,
+                             size_t outputlen)
+{
+  const char *begin = output;
+  const char *end = output + outputlen;
+
+  if ((total_exec_time == NULL) || (sf_exec_time== NULL))
+    output += snprintf(output,
+                       end - output,
+                       "%25s   %18s  %18s  %18s  %15s  %18s  %18s  %18s  %18s  %18s  %18s %9s %6f\n",
+                       "Name",
+                       "Total",
+                       "Max",
+                       "Std",
+                       "Num Trials",
+                       "min",
+                       "d1",
+                       "q1",
+                       "median",
+                       "q3",
+                       "d9",
+                       "CPU_F_GHz",
+                       cpu_freq_GHz);
+  else
+    output += snprintf(output,
+                       end - output,
+                       "%25s   %18s  %18s  %15s %9s %6f\n",
+                       "Name",
+                       "Total",
+                       "Average/Frame",
+                       "Trials",
+                       "CPU_F_GHz",
+                       cpu_freq_GHz);
+
+  return output - begin;
+}
+
 size_t print_meas_log(time_stats_t *ts,
                       const char *name,
                       time_stats_t *total_exec_time,
@@ -101,46 +146,38 @@ size_t print_meas_log(time_stats_t *ts,
 {
   const char *begin = output;
   const char *end = output + outputlen;
-  static int first_time = 0;
   static double cpu_freq_GHz = 0.0;
 
   if (cpu_freq_GHz == 0.0)
     cpu_freq_GHz = get_cpu_freq_GHz();
 
-  if (first_time == 0) {
-    first_time=1;
-
-    if ((total_exec_time == NULL) || (sf_exec_time== NULL))
-      output += snprintf(output,
-                         end - output,
-                         "%25s  %25s  %25s  %25s %25s %6f\n",
-                         "Name",
-                         "Total",
-                         "Per Trials",
-                         "Num Trials",
-                         "CPU_F_GHz",
-                         cpu_freq_GHz);
-    else
-      output += snprintf(output,
-                         end - output,
-                         "%25s  %25s  %25s  %20s %15s %6f\n",
-                         "Name",
-                         "Total",
-                         "Average/Frame",
-                         "Trials",
-                         "CPU_F_GHz",
-                         cpu_freq_GHz);
-  }
-
   if (ts->trials>0) {
     if ((total_exec_time == NULL) || (sf_exec_time== NULL)) {
-      output += snprintf(output,
-                         end - output,
-                         "%25s:  %15.3f us; %15d; %15.3f us;\n",
-                         name,
-                         ts->diff / ts->trials / cpu_freq_GHz / 1000.0,
-                         ts->trials,
-                         ts->max / cpu_freq_GHz / 1000.0);
+      if (is_enabled_time_stats_sorted_list(&ts->time_stats_sorted_list)) {
+        output += snprintf(output,
+                           end - output,
+                           "%25s:  %15.3f us; %15.3f us; %15.3f us; %15d; %15.3f us; %15.3f us; %15.3f us; %15.3f us; %15.3f us; %15.3f us;\n",
+                           name,
+                           ts->diff / ts->trials / 1000.0,
+                           ts->max / 1000.0,
+                           StdDev(ts),
+                           ts->trials,
+                           get_min(&ts->time_stats_sorted_list) / 1000.0,
+                           get_d1(&ts->time_stats_sorted_list) / 1000.0,
+                           get_q1(&ts->time_stats_sorted_list) / 1000.0,
+                           get_median(&ts->time_stats_sorted_list) / 1000.0,
+                           get_q3(&ts->time_stats_sorted_list) / 1000.0,
+                           get_d9(&ts->time_stats_sorted_list) / 1000.0);
+      } else {
+        output += snprintf(output,
+                           end - output,
+                           "%25s:  %15.3f us; %15.3f us; %15.3f us; %15d;\n",
+                           name,
+                           ts->diff / ts->trials / 1000.0,
+                           ts->max / 1000.0,
+                           StdDev(ts),
+                           ts->trials);
+      }
     } else {
       output += snprintf(output,
                          end - output,
@@ -283,4 +320,223 @@ void end_meas(void) {
 	time_stats_msg_t *msg = (time_stats_msg_t *)NotifiedFifoData(nfe);
     msg->msgid = TIMESTAT_MSGID_END ;
     pushNotifiedFIFO(&measur_fifo, nfe);
+}
+
+/**
+ * \brief initializes sorted list
+ * if dst is already initialized then asserts
+ * \param time_stats_sorted_list sorted list to be initialized
+ * \param size size of the sorted list
+ */
+void init_time_stats_sorted_list(time_stats_sorted_list_t *time_stats_sorted_list, unsigned int size)
+{
+  if (time_stats_sorted_list->size == 0) {
+    time_stats_sorted_list->list = calloc(size, sizeof(oai_cputime_t));
+    time_stats_sorted_list->size = size;
+    time_stats_sorted_list->nb_elm = 0;
+  } else {
+    AssertFatal(time_stats_sorted_list->size == 0, "Calling init_time_stats_sorted_list on initialized sorted list\n");
+  }
+}
+/**
+ * \brief free sorted list
+ * if dst is already free then does nothing
+ * \param time_stats_sorted_list sorted list to be freed
+ */
+void free_time_stats_sorted_list(time_stats_sorted_list_t *time_stats_sorted_list)
+{
+  if (time_stats_sorted_list->size > 0) {
+    free(time_stats_sorted_list->list);
+    time_stats_sorted_list->size = 0;
+  }
+}
+/**
+ * \brief returns true if the sorted list is enabled and false otherwise
+ * \param time_stats_sorted_list sorted list to be tested
+ */
+int is_enabled_time_stats_sorted_list(const time_stats_sorted_list_t *time_stats_sorted_list)
+{
+  return (time_stats_sorted_list->size > 0);
+}
+/**
+ * \brief empties sorted list
+ * if dst is not initialized then does nothing
+ * \param time_stats_sorted_list sorted list to be emptied
+ */
+void reset_time_stats_sorted_list(time_stats_sorted_list_t *time_stats_sorted_list)
+{
+  if (time_stats_sorted_list->size > 0) {
+    time_stats_sorted_list->nb_elm = 0;
+  }
+}
+/**
+ * \brief inserts value sorted list
+ * if dst is not initialized then does nothing
+ * if dst is full then does nothing
+ * \param time_stats_sorted_list sorted list to insert in
+ * \param time time value to insert
+ */
+void insert_in_time_stats_sorted_list(time_stats_sorted_list_t *time_stats_sorted_list, oai_cputime_t time)
+{
+  if (time_stats_sorted_list->size > 0) {
+    if (time_stats_sorted_list->nb_elm < time_stats_sorted_list->size) {
+      unsigned int i = 0;
+#ifdef DICHOTOMY
+      unsigned int low = 0;
+      unsigned int high = time_stats_sorted_list->nb_elm;
+      bool converged = false;
+      while (!converged) {
+        i = (high + low) / 2;
+        if (i > 0 && time_stats_sorted_list->list[i - 1] > time) {
+          high = i - 1;
+        } else if (i < time_stats_sorted_list->nb_elm && time_stats_sorted_list->list[i] < time) {
+          low = i + 1;
+        } else {
+          converged = true;
+        }
+      }
+#else
+      for (; i < time_stats_sorted_list->nb_elm && time_stats_sorted_list->list[i] < time; i++);
+#endif
+      // dst and src may overlap => use memmove rather than memcpy
+      memmove(&time_stats_sorted_list->list[i+1], &time_stats_sorted_list->list[i], (time_stats_sorted_list->nb_elm - i) * sizeof(oai_cputime_t));
+      time_stats_sorted_list->list[i] = time;
+      time_stats_sorted_list->nb_elm++;
+    }
+  }
+}
+/**
+ * \brief copy sorted list src into dst, freeing and replacing dst
+ * dst and src should be initialized, otherwise does nothing
+ * \param dst destination sorted list
+ * should be intitialized even with a dummy size 1 buffer to make sure that copying the list there is expected by the caller
+ * \param src source sorted list
+ */
+void copy_time_stats_sorted_list(time_stats_sorted_list_t *dst, const time_stats_sorted_list_t *src)
+{
+  if (dst->size > 0 && src->size > 0) {
+    if (dst->size != src->size) {
+      free_time_stats_sorted_list(dst);
+      init_time_stats_sorted_list(dst, src->size);
+    }
+    memcpy(dst->list, src->list, src->nb_elm * sizeof(oai_cputime_t));
+    dst->nb_elm = src->nb_elm;
+  }
+}
+/**
+ * \brief inserts the content of sorted list src into dst
+ * dst and src should be initialized, otherwise does nothing
+ * if dst is not large enough to copy src then does nothing
+ * \param dst destination sorted list
+ * \param src source sorted list
+ */
+void merge_time_stats_sorted_list(time_stats_sorted_list_t *dst, const time_stats_sorted_list_t *src)
+{
+  if (dst->size > 0 && src->size > 0) {
+    if ((dst->size - dst->nb_elm) >= src->nb_elm) {
+      unsigned int j = 0;
+      for (unsigned int i = 0; i < src->nb_elm; i++) {
+#ifdef DICHOTOMY
+        unsigned int low = j + 1;
+        unsigned int high = dst->nb_elm;
+        bool converged = false;
+        while (!converged) {
+          j = (high + low) / 2;
+          if (j > 0 && dst->list[j - 1] > src->list[i]) {
+            high = j - 1;
+          } else if (j < dst->nb_elm && dst->list[j] < src->list[i]) {
+            low = j + 1;
+          } else {
+            converged = true;
+          }
+        }
+#else
+        for (; j < dst->nb_elm && dst->list[j] < src->list[i]; j++);
+#endif
+        // dst and src may overlap => use memmove rather than memcpy
+        memmove(&dst->list[j+1], &dst->list[j], (dst->nb_elm - j) * sizeof(oai_cputime_t));
+        dst->list[j] = src->list[i];
+        dst->nb_elm++;
+        j++;
+      }
+    }
+  }
+}
+/**
+ * \brief get the minimum from a sorted list
+ * if the sorted list is not initialized or empty then returns -1
+ * \param time_stats_sorted_list sorted list to query
+ */
+oai_cputime_t get_min(time_stats_sorted_list_t *time_stats_sorted_list)
+{
+  if (time_stats_sorted_list->size > 0 && time_stats_sorted_list->nb_elm > 0) {
+    return time_stats_sorted_list->list[0];
+  } else {
+    return -1;
+  }
+}
+/**
+ * \brief get the median from a sorted list
+ * if the sorted list is not initialized or empty then returns -1
+ * \param time_stats_sorted_list sorted list to query
+ */
+oai_cputime_t get_median(time_stats_sorted_list_t *time_stats_sorted_list)
+{
+  if (time_stats_sorted_list->size > 0 && time_stats_sorted_list->nb_elm > 0) {
+    return time_stats_sorted_list->list[time_stats_sorted_list->nb_elm / 2];
+  } else {
+    return -1;
+  }
+}
+/**
+ * \brief get the first quartile from a sorted list
+ * if the sorted list is not initialized or empty then returns -1
+ * \param time_stats_sorted_list sorted list to query
+ */
+oai_cputime_t get_q1(time_stats_sorted_list_t *time_stats_sorted_list)
+{
+  if (time_stats_sorted_list->size > 0 && time_stats_sorted_list->nb_elm > 0) {
+    return time_stats_sorted_list->list[time_stats_sorted_list->nb_elm / 4];
+  } else {
+    return -1;
+  }
+}
+/**
+ * \brief get the third quartile from a sorted list
+ * if the sorted list is not initialized or empty then returns -1
+ * \param time_stats_sorted_list sorted list to query
+ */
+oai_cputime_t get_q3(time_stats_sorted_list_t *time_stats_sorted_list)
+{
+  if (time_stats_sorted_list->size > 0 && time_stats_sorted_list->nb_elm > 0) {
+    return time_stats_sorted_list->list[3 * time_stats_sorted_list->nb_elm / 4];
+  } else {
+    return -1;
+  }
+}
+/**
+ * \brief get the first decile from a sorted list
+ * if the sorted list is not initialized or empty then returns -1
+ * \param time_stats_sorted_list sorted list to query
+ */
+oai_cputime_t get_d1(time_stats_sorted_list_t *time_stats_sorted_list)
+{
+  if (time_stats_sorted_list->size > 0 && time_stats_sorted_list->nb_elm > 0) {
+    return time_stats_sorted_list->list[time_stats_sorted_list->nb_elm / 10];
+  } else {
+    return -1;
+  }
+}
+/**
+ * \brief get the nineth decile from a sorted list
+ * if the sorted list is not initialized or empty then returns -1
+ * \param time_stats_sorted_list sorted list to query
+ */
+oai_cputime_t get_d9(time_stats_sorted_list_t *time_stats_sorted_list)
+{
+  if (time_stats_sorted_list->size > 0 && time_stats_sorted_list->nb_elm > 0) {
+    return time_stats_sorted_list->list[9 * time_stats_sorted_list->nb_elm / 10];
+  } else {
+    return -1;
+  }
 }

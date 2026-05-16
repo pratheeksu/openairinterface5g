@@ -51,43 +51,46 @@ void sumUpStatsSlot(time_stats_t *res, time_stats_t src[RX_NB_TH][2], int lastAc
 }
 
 double squareRoot(time_stats_t *ptr) {
-  double timeBase=1/(1000*get_cpu_freq_GHz());
+  double timeBase=1/1000;
   return sqrt((double)ptr->diff_square*pow(timeBase,2)/ptr->trials -
               pow((double)ptr->diff/ptr->trials*timeBase,2));
 }
 
 void printDistribution(time_stats_t *ptr, varArray_t *sortedList, char *txt) {
-  double timeBase=1/(1000*get_cpu_freq_GHz());
   printf("%-43s %6.2f us (%d trials)\n",
          txt,
-         (double)ptr->diff/ptr->trials*timeBase,
+         (double)ptr->diff/ptr->trials/1000.0,
          ptr->trials);
-  printf(" Statistics std=%.2f, median=%.2f, q1=%.2f, q3=%.2f µs (on %ld trials)\n",
-         squareRoot(ptr), median(sortedList),q1(sortedList),q3(sortedList), sortedList->size);
+  printf(" Statistics std=%.2f, min=%.2f, q1=%.2f, median=%.2f, q3=%.2f, max=%.2f µs (on %d trials)\n",
+         squareRoot(ptr),
+	 get_min(&ptr->time_stats_sorted_list) / 1000.0,
+	 get_q1(&ptr->time_stats_sorted_list) / 1000.0,
+	 get_median(&ptr->time_stats_sorted_list) / 1000.0,
+	 get_q3(&ptr->time_stats_sorted_list) / 1000.0,
+	 ptr->max / 1000.0,
+	 ptr->trials);
 }
 
 void printStatIndent(time_stats_t *ptr, char *txt) {
   printf("|__ %-38s %6.2f us (%3d trials)\t\t(%6.2f total [ms])\n",
          txt,
-         ptr->trials?inMicroS(ptr->diff/ptr->trials):0,
+         ptr->trials?ptr->diff/ptr->trials/1000.0:0,
          ptr->trials,
-         ptr->trials?inMicroS(ptr->diff)/1000:0);
+         ptr->trials?ptr->diff/1000.0:0);
 }
 
 void printStatIndent2(time_stats_t *ptr, char *txt) {
-  double timeBase=1/(1000*get_cpu_freq_GHz());
   printf("    |__ %-34s %6.2f us (%3d trials)\t\t(%6.2f total [ms])\n",
          txt,
-         ptr->trials?((double)ptr->diff)/ptr->trials*timeBase:0,
+         ptr->trials?ptr->diff/ptr->trials/1000.0:0,
          ptr->trials,
-         ptr->trials?inMicroS(ptr->diff)/1000:0);
+         ptr->trials?ptr->diff/1000.0:0);
 }
 
 void printStatIndent3(time_stats_t *ptr, char *txt) {
-  double timeBase=1/(1000*get_cpu_freq_GHz());
   printf("        |__ %-30s %6.2f us (%3d trials)\n",
          txt,
-         ptr->trials?((double)ptr->diff)/ptr->trials*timeBase:0,
+         ptr->trials?ptr->diff/ptr->trials/1000.0:0,
 	 ptr->trials);
 }
 

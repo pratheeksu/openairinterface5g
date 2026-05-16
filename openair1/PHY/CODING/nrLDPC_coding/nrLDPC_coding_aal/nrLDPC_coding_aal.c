@@ -899,10 +899,8 @@ static int pmd_lcore_ldpc_enc(void *arg)
   AssertFatal(ret == 0, "Allocation failed for %d ops", num_segments);
   set_ldpc_enc_op(ops_enq, bufs->inputs, bufs->hard_outputs, nrLDPC_slot_encoding_parameters);
 
-  if (nrLDPC_slot_encoding_parameters->tprep != NULL)
-    stop_meas(nrLDPC_slot_encoding_parameters->tprep);
-  if (nrLDPC_slot_encoding_parameters->tparity != NULL)
-    start_meas(nrLDPC_slot_encoding_parameters->tparity);
+  stop_meas(&nrLDPC_slot_encoding_parameters->TBs[0].segments[0].tprep);
+  start_meas(&nrLDPC_slot_encoding_parameters->TBs[0].segments[0].tparity);
 
   uint16_t enq = 0, deq = 0;
   while (enq < num_segments) {
@@ -916,14 +914,11 @@ static int pmd_lcore_ldpc_enc(void *arg)
     time_out++;
     DevAssert(time_out <= TIME_OUT_POLL);
   }
-  if (nrLDPC_slot_encoding_parameters->tparity != NULL)
-    stop_meas(nrLDPC_slot_encoding_parameters->tparity);
-  if (nrLDPC_slot_encoding_parameters->toutput != NULL)
-    start_meas(nrLDPC_slot_encoding_parameters->toutput);
+  stop_meas(&nrLDPC_slot_encoding_parameters->TBs[0].segments[0].tparity);
+  start_meas(&nrLDPC_slot_encoding_parameters->TBs[0].segments[0].toutput);
   ret = retrieve_ldpc_enc_op(ops_deq, nrLDPC_slot_encoding_parameters);
   AssertFatal(ret == 0, "Failed to retrieve LDPC encoding op!");
-  if (nrLDPC_slot_encoding_parameters->toutput != NULL)
-    stop_meas(nrLDPC_slot_encoding_parameters->toutput);
+  stop_meas(&nrLDPC_slot_encoding_parameters->TBs[0].segments[0].toutput);
   rte_bbdev_enc_op_free_bulk(ops_enq, num_segments);
   return ret;
 }
@@ -1338,8 +1333,7 @@ int32_t nrLDPC_coding_decoder(nrLDPC_slot_decoding_parameters_t *nrLDPC_slot_dec
 int32_t nrLDPC_coding_encoder(nrLDPC_slot_encoding_parameters_t *nrLDPC_slot_encoding_parameters)
 {
   pthread_mutex_lock(&encode_mutex);
-  if (nrLDPC_slot_encoding_parameters->tprep != NULL)
-    start_meas(nrLDPC_slot_encoding_parameters->tprep);
+  start_meas(&nrLDPC_slot_encoding_parameters->TBs[0].segments[0].tprep);
 
   const uint16_t num_segments = nb_segments_encoding(nrLDPC_slot_encoding_parameters);
 

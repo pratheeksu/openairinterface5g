@@ -34,6 +34,7 @@
 /* help strings definition for command line options, used in CMDLINE_XXX_DESC macros and printed when -h option is used */
 #define CONFIG_HLP_DLMCS_PHYTEST  "Set the downlink MCS for PHYTEST mode\n"
 #define CONFIG_HLP_DLNL_PHYTEST   "Set the downlink nrOfLayers for PHYTEST mode\n"
+#define CONFIG_HLP_DLPMI_PHYTEST  "Set the downlink Precoding Matrix Index for PHYTEST mode\n"
 #define CONFIG_HLP_ULNL_PHYTEST   "Set the uplink nrOfLayers for PHYTEST mode\n"
 #define CONFIG_HLP_DLBW_PHYTEST   "Set the number of PRBs used for DLSCH in PHYTEST mode\n"
 #define CONFIG_HLP_ULBW_PHYTEST   "Set the number of PRBs used for ULSCH in PHYTEST mode\n"

@@ -1023,6 +1023,7 @@ int main(int argc, char **argv)
   time_stats_t channel_stats = {0};
   time_stats_t noise_stats = {0};
   time_stats_t pipeline_stats = {0};
+  init_sorted_list_meas(&gNB->phy_proc_tx, 4 * n_trials);
 
   for (SNR = snr0; SNR < snr1 && !stop; SNR += .2) {
 
@@ -1505,6 +1506,7 @@ int main(int argc, char **argv)
 
   } // NSR
 
+  free_sorted_list_meas(&gNB->phy_proc_tx);
   free(Sched_INFO);
 
   free_channel_desc_scm(gNB2UE);

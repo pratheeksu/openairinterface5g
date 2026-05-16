@@ -109,10 +109,6 @@ int nr_ulsch_encoding(PHY_VARS_NR_UE *ue,
                                                        .slot = slot,
                                                        .nb_TBs = nb_ulsch,
                                                        .threadPool = &get_nrUE_params()->Tpool,
-                                                       .tinput = NULL,
-                                                       .tprep = NULL,
-                                                       .tparity = NULL,
-                                                       .toutput = NULL,
                                                        .TBs = TBs};
 
   int max_num_segments = 0;
@@ -166,6 +162,10 @@ int nr_ulsch_encoding(PHY_VARS_NR_UE *ue,
       reset_meas(&segment_parameters->ts_interleave);
       reset_meas(&segment_parameters->ts_rate_match);
       reset_meas(&segment_parameters->ts_ldpc_encode);
+      reset_meas(&segment_parameters->tinput);
+      reset_meas(&segment_parameters->tprep);
+      reset_meas(&segment_parameters->tparity);
+      reset_meas(&segment_parameters->toutput);
 
     } // TB_parameters->C
   } // pusch_id
@@ -180,6 +180,10 @@ int nr_ulsch_encoding(PHY_VARS_NR_UE *ue,
       merge_meas(&ue->phy_cpu_stats.cpu_time_stats[ULSCH_INTERLEAVING_STATS], &segment_parameters->ts_interleave);
       merge_meas(&ue->phy_cpu_stats.cpu_time_stats[ULSCH_RATE_MATCHING_STATS], &segment_parameters->ts_rate_match);
       merge_meas(&ue->phy_cpu_stats.cpu_time_stats[ULSCH_LDPC_ENCODING_STATS], &segment_parameters->ts_ldpc_encode);
+      merge_meas(&ue->phy_cpu_stats.cpu_time_stats[ULSCH_LDPC_INPUT_STATS], &segment_parameters->tinput);
+      merge_meas(&ue->phy_cpu_stats.cpu_time_stats[ULSCH_LDPC_PREP_STATS], &segment_parameters->tprep);
+      merge_meas(&ue->phy_cpu_stats.cpu_time_stats[ULSCH_LDPC_PARITY_STATS], &segment_parameters->tparity);
+      merge_meas(&ue->phy_cpu_stats.cpu_time_stats[ULSCH_LDPC_OUTPUT_STATS], &segment_parameters->toutput);
     }
   }
 

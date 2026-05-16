@@ -125,7 +125,8 @@ int main(int argc, char *argv[])
     }
   }
   // Initiate timing. (Results depend on CPU Frequency. Therefore, might change due to performance variances during simulation.)
-  time_stats_t timeEncoder, timeDecoder;
+  time_stats_t timeEncoder = {0};
+  time_stats_t timeDecoder = {0};
   cpu_meas_enabled = 1;
   reset_meas(&timeEncoder);
   reset_meas(&timeDecoder);

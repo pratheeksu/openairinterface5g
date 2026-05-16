@@ -21,6 +21,7 @@ int cpu_meas_enabled;
 THREAD_STRUCT thread_struct;
 uint32_t target_ul_mcs = 9;
 uint32_t target_dl_mcs = 9;
+uint32_t target_dl_pmi = 0;
 uint64_t dlsch_slot_bitmap = (1<<1);
 uint64_t ulsch_slot_bitmap = (1<<8);
 uint32_t target_ul_bw = 50;
