@@ -142,11 +142,14 @@ static nr_dci_format_t handle_dci(NR_UE_MAC_INST_t *mac, frame_t frame, int slot
 // Note: sdu should always be processed because data and timing advance updates are transmitted by the UE
 static int8_t handle_dlsch(NR_UE_MAC_INST_t *mac, nr_downlink_indication_t *dl_info, int pdu_id)
 {
-  if (mac->ra.ra_state != nrRA_WAIT_RAR) // no HARQ for MSG2
-    update_harq_status(mac,
-                       dl_info->rx_ind->rx_indication_body[pdu_id].pdsch_pdu.harq_pid,
-                       dl_info->rx_ind->rx_indication_body[pdu_id].pdsch_pdu.ack_nack);
-  if(dl_info->rx_ind->rx_indication_body[pdu_id].pdsch_pdu.ack_nack)
+  const uint8_t harq_pid = dl_info->rx_ind->rx_indication_body[pdu_id].pdsch_pdu.harq_pid;
+  /* DLSCH path uses DL HARQ status tied to harq_pid: P-RNTI paging does not, so update HARQ status
+   * only when active. */
+  if (mac->ra.ra_state != nrRA_WAIT_RAR && mac->dl_harq_info[harq_pid].active)
+    update_harq_status(mac, harq_pid, dl_info->rx_ind->rx_indication_body[pdu_id].pdsch_pdu.ack_nack);
+  /* The flag is set when MAC accepted a P-RNTI grant: forward PCCH to RRC. */
+  const bool is_pending_paging = mac->pending_pcch_from_prnti;
+  if (dl_info->rx_ind->rx_indication_body[pdu_id].pdsch_pdu.ack_nack || is_pending_paging)
     nr_ue_send_sdu(mac, dl_info, pdu_id);
 
   return 0;

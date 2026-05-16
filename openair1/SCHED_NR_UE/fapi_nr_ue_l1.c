@@ -175,7 +175,7 @@ static void nr_ue_scheduled_response_dl(NR_UE_MAC_INST_t *mac,
       case FAPI_NR_DL_CONFIG_TYPE_DLSCH: {
         fapi_nr_dl_config_dlsch_pdu_rel15_t *dlsch_config_pdu = &pdu->dlsch_config_pdu.dlsch_config_rel15;
         NR_UE_DLSCH_t *dlsch0 = &phy_data->dlsch[0];
-        dlsch0->rnti_type = TYPE_C_RNTI_;
+        dlsch0->rnti_type = (pdu->dlsch_config_pdu.rnti == P_RNTI) ? TYPE_P_RNTI_ : TYPE_C_RNTI_;
         dlsch0->dlsch_config = *dlsch_config_pdu;
         configure_dlsch(dlsch0, phy->dl_harq_processes[0], dlsch_config_pdu, mac, pdu->dlsch_config_pdu.rnti);
       } break;

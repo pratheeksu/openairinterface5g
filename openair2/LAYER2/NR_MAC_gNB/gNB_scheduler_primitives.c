@@ -482,8 +482,7 @@ NR_sched_pdcch_t set_pdcch_structure(gNB_MAC_INST *gNB_mac,
   BIT_STRING_t *symbolsInSlot = ss->monitoringSymbolsWithinSlot;
   AssertFatal(symbolsInSlot->buf != NULL, "ss->monitoringSymbolsWithinSlot->buf is null\n");
 
-  // for SPS=14 8 MSBs in positions 13 downto 6
-  int monitoringSymbolsWithinSlot = (symbolsInSlot->buf[0] << (sps - 8)) | (symbolsInSlot->buf[1] >> (16 - sps));
+  int monitoringSymbolsWithinSlot = nr_pdcch_monitoring_symbols_mask(symbolsInSlot, sps);
 
   for (int i = 0; i < sps; i++) {
     if ((monitoringSymbolsWithinSlot >> (sps - 1 - i)) & 1) {
@@ -626,6 +625,70 @@ void fill_pdcch_vrb_map(gNB_MAC_INST *mac,
         vrb_map[pdcch->BWPStart + f*B_rb + rb] |= SL_to_bitmap(pdcch->StartSymbolIndex, N_symb);
     }
   }
+}
+
+bool update_rb_mcs_tbs(NR_sched_pdsch_t *pdsch, uint32_t num_total_bytes, uint16_t *vrb_map)
+{
+  const NR_tda_info_t *tda_info = &pdsch->tda_info;
+
+  uint8_t N_PRB_DMRS = pdsch->dmrs_parms.N_PRB_DMRS;
+  LOG_D(MAC, "dlDmrsSymbPos %x\n", pdsch->dmrs_parms.dl_dmrs_symb_pos);
+  int mcsTableIdx = 0;
+  const uint16_t slbitmap = SL_to_bitmap(tda_info->startSymbolIndex, tda_info->nrOfSymbols);
+  int bwpSize = pdsch->bwp_info.bwpSize;
+  int bwpStart = pdsch->bwp_info.bwpStart;
+  int rbStop = bwpSize - 1;
+  while (pdsch->rbStart < rbStop) {
+    if (vrb_map[pdsch->rbStart + bwpStart] & slbitmap)
+      pdsch->rbStart++;
+    else {
+      int max_rbSize = 0;
+      while (pdsch->rbStart + max_rbSize <= rbStop && !(vrb_map[pdsch->rbStart + max_rbSize + bwpStart] & slbitmap))
+        max_rbSize++;
+
+      bool res = false;
+      while (!res && pdsch->mcs < 10) {
+        pdsch->Qm = nr_get_Qm_dl(pdsch->mcs, mcsTableIdx);
+        pdsch->R = nr_get_code_rate_dl(pdsch->mcs, mcsTableIdx);
+        res = nr_find_nb_rb(pdsch->Qm,
+                            pdsch->R,
+                            1,
+                            1,
+                            tda_info->nrOfSymbols,
+                            pdsch->dmrs_parms.N_PRB_DMRS * pdsch->dmrs_parms.N_DMRS_SLOT,
+                            num_total_bytes,
+                            1,
+                            max_rbSize,
+                            &pdsch->tb_size,
+                            &pdsch->rbSize);
+        if (!res)
+          pdsch->mcs++;
+      }
+      break;
+    }
+  }
+  if (pdsch->tb_size < num_total_bytes) {
+    LOG_D(NR_MAC,
+          "Couldn't allocate enough resources for %d bytes in common PDSCH (rbStart %d, rbSize %d, bwpSize %d)\n",
+          num_total_bytes,
+          pdsch->rbStart,
+          pdsch->rbSize,
+          bwpSize);
+    return false;
+  }
+
+  LOG_D(NR_MAC,
+        "Common PDSCH: mcs=%i, startSymbolIndex=%i, nrOfSymbols=%i, rbSize=%i, TBS=%i, dmrs_length=%d, N_PRB_DMRS=%d, "
+        "mappingtype=%d\n",
+        pdsch->mcs,
+        tda_info->startSymbolIndex,
+        tda_info->nrOfSymbols,
+        pdsch->rbSize,
+        pdsch->tb_size,
+        pdsch->dmrs_parms.N_DMRS_SLOT,
+        N_PRB_DMRS,
+        tda_info->mapping_type);
+  return true;
 }
 
 static bool multiple_2_3_5(int rb)
@@ -917,15 +980,25 @@ dci_pdu_rel15_t prepare_dci_dl_payload(const gNB_MAC_INST *gNB_mac,
     dci_payload.system_info_indicator = !is_sib1;
     return dci_payload;
   }
+
   if (rnti_type == TYPE_RA_RNTI_) {
     dci_payload.tb_scaling = tb_scaling;
     return dci_payload;
   }
 
-  const NR_UE_sched_ctrl_t *sched_ctrl = &UE->UE_sched_ctrl;
+  if (rnti_type == TYPE_P_RNTI_) {
+    /* Paging DCI 1_0: P-RNTI has no UE-specific HARQ fields. */
+    dci_payload.tb_scaling = tb_scaling;
+    dci_payload.short_messages_indicator = 1;
+    dci_payload.short_messages = 0;
+    return dci_payload;
+  }
+
   dci_payload.dmrs_sequence_initialization.val = pdsch_pdu->SCID;
   dci_payload.antenna_ports.val = sched_pdsch->dmrs_parms.dmrs_ports_id;
   dci_payload.tpc = tpc;
+
+  const NR_UE_sched_ctrl_t *sched_ctrl = &UE->UE_sched_ctrl;
   const NR_UE_harq_t *harq = &sched_ctrl->harq_processes[harq_pid];
   AssertFatal(harq, "HARQ process should be available for DCI with RNTI %s\n", rnti_types(rnti_type));
   dci_payload.harq_pid.val = harq_pid;
@@ -1904,6 +1977,12 @@ void fill_dci_pdu_rel15(const NR_UE_ServingCell_Info_t *servingCellInfo,
         // TB scaling 2 bit
         for (int i = 0; i < 2; i++)
           *dci_pdu |= (((uint64_t)dci_pdu_rel15->tb_scaling >> (1 - i)) & 1) << (dci_size - pos++);
+        LOG_D(NR_MAC,
+              "Packed P-RNTI DCI: payload=0x%lx dci_size=%d SMI=%d short_msg=0x%02x\n",
+              *dci_pdu,
+              dci_size,
+              dci_pdu_rel15->short_messages_indicator,
+              dci_pdu_rel15->short_messages);
         break;
 
       case TYPE_SI_RNTI_:
@@ -3675,6 +3754,43 @@ int get_beam_from_ssbidx(gNB_MAC_INST *mac, int ssb_idx)
   int beam_idx = mac->beam_index_list[ssb_idx];
   AssertFatal(beam_idx >= 0, "Invalid beamforming index %d\n", beam_idx);
   return beam_idx;
+}
+
+/** @brief Maximum number of SS/PBCH block positions (L_max)
+ * @param scc ServingCellConfigCommon for which to determine L_max from ssb-PositionsInBurst (TS 38.331).
+ * @return L_max: shortBitmap: 4; mediumBitmap: 8; longBitmap: 64. */
+int get_max_ssbs(const NR_ServingCellConfigCommon_t *scc)
+{
+  switch (scc->ssb_PositionsInBurst->present) {
+    case NR_ServingCellConfigCommon__ssb_PositionsInBurst_PR_shortBitmap:
+      return 4;
+    case NR_ServingCellConfigCommon__ssb_PositionsInBurst_PR_mediumBitmap:
+      return 8;
+    case NR_ServingCellConfigCommon__ssb_PositionsInBurst_PR_longBitmap:
+      return 64;
+    default:
+      AssertFatal(false, "Invalid SSB configuration\n");
+  }
+}
+
+/** @brief Returns true if @param frame contains a Type0-PDCCH CSS monitoring occasion (TS 38.213 Clause 13). */
+static bool check_frame_type0(const NR_ServingCellConfigCommon_t *scc, const NR_Type0_PDCCH_CSS_config_t *type0, int frame)
+{
+  if (type0->type0_pdcch_ss_mux_pattern == 1)
+    return (frame % 2) == type0->sfn_c;
+  DevAssert(scc->ssb_periodicityServingCell);
+  long ssb_period = *scc->ssb_periodicityServingCell; // every how many frames SSB are generated
+  int ssb_frame_periodicity = (ssb_period > 1) ? (1 << (ssb_period - 1)) : 1; // 0 is every half frame
+  return (frame % ssb_frame_periodicity) == 0;
+}
+
+/** @brief True if @param frame, @param slot is the Type0-PDCCH CSS monitoring occasion
+ * for @param type0 (TS 38.213 Clause 13). Used by SIB1 and paging (SearchSpaceId = 0) scheduling. */
+bool is_type0_occasion(NR_ServingCellConfigCommon_t *scc, const NR_Type0_PDCCH_CSS_config_t *type0, int frame, uint32_t slot)
+{
+  DevAssert(scc);
+  DevAssert(type0);
+  return type0->active && (slot == type0->slot) && check_frame_type0(scc, type0, frame);
 }
 
 uint64_t get_ssb_bitmap_and_len(const NR_ServingCellConfigCommon_t *scc, uint8_t *len)

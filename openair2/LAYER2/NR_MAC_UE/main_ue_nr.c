@@ -23,6 +23,16 @@ void send_srb0_rrc(int ue_id, const uint8_t *sdu, sdu_size_t sdu_len, void *data
   itti_send_msg_to_task(TASK_RRC_NRUE, ue_id, message_p);
 }
 
+void send_pcch_rrc(int ue_id, const uint8_t *sdu, sdu_size_t sdu_len, void *data)
+{
+  AssertFatal(sdu_len > 0 && sdu_len <= PCCH_SDU_SIZE, "invalid PCCH SDU size %d\n", sdu_len);
+  MessageDef *message_p = itti_alloc_new_message(TASK_MAC_UE, 0, NR_RRC_MAC_PCCH_DATA_IND);
+  memset(NR_RRC_MAC_PCCH_DATA_IND(message_p).sdu, 0, sdu_len);
+  memcpy(NR_RRC_MAC_PCCH_DATA_IND(message_p).sdu, sdu, sdu_len);
+  NR_RRC_MAC_PCCH_DATA_IND(message_p).sdu_size = sdu_len;
+  itti_send_msg_to_task(TASK_RRC_NRUE, ue_id, message_p);
+}
+
 void nr_ue_init_mac(NR_UE_MAC_INST_t *mac)
 {
   LOG_I(NR_MAC, "[UE%d] Initializing MAC\n", mac->ue_id);

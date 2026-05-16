@@ -521,6 +521,7 @@ static void nr_sdap_qfi2drb_map_update(nr_sdap_entity_t *entity, const sdap_conf
 static void nr_sdap_add_entity(const int is_gnb, const ue_id_t ue_id, const sdap_config_t *sdap)
 {
   nr_sdap_entity_t *sdap_entity = calloc_or_fail(1, sizeof(*sdap_entity));
+  LOG_I(SDAP, "Creating SDAP entity ue_id=%ld pdu_session_id=%d\n", ue_id, sdap->pdusession_id);
 
   // SDAP entity ids
   sdap_entity->ue_id = ue_id;
@@ -591,8 +592,10 @@ nr_sdap_entity_t *nr_sdap_get_entity(ue_id_t ue_id, int pdusession_id)
   nr_sdap_entity_t *sdap_entity;
   sdap_entity = sdap_info.sdap_entity_llist;
 
-  if(sdap_entity == NULL)
+  if (sdap_entity == NULL) {
+    LOG_W(SDAP, " Could not find SDAP entity: entity list empty (ue_id=%ld pdu_session_id=%d)\n", ue_id, pdusession_id);
     return NULL;
+  }
 
   while ((sdap_entity->ue_id != ue_id || sdap_entity->pdusession_id != pdusession_id) && sdap_entity->next_entity != NULL) {
     sdap_entity = sdap_entity->next_entity;

@@ -14,6 +14,7 @@
 #include "NR_DL-CCCH-Message.h"        //asn_DEF_NR_DL_CCCH_Message
 #include "NR_BCCH-BCH-Message.h"       //asn_DEF_NR_BCCH_BCH_Message
 #include "NR_BCCH-DL-SCH-Message.h"    //asn_DEF_NR_BCCH_DL_SCH_Message
+#include "NR_PCCH-Message.h" //asn_DEF_NR_PCCH_Message
 #include "NR_CellGroupConfig.h"        //asn_DEF_NR_CellGroupConfig
 #include "NR_BWP-Downlink.h"           //asn_DEF_NR_BWP_Downlink
 #include "NR_RRCReconfiguration.h"
@@ -38,6 +39,8 @@
 #include "openair3/SECU/key_nas_deriver.h"
 
 #include "common/utils/LOG/log.h"
+#include "conversions.h"
+#include "common/utils/ds/byte_array.h"
 
 #ifndef CELLULAR
   #include "RRC/NR/MESSAGES/asn1_msg.h"
@@ -1673,7 +1676,7 @@ NR_UE_RRC_INST_t* nr_rrc_init_ue(char* uecap_file, int instance_id, int num_ant_
   rrc->sched_reconfsync_sib1 = false;
   rrc->detach_after_release = false;
   rrc->reconfig_after_reestab = false;
-  /* 5G-S-TMSI */
+  /* 5G-S-TMSI starts unset (sentinel UINT64_MAX). NAS_5GMM_IND populates it on registration */
   rrc->fiveG_S_TMSI = UINT64_MAX;
   rrc->access_barred = false;
 
@@ -2063,15 +2066,37 @@ static void nr_rrc_ue_decode_NR_BCCH_DL_SCH_Message(NR_UE_RRC_INST_t *rrc,
   SEQUENCE_free(&asn_DEF_NR_BCCH_DL_SCH_Message, bcch_message, ASFM_FREE_EVERYTHING);
 }
 
-static void rrc_ue_generate_RRCSetupComplete(const NR_UE_RRC_INST_t *rrc, const uint8_t Transaction_id)
+static void rrc_ue_generate_RRCSetupComplete(NR_UE_RRC_INST_t *rrc, const uint8_t Transaction_id)
 {
   uint8_t buffer[100];
   as_nas_info_t initialNasMsg;
 
   if (IS_SA_MODE(get_softmodem_params())) {
+    /* 3GPP TS 38.331:
+     * - 5.3.3.1: RRC connection establishment is also used to transfer the initial NAS dedicated information
+     *   message from the UE to the network.
+     * - 5.3.3.4: set the dedicatedNAS-Message to include the information received from upper layers.
+     * In paging-triggered service resumption (TS 24.501 service request procedure), the Service Request NAS PDU
+     * is therefore carried here as the initial NAS message in RRCSetupComplete. */
     nr_ue_nas_t *nas = get_ue_nas_info(rrc->ue_id);
-    // Send Initial NAS message (Registration Request) before Security Mode control procedure
-    generateRegistrationRequest(&initialNasMsg, nas, false);
+    if (rrc->pending_initial_nas.nas_data && rrc->pending_initial_nas.length > 0) {
+      /* Deferred NAS PDU is placed in dedicatedNAS-Message (TS 38.331 §5.3.3.4). It is the initial NAS message that
+       * starts CM-IDLE to CM-CONNECTED transition (TS 33.501 §6.8.1.2.1, TS 24.501). */
+      initialNasMsg = rrc->pending_initial_nas;
+      /* Clear RRC copy of pointer after shallow copy: NAS payload is owned by initialNasMsg */
+      rrc->pending_initial_nas.nas_data = NULL;
+      rrc->pending_initial_nas.length = 0;
+      LOG_I(NR_RRC, "[UE %ld] Using pending initial NAS message for RRCSetupComplete\n", rrc->ue_id);
+      /* TS 33.501 §6.8.1.2.2: UE derives KgNB from KAMF using NAS UL COUNT of the NAS message that initiated
+       * CM-IDLE to CM-CONNECTED transition. §6.2.3.2 / Annex A.9 tie initial KgNB to ngKSI + that COUNT. In this case,
+       * NAS holds the derived KgNB value: copy into RRC so AS SMC and RRC keys (§6.2.3.1, §6.5) match after RRC release
+       * cleared AS keys (§6.8.1.2.1). */
+      if (nas->security_container && nas->security_container->integrity_context)
+        memcpy(rrc->kgnb, nas->security.kgnb, sizeof(rrc->kgnb));
+    } else {
+      // Send Initial NAS message (Registration Request) before Security Mode control procedure
+      generateRegistrationRequest(&initialNasMsg, nas, false);
+    }
     if (!initialNasMsg.nas_data) {
       LOG_E(NR_RRC, "Failed to complete RRCSetup. NAS InitialUEMessage message not found.\n");
       return;
@@ -2281,6 +2306,43 @@ static int8_t nr_rrc_ue_decode_ccch(NR_UE_RRC_INST_t *rrc, const NRRrcMacCcchDat
 
    ASN_STRUCT_FREE(asn_DEF_NR_DL_CCCH_Message, dl_ccch_msg);
    return rval;
+}
+
+/** @brief Decode a PCCH paging message and scan its paging records (TS 38.331 §5.3.2.3).
+ * @return -1 on decode error, 0 if no match is found, 1 if a record matches the UE */
+static int8_t nr_rrc_ue_decode_pcch(NR_UE_RRC_INST_t *rrc, const byte_array_t pcch)
+{
+  // Paging is only relevant in RRC_IDLE and RRC_INACTIVE.
+  if (rrc->nrRrcState != RRC_STATE_IDLE_NR && rrc->nrRrcState != RRC_STATE_INACTIVE_NR) {
+    LOG_D(NR_RRC, "[UE %ld] Ignoring PCCH in RRC state %d\n", rrc->ue_id, rrc->nrRrcState);
+    return 0;
+  }
+
+  LOG_D(NR_RRC, "[UE %ld] Decoding PCCH message (%zu bytes), State %d\n", rrc->ue_id, pcch.len, rrc->nrRrcState);
+
+  nr_paging_params_t params[NR_PCCH_MAX_PAGING_RECORDS];
+  int count = 0;
+  if (nr_pcch_decode(pcch, params, &count) != 0) {
+    LOG_E(NR_RRC, "[UE %ld] Failed to decode PCCH message (%zu bytes)\n", rrc->ue_id, pcch.len);
+    log_dump(NR_RRC, pcch.buf, pcch.len, LOG_DUMP_CHAR, "   Received bytes:\n");
+    return -1;
+  }
+
+  LOG_D(NR_RRC, "[UE %ld] Received Paging message with %d record(s)\n", rrc->ue_id, count);
+
+  const uint32_t ue_m_tmsi = rrc->fiveG_S_TMSI & UINT32_MAX;
+  for (int i = 0; i < count; i++) {
+    if (params[i].ue_identity_type == NR_PagingUE_Identity_PR_ng_5G_S_TMSI) {
+      LOG_D(NR_RRC, "[UE %ld] PagingRecord %d: M-TMSI=0x%08x\n", rrc->ue_id, i, params[i].ue_identity.m_tmsi);
+      if (params[i].ue_identity.m_tmsi == ue_m_tmsi) {
+        LOG_I(NR_RRC, "[UE %ld] Paging record %d matches M-TMSI=0x%08x\n", rrc->ue_id, i, params[i].ue_identity.m_tmsi);
+        return 1;
+      }
+    }
+  }
+
+  LOG_D(NR_RRC, "[UE %ld] No paging match found in PagingRecordList\n", rrc->ue_id);
+  return 0;
 }
 
 static void nr_rrc_ue_process_securityModeCommand(NR_UE_RRC_INST_t *ue_rrc,
@@ -2700,6 +2762,22 @@ static int nr_rrc_ue_decode_dcch(NR_UE_RRC_INST_t *rrc,
   //  release memory allocation
   SEQUENCE_free(&asn_DEF_NR_DL_DCCH_Message, dl_dcch_msg, ASFM_FREE_EVERYTHING);
   return 0;
+}
+
+/** @brief Encode NAS in ULInformationTransfer, submit to PDCP on SRB2 if established else SRB1. */
+static void nr_rrc_ue_send_ul_information_transfer_nas(NR_UE_RRC_INST_t *rrc, uint32_t nas_length, uint8_t *nas_pdu)
+{
+  uint8_t *buffer = NULL;
+  const int enc_bytes = do_NR_ULInformationTransfer(&buffer, nas_length, nas_pdu);
+  const rb_id_t srb_id = rrc->Srb[2] == RB_ESTABLISHED ? 2 : 1;
+  LOG_D(NR_RRC,
+        "[UE %ld] PDCP_DATA_REQ ULInformationTransfer (NAS %u B) -> SRB%d encoded %d B\n",
+        rrc->ue_id,
+        nas_length,
+        (int)srb_id,
+        enc_bytes);
+  nr_pdcp_data_req_srb(rrc->ue_id, srb_id, 0, enc_bytes, buffer, deliver_pdu_srb_rlc, NULL);
+  free(buffer);
 }
 
 static void apply_ema(val_init_t *vi_rsrp_dBm, float filter_coeff_rsrp, int rsrp_dBm)
@@ -3176,6 +3254,22 @@ void *rrc_nrue(void *notUsed)
     nr_rrc_ue_decode_ccch(rrc, ind);
   } break;
 
+  case NR_RRC_MAC_PCCH_DATA_IND: {
+    NRRrcMacPcchDataInd *ind = &NR_RRC_MAC_PCCH_DATA_IND(msg_p);
+    const byte_array_t pcch = {.len = ind->sdu_size, .buf = ind->sdu};
+    if (nr_rrc_ue_decode_pcch(rrc, pcch) == 1) {
+      LOG_I(NR_RRC, "[UE %ld] Paging match found in PagingRecordList\n", rrc->ue_id);
+      MessageDef *nas_msg = itti_alloc_new_message(TASK_RRC_NRUE, rrc->ue_id, NAS_PAGING_IND);
+      if (nas_msg != NULL) {
+        NAS_PAGING_IND(nas_msg).cause = AS_CONNECTION_ESTABLISH;
+        LOG_I(NR_RRC, "[UE %ld] Triggering Service Request after paging (cause=AS_CONNECTION_ESTABLISH)\n", rrc->ue_id);
+        itti_send_msg_to_task(TASK_NAS_NRUE, rrc->ue_id, nas_msg);
+      } else {
+        LOG_E(NR_RRC, "[UE %ld] Failed to allocate NAS_PAGING_IND message\n", rrc->ue_id);
+      }
+    }
+  } break;
+
   case NR_RRC_DCCH_DATA_IND:
     nr_rrc_ue_decode_dcch(rrc,
                           NR_RRC_DCCH_DATA_IND(msg_p).dcch_index,
@@ -3203,24 +3297,65 @@ void *rrc_nrue(void *notUsed)
     break;
 
   case NAS_UPLINK_DATA_REQ: {
-    uint32_t length;
-    uint8_t *buffer = NULL;
     ul_info_transfer_req_t *req = &NAS_UPLINK_DATA_REQ(msg_p);
-    /* Create message for PDCP (ULInformationTransfer_t) */
-    length = do_NR_ULInformationTransfer(&buffer, req->nasMsg.length, req->nasMsg.nas_data);
-    /* Transfer data to PDCP */
-    // check if SRB2 is created, if yes request data_req on SRB2
-    // error: the remote gNB is hardcoded here
-    rb_id_t srb_id = rrc->Srb[2] == RB_ESTABLISHED ? 2 : 1;
-    nr_pdcp_data_req_srb(rrc->ue_id, srb_id, 0, length, buffer, deliver_pdu_srb_rlc, NULL);
+    /* ULInformationTransfer (TS 38.331) requires an established UL-DCCH SRB: not used for CM-IDLE initial NAS
+     * (that path uses RRCSetupComplete dedicatedNAS-Message (TS 38.331 §5.3.3.4, TS 33.501 §6.8.1.2.1)). */
+    if (rrc->Srb[1] != RB_ESTABLISHED && rrc->Srb[2] != RB_ESTABLISHED) {
+      LOG_W(NR_RRC,
+            "[UE %ld] NAS UL requested but no SRB established: dropping UL request (%u B)\n",
+            rrc->ue_id,
+            req->nasMsg.length);
+      free(req->nasMsg.nas_data);
+      break;
+    }
+    nr_rrc_ue_send_ul_information_transfer_nas(rrc, req->nasMsg.length, req->nasMsg.nas_data);
     free(req->nasMsg.nas_data);
-    free(buffer);
+    break;
+  }
+
+  case NAS_INITIAL_UL_TRANSFER_REQ: {
+    ul_info_transfer_req_t *req = &NAS_INITIAL_UL_TRANSFER_REQ(msg_p);
+    if (rrc->Srb[1] != RB_ESTABLISHED && rrc->Srb[2] != RB_ESTABLISHED) {
+      /* No UL-DCCH SRB yet: cannot use ULInformationTransfer (TS 38.331). Buffer NAS for dedicatedNAS-Message in
+       * RRCSetupComplete (§5.3.3.4). Typical source is Service Request from 5GMM-IDLE (TS 24.501 §5.6.1). */
+      free(rrc->pending_initial_nas.nas_data);
+      rrc->pending_initial_nas.nas_data = req->nasMsg.nas_data;
+      rrc->pending_initial_nas.length = req->nasMsg.length;
+      LOG_I(NR_RRC,
+            "[UE %ld] Initial NAS UL: no SRB yet; buffered %u B for RRCSetupComplete dedicatedNAS (RRC state=%d)\n",
+            rrc->ue_id,
+            req->nasMsg.length,
+            rrc->nrRrcState);
+      if (rrc->nrRrcState == RRC_STATE_IDLE_NR) {
+        RA_trigger_t prev_trigger = rrc->ra_trigger;
+        rrc->ra_trigger = RRC_CONNECTION_SETUP;
+        nr_rrc_ue_prepare_RRCSetupRequest(rrc);
+        nr_mac_rrc_message_t rrc_msg = {0};
+        rrc_msg.payload_type = NR_MAC_RRC_START_RA;
+        nr_rrc_send_msg_to_mac(rrc, &rrc_msg);
+        LOG_I(NR_RRC,
+              "[UE %ld] Triggering MAC RA for RRCSetupComplete pending NAS (prev_trigger=%d)\n",
+              rrc->ue_id,
+              prev_trigger);
+      }
+      break;
+    }
+    LOG_W(NR_RRC,
+          "[UE %ld] Initial NAS UL requested but SRB established: dropping request (length=%u)\n",
+          rrc->ue_id,
+          req->nasMsg.length);
+    free(rrc->pending_initial_nas.nas_data);
+    rrc->pending_initial_nas.nas_data = NULL;
+    rrc->pending_initial_nas.length = 0;
+    free(req->nasMsg.nas_data);
     break;
   }
 
   case NAS_5GMM_IND: {
     nas_5gmm_ind_t *req = &NAS_5GMM_IND(msg_p);
     rrc->fiveG_S_TMSI = req->fiveG_STMSI;
+    /* Push the 5G-S-TMSI-derived UE_ID to MAC for paging PF/PO derivation */
+    nr_rrc_mac_config_req_paging_ue_id(rrc->ue_id, rrc->fiveG_S_TMSI);
     break;
   }
 

@@ -777,6 +777,7 @@ static void nr_ue_dlsch_procedures(PHY_VARS_NR_UE *ue,
       break;
 
     case TYPE_C_RNTI_:
+    case TYPE_P_RNTI_:
       ind_type = FAPI_NR_RX_PDU_TYPE_DLSCH;
       break;
 

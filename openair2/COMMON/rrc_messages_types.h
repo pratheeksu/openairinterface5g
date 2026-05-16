@@ -61,6 +61,7 @@
 #define NAS_CELL_SELECTION_REQ(mSGpTR)  (mSGpTR)->ittiMsg.nas_cell_selection_req
 #define NAS_CONN_ESTABLI_REQ(mSGpTR)    (mSGpTR)->ittiMsg.nas_conn_establi_req
 #define NAS_UPLINK_DATA_REQ(mSGpTR)     (mSGpTR)->ittiMsg.nas_ul_data_req
+#define NAS_INITIAL_UL_TRANSFER_REQ(mSGpTR) (mSGpTR)->ittiMsg.nas_initial_ul_transfer_req
 #define NAS_DETACH_REQ(mSGpTR)          (mSGpTR)->ittiMsg.nas_detach_req
 #define NAS_DEREGISTRATION_REQ(mSGpTR)  (mSGpTR)->ittiMsg.nas_deregistration_req
 #define NAS_5GMM_IND(mSGpTR)            (mSGpTR)->ittiMsg.nas_5gmm_ind
@@ -467,6 +468,7 @@ enum payload_type {
   NR_MAC_RRC_CONFIG_MIB,
   NR_MAC_RRC_CONFIG_SIB1,
   NR_MAC_RRC_CONFIG_OTHER_SIB,
+  NR_MAC_RRC_START_RA,
   NR_MAC_RRC_SCHED_SIB,
   NR_MAC_RRC_RESUME_RB
 };
