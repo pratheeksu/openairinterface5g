@@ -20,8 +20,8 @@ static void nr_fill_nfapi_pucch(gNB_MAC_INST *nrmac, frame_t frame, slot_t slot,
 
   const int index = ul_buffer_index(pucch->frame,
                                     pucch->ul_slot,
-                                    nrmac->frame_structure.numb_slots_frame,
-                                    nrmac->UL_tti_req_ahead_size);
+                                    nrmac->frame_structure[0].numb_slots_frame,
+                                    nrmac->UL_tti_req_ahead_size[0]);
   nfapi_nr_ul_tti_request_t *future_ul_tti_req = &nrmac->UL_tti_req_ahead[0][index];
   if (future_ul_tti_req->SFN != pucch->frame || future_ul_tti_req->Slot != pucch->ul_slot)
     LOG_W(NR_MAC,
@@ -78,7 +78,7 @@ static void nr_fill_nfapi_pucch(gNB_MAC_INST *nrmac, frame_t frame, slot_t slot,
                      pucch->dai_c,
                      pucch->sr_flag,
                      pucch->r_pucch,
-                     nrmac->beam_info.beam_mode);
+                     nrmac->beam_info[0].beam_mode);
 }
 
 //Differential RSRP values Table 10.1.6.1-2 from 38.133
@@ -136,7 +136,7 @@ static int get_pucch_index(int frame, int slot, const frame_structure_t *fs, int
 static void schedule_pucch_core(gNB_MAC_INST *nrmac, NR_UE_info_t *UE, frame_t frame, slot_t slot)
 {
   NR_UE_sched_ctrl_t *sched_ctrl = &UE->UE_sched_ctrl;
-  const int pucch_index = get_pucch_index(frame, slot, &nrmac->frame_structure, sched_ctrl->sched_pucch_size);
+  const int pucch_index = get_pucch_index(frame, slot, &nrmac->frame_structure[0], sched_ctrl->sched_pucch_size);
   NR_sched_pucch_t *curr_pucch = &UE->UE_sched_ctrl.sched_pucch[pucch_index];
   if (!curr_pucch->active)
     return;
@@ -171,7 +171,7 @@ void nr_schedule_pucch(gNB_MAC_INST *nrmac, frame_t frame, slot_t slot)
   /* already mutex protected: held in gNB_dlsch_ulsch_scheduler() */
   NR_SCHED_ENSURE_LOCKED(&nrmac->sched_lock);
 
-  if (!is_ul_slot(slot, &nrmac->frame_structure))
+  if (!is_ul_slot(slot, &nrmac->frame_structure[0]))
     return;
 
   UE_iterator(nrmac->UE_info.access_ue_list, init_UE) {
@@ -197,7 +197,7 @@ void nr_csi_meas_reporting(int Mod_idP,frame_t frame, slot_t slot)
   UE_iterator(nrmac->UE_info.connected_ue_list, UE) {
     NR_UE_sched_ctrl_t *sched_ctrl = &UE->UE_sched_ctrl;
     NR_UE_UL_BWP_t *ul_bwp = &UE->current_UL_BWP;
-    const int n_slots_frame = nrmac->frame_structure.numb_slots_frame;
+    const int n_slots_frame = nrmac->frame_structure[0].numb_slots_frame;
     if (!nr_mac_ue_is_active(UE) && !get_softmodem_params()->phy_test) {
       continue;
     }
@@ -228,7 +228,7 @@ void nr_csi_meas_reporting(int Mod_idP,frame_t frame, slot_t slot)
       if ((sched_frame * n_slots_frame + sched_slot - offset) % period != 0)
         continue;
 
-      AssertFatal(is_ul_slot(sched_slot, &nrmac->frame_structure), "CSI reporting slot %d is not set for an uplink slot\n", sched_slot);
+      AssertFatal(is_ul_slot(sched_slot, &nrmac->frame_structure[0]), "CSI reporting slot %d is not set for an uplink slot\n", sched_slot);
       LOG_D(NR_MAC, "CSI reporting in frame %d slot %d CSI report ID %ld\n", sched_frame, sched_slot, csirep->reportConfigId);
 
       const NR_PUCCH_ResourceSet_t *pucchresset = pucch_Config->resourceSetToAddModList->list.array[1]; // set with formats >1
@@ -240,7 +240,7 @@ void nr_csi_meas_reporting(int Mod_idP,frame_t frame, slot_t slot)
       AssertFatal(res_index < n,
                   "CSI pucch resource %ld not found among PUCCH resources\n", pucchcsires->pucch_Resource);
 
-      const int pucch_index = get_pucch_index(sched_frame, sched_slot, &nrmac->frame_structure, sched_ctrl->sched_pucch_size);
+      const int pucch_index = get_pucch_index(sched_frame, sched_slot, &nrmac->frame_structure[0], sched_ctrl->sched_pucch_size);
       NR_sched_pucch_t *curr_pucch = &sched_ctrl->sched_pucch[pucch_index];
       if (curr_pucch->active) {
         LOG_E(NR_MAC, "CSI structure is scheduled in advance. It should be free!\n");
@@ -256,9 +256,9 @@ void nr_csi_meas_reporting(int Mod_idP,frame_t frame, slot_t slot)
       int bwp_start = ul_bwp->BWPStart;
 
       // going through the list of PUCCH resources to find the one indexed by resource_id
-      NR_beam_alloc_t beam = beam_allocation_procedure(&nrmac->beam_info, sched_frame, sched_slot, UE->UE_beam_index, n_slots_frame);
+      NR_beam_alloc_t beam = beam_allocation_procedure(&nrmac->beam_info[0], sched_frame, sched_slot, UE->UE_beam_index, n_slots_frame);
       AssertFatal(beam.idx >= 0, "Cannot allocate CSI measurements on PUCCH in any available beam\n");
-      const int index = ul_buffer_index(sched_frame, sched_slot, n_slots_frame, nrmac->vrb_map_UL_size);
+      const int index = ul_buffer_index(sched_frame, sched_slot, n_slots_frame, nrmac->vrb_map_UL_size[0]);
       uint16_t *vrb_map_UL = &nrmac->common_channels[0].vrb_map_UL[beam.idx][index * MAX_BWP_SIZE];
       const int m = pucch_Config->resourceToAddModList->list.count;
       for (int j = 0; j < m; j++) {
@@ -712,7 +712,7 @@ static void extract_pucch_csi_report(NR_CSI_MeasConfig_t *csi_MeasConfig,
       NR_CSI_ReportConfig__ext2__reportQuantity_r16_PR_NOTHING;
   NR_UE_sched_ctrl_t *sched_ctrl = &UE->UE_sched_ctrl;
   NR_UE_DL_BWP_t *dl_bwp = &UE->current_DL_BWP;
-  const int n_slots_frame = nrmac->frame_structure.numb_slots_frame;
+  const int n_slots_frame = nrmac->frame_structure[0].numb_slots_frame;
   int cumul_bits = 0;
   int r_index = -1;
   int new_bf_index = -1;
@@ -810,7 +810,7 @@ static void extract_pucch_csi_report(NR_CSI_MeasConfig_t *csi_MeasConfig,
       }
     }
   }
-  if ((new_bf_index !=-1) && !nrmac->radio_config.do_TCI)
+  if ((new_bf_index !=-1) && !nrmac->radio_config[0].do_TCI)
     // Trigger RRCReconfiguration. Need to be out of the for loop as it may modify csi_MeasConfig
     beam_switching_procedure(nrmac, UE, new_bf_index);
 }
@@ -898,7 +898,7 @@ void handle_nr_uci_pucch_0_1(module_id_t mod_id, frame_t frame, slot_t slot, con
       bool success = harq_value == 0 && harq_confidence == 0;
       // TCI state switch occurs at the first slot that is after slot n_+ T_HARQ + 3N_sf_slot (8.10.3 of 38.133)
       if (success && harq->start_tci_timer) {
-        int slots = 3 * nrmac->frame_structure.numb_slots_frame / 10;
+        int slots = 3 * nrmac->frame_structure[0].numb_slots_frame / 10;
         nr_timer_setup(&sched_ctrl->tci_beam_switch, slots, 1);
         nr_timer_start(&sched_ctrl->tci_beam_switch);
         harq->start_tci_timer = false;
@@ -998,7 +998,7 @@ void handle_nr_uci_pucch_2_3_4(module_id_t mod_id, frame_t frame, slot_t slot, c
       // TCI state switch occurs at the first slot that is after slot n_+ T_HARQ + 3N_sf_slot (8.10.3 of 38.133)
       bool success = uci_234->harq.harq_crc != 1 && acknack;
       if (success && harq->start_tci_timer) {
-        int slots = 3 * nrmac->frame_structure.numb_slots_frame / 10;
+        int slots = 3 * nrmac->frame_structure[0].numb_slots_frame / 10;
         nr_timer_setup(&sched_ctrl->tci_beam_switch, slots, 1);
         nr_timer_start(&sched_ctrl->tci_beam_switch);
         harq->start_tci_timer = false;
@@ -1142,9 +1142,9 @@ int nr_acknack_scheduling(gNB_MAC_INST *mac,
   const NR_ServingCellConfigCommon_t *scc = mac->common_channels[CC_id].ServingCellConfigCommon;
   const int NTN_gNB_Koffset = get_NTN_Koffset(scc);
 
-  const int minfbtime = mac->radio_config.minRXTXTIME + NTN_gNB_Koffset;
+  const int minfbtime = mac->radio_config[0].minRXTXTIME + NTN_gNB_Koffset;
   const NR_UE_UL_BWP_t *ul_bwp = &UE->current_UL_BWP;
-  const frame_structure_t *fs = &mac->frame_structure;
+  const frame_structure_t *fs = &mac->frame_structure[0];
   const int n_slots_frame = fs->numb_slots_frame;
 
   NR_UE_sched_ctrl_t *sched_ctrl = &UE->UE_sched_ctrl;
@@ -1176,7 +1176,7 @@ int nr_acknack_scheduling(gNB_MAC_INST *mac,
     }
     const int pucch_frame = (frame + ((slot + pdsch_to_harq_feedback[f] + NTN_gNB_Koffset) / n_slots_frame)) % MAX_FRAME_NUMBER;
     // we store PUCCH resources according to slot, TDD configuration and size of the vector containing PUCCH structures
-    const int pucch_index = get_pucch_index(pucch_frame, pucch_slot, &mac->frame_structure, sched_ctrl->sched_pucch_size);
+    const int pucch_index = get_pucch_index(pucch_frame, pucch_slot, &mac->frame_structure[0], sched_ctrl->sched_pucch_size);
     NR_sched_pucch_t *curr_pucch = &sched_ctrl->sched_pucch[pucch_index];
     if (curr_pucch->active &&
         curr_pucch->frame == pucch_frame &&
@@ -1224,7 +1224,7 @@ int nr_acknack_scheduling(gNB_MAC_INST *mac,
     else { // unoccupied occasion
       // checking if in ul_slot the resources potentially to be assigned to this PUCCH are available
       set_pucch_allocation(ul_bwp, r_pucch, bwp_size, curr_pucch);
-      NR_beam_alloc_t beam = beam_allocation_procedure(&mac->beam_info, pucch_frame, pucch_slot, ue_beam, n_slots_frame);
+      NR_beam_alloc_t beam = beam_allocation_procedure(&mac->beam_info[0], pucch_frame, pucch_slot, ue_beam, n_slots_frame);
       if (beam.idx < 0) {
         LOG_D(NR_MAC,
               "DL %4d.%2d, UL_ACK %4d.%2d beam resources for this occasion are already occupied, move to the following occasion\n",
@@ -1234,7 +1234,7 @@ int nr_acknack_scheduling(gNB_MAC_INST *mac,
               pucch_slot);
         continue;
       }
-      const int index = ul_buffer_index(pucch_frame, pucch_slot, n_slots_frame, mac->vrb_map_UL_size);
+      const int index = ul_buffer_index(pucch_frame, pucch_slot, n_slots_frame, mac->vrb_map_UL_size[0]);
       uint16_t *vrb_map_UL = &mac->common_channels[CC_id].vrb_map_UL[beam.idx][index * MAX_BWP_SIZE];
       bool ret = test_pucch0_vrb_occupation(curr_pucch, vrb_map_UL, bwp_start);
       if(!ret) {
@@ -1244,7 +1244,7 @@ int nr_acknack_scheduling(gNB_MAC_INST *mac,
               slot,
               pucch_frame,
               pucch_slot);
-        reset_beam_status(&mac->beam_info, pucch_frame, pucch_slot, ue_beam, n_slots_frame, beam.new_beam);
+        reset_beam_status(&mac->beam_info[0], pucch_frame, pucch_slot, ue_beam, n_slots_frame, beam.new_beam);
         continue;
       }
       // allocating a new PUCCH structure for this occasion
@@ -1275,13 +1275,13 @@ void nr_sr_reporting(gNB_MAC_INST *nrmac, frame_t SFN, slot_t slot)
   /* already mutex protected: held in gNB_dlsch_ulsch_scheduler() */
   NR_SCHED_ENSURE_LOCKED(&nrmac->sched_lock);
 
-  if (!is_ul_slot(slot, &nrmac->frame_structure))
+  if (!is_ul_slot(slot, &nrmac->frame_structure[0]))
     return;
   const int CC_id = 0;
   UE_iterator(nrmac->UE_info.connected_ue_list, UE) {
     NR_UE_sched_ctrl_t *sched_ctrl = &UE->UE_sched_ctrl;
     NR_UE_UL_BWP_t *ul_bwp = &UE->current_UL_BWP;
-    const int n_slots_frame = nrmac->frame_structure.numb_slots_frame;
+    const int n_slots_frame = nrmac->frame_structure[0].numb_slots_frame;
     if (!nr_mac_ue_is_active(UE))
       continue;
     NR_PUCCH_Config_t *pucch_Config = ul_bwp->pucch_Config;
@@ -1314,7 +1314,7 @@ void nr_sr_reporting(gNB_MAC_INST *nrmac, frame_t SFN, slot_t slot)
       }
       AssertFatal(idx > -1, "SR resource not found among PUCCH resources");
 
-      const int pucch_index = get_pucch_index(SFN, slot, &nrmac->frame_structure, sched_ctrl->sched_pucch_size);
+      const int pucch_index = get_pucch_index(SFN, slot, &nrmac->frame_structure[0], sched_ctrl->sched_pucch_size);
       NR_sched_pucch_t *curr_pucch = &sched_ctrl->sched_pucch[pucch_index];
 
       if (curr_pucch->active && curr_pucch->frame == SFN && curr_pucch->ul_slot == slot && curr_pucch->resource_indicator == idx)
@@ -1330,9 +1330,9 @@ void nr_sr_reporting(gNB_MAC_INST *nrmac, frame_t SFN, slot_t slot)
         continue;
       }
       else {
-        NR_beam_alloc_t beam = beam_allocation_procedure(&nrmac->beam_info, SFN, slot, UE->UE_beam_index, n_slots_frame);
+        NR_beam_alloc_t beam = beam_allocation_procedure(&nrmac->beam_info[0], SFN, slot, UE->UE_beam_index, n_slots_frame);
         AssertFatal(beam.idx >= 0, "Cannot allocate SR in any available beam\n");
-        const int index = ul_buffer_index(SFN, slot, n_slots_frame, nrmac->vrb_map_UL_size);
+        const int index = ul_buffer_index(SFN, slot, n_slots_frame, nrmac->vrb_map_UL_size[0]);
         uint16_t *vrb_map_UL = &nrmac->common_channels[CC_id].vrb_map_UL[beam.idx][index * MAX_BWP_SIZE];
         const int bwp_start = ul_bwp->BWPStart;
         const int bwp_size = ul_bwp->BWPSize;

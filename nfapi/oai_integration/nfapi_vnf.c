@@ -897,25 +897,27 @@ int phy_nr_slot_indication(nfapi_nr_slot_indication_scf_t *ind)
   ifi->NR_slot_indication(ind, &sched_response);
 
 #ifdef ENABLE_AERIAL
+    // phy_id is 1-based in cuBB; convert to 0-based CC index
+    uint8_t CC_id = (ind->header.phy_id > 0) ? ind->header.phy_id - 1 : 0;
     bool send_slt_resp = false;
     if (sched_response.DL_req.dl_tti_request_body.nPDUs> 0) {
-      oai_fapi_dl_tti_req(&sched_response.DL_req);
+      oai_fapi_dl_tti_req(&sched_response.DL_req, CC_id);
       send_slt_resp = true;
     }
     if (sched_response.UL_tti_req.n_pdus > 0) {
-      oai_fapi_ul_tti_req(&sched_response.UL_tti_req);
+      oai_fapi_ul_tti_req(&sched_response.UL_tti_req, CC_id);
       send_slt_resp = true;
     }
     if (sched_response.TX_req.Number_of_PDUs > 0) {
-      oai_fapi_tx_data_req(&sched_response.TX_req);
+      oai_fapi_tx_data_req(&sched_response.TX_req, CC_id);
       send_slt_resp = true;
     }
     if (sched_response.UL_dci_req.numPdus > 0) {
-      oai_fapi_ul_dci_req(&sched_response.UL_dci_req);
+      oai_fapi_ul_dci_req(&sched_response.UL_dci_req, CC_id);
       send_slt_resp = true;
     }
     if (send_slt_resp) {
-      oai_fapi_send_end_request(ind->sfn, ind->slot);
+      oai_fapi_send_end_request(ind->sfn, ind->slot, CC_id);
     }
 #else
   if (sched_response.DL_req.dl_tti_request_body.nPDUs > 0)

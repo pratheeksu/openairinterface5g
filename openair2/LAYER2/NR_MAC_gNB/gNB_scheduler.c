@@ -33,7 +33,7 @@ uint8_t nr_get_rv(int rel_round)
 void clear_nr_nfapi_information(gNB_MAC_INST *gNB, int CC_idP, frame_t frameP, slot_t slotP)
 {
   /* called below and in simulators, so we assume a lock but don't require it */
-  const int num_slots = gNB->frame_structure.numb_slots_frame;
+  const int num_slots = gNB->frame_structure[0].numb_slots_frame;
   UL_tti_req_ahead_initialization(gNB, num_slots, CC_idP, frameP, slotP);
 
   nfapi_nr_dl_tti_pdcch_pdu_rel15_t **pdcch = (nfapi_nr_dl_tti_pdcch_pdu_rel15_t **)gNB->pdcch_pdu_idx[CC_idP];
@@ -43,7 +43,7 @@ void clear_nr_nfapi_information(gNB_MAC_INST *gNB, int CC_idP, frame_t frameP, s
   memset(pdcch, 0, sizeof(*pdcch) * MAX_NUM_CORESET);
 
   /* advance last round's future UL_tti_req to be ahead of current frame/slot */
-  const int size = gNB->UL_tti_req_ahead_size;
+  const int size = gNB->UL_tti_req_ahead_size[0];
   const int prev_slot = frameP * num_slots + slotP + size - 1;
   nfapi_nr_ul_tti_request_t *future_ul_tti_req = &gNB->UL_tti_req_ahead[CC_idP][prev_slot % size];
   future_ul_tti_req->SFN = (prev_slot / num_slots) % 1024;
@@ -125,21 +125,21 @@ void gNB_dlsch_ulsch_scheduler(module_id_t module_idP, frame_t frame, slot_t slo
   NR_ServingCellConfigCommon_t *scc = cc->ServingCellConfigCommon;
 
   NR_SCHED_LOCK(&gNB->sched_lock);
-  int slots_frame = gNB->frame_structure.numb_slots_frame;
-  clear_beam_information(&gNB->beam_info, frame, slot, slots_frame);
+  int slots_frame = gNB->frame_structure[0].numb_slots_frame;
+  clear_beam_information(&gNB->beam_info[0], frame, slot, slots_frame);
 
   gNB->frame = frame;
   start_meas(&gNB->gNB_scheduler);
 
   for (int CC_id = 0; CC_id < MAX_NUM_CCs; CC_id++) {
     int num_beams = 1;
-    if(gNB->beam_info.beam_mode != NO_BEAM_MODE)
-      num_beams = gNB->beam_info.beams_per_period;
+    if(gNB->beam_info[0].beam_mode != NO_BEAM_MODE)
+      num_beams = gNB->beam_info[0].beams_per_period;
     // clear vrb_maps
     for (int i = 0; i < num_beams; i++)
       memset(cc[CC_id].vrb_map[i], 0, sizeof(uint16_t) * MAX_BWP_SIZE);
     // clear last scheduled slot's content (only)!
-    const int size = gNB->vrb_map_UL_size;
+    const int size = gNB->vrb_map_UL_size[0];
     const int prev_slot = frame * slots_frame + slot + size - 1;
     for (int i = 0; i < num_beams; i++) {
       uint16_t *vrb_map_UL = cc[CC_id].vrb_map_UL[i];
@@ -229,7 +229,7 @@ void gNB_dlsch_ulsch_scheduler(module_id_t module_idP, frame_t frame, slot_t slo
    * is more than 1 CC supported?
    */
   AssertFatal(MAX_NUM_CCs == 1, "only 1 CC supported\n");
-  const int current_index = ul_buffer_index(frame, slot, slots_frame, gNB->UL_tti_req_ahead_size);
+  const int current_index = ul_buffer_index(frame, slot, slots_frame, gNB->UL_tti_req_ahead_size[0]);
   copy_ul_tti_req(&sched_info->UL_tti_req, &gNB->UL_tti_req_ahead[0][current_index]);
 
   stop_meas(&gNB->gNB_scheduler);

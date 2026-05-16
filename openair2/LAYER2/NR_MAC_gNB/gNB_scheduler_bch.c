@@ -141,16 +141,16 @@ void schedule_nr_mib(module_id_t module_idP, frame_t frameP, slot_t slotP, nfapi
     NR_COMMON_channels_t *cc = &gNB->common_channels[CC_id];
     const NR_MIB_t *mib = cc->mib->message.choice.mib;
     NR_ServingCellConfigCommon_t *scc = cc->ServingCellConfigCommon;
-    const int slots_per_frame = gNB->frame_structure.numb_slots_frame;
+    const int slots_per_frame = gNB->frame_structure[0].numb_slots_frame;
     dl_req = &DL_req->dl_tti_request_body;
 
     // get MIB every 8 frames
     if(((slotP == 0) && (frameP & 7) == 0) ||
-       gNB->first_MIB) {
+       gNB->first_MIB[0]) {
       int mib_sdu_length = encode_mib(cc->mib, frameP, cc->MIB_pdu, sizeof(cc->MIB_pdu));
 
       // flag to avoid sending an empty MIB in the first frames of execution since gNB doesn't get at the beginning in frame 0 slot 0
-      gNB->first_MIB = false;
+      gNB->first_MIB[0] = false;
 
       LOG_D(MAC,
             "[gNB %d] Frame %d : MIB->BCH  CC_id %d, Received %d bytes\n",
@@ -179,8 +179,8 @@ void schedule_nr_mib(module_id_t module_idP, frame_t frameP, slot_t slotP, nfapi
       NR_SubcarrierSpacing_t scs = *scc->ssbSubcarrierSpacing;
       const long band = *scc->downlinkConfigCommon->frequencyInfoDL->frequencyBandList.list.array[0];
       const int bw = scc->downlinkConfigCommon->frequencyInfoDL->scs_SpecificCarrierList.list.array[0]->carrierBandwidth;
-      const uint16_t offset_pointa = gNB->ssb_OffsetPointA;
-      uint8_t ssbSubcarrierOffset = gNB->ssb_SubcarrierOffset;
+      const uint16_t offset_pointa = gNB->ssb_OffsetPointA[0];
+      uint8_t ssbSubcarrierOffset = gNB->ssb_SubcarrierOffset[0];
       const int L_max = get_max_ssbs(scc);
       const frequency_range_t frequency_range = scc->ssb_PositionsInBurst->present == 3 ? FR2 : FR1;
       const int prb_offset = frequency_range == FR1 ? offset_pointa >> scs : offset_pointa >> (scs - 2);
@@ -189,18 +189,18 @@ void schedule_nr_mib(module_id_t module_idP, frame_t frameP, slot_t slotP, nfapi
           uint16_t ssb_start_symbol = get_ssb_start_symbol(band, scs, i_ssb);
           // if start symbol is in current slot, schedule current SSB, fill VRB map and call get_type0_PDCCH_CSS_config_parameters
           if ((ssb_start_symbol / 14) == rel_slot) {
-            NR_beam_alloc_t beam = beam_allocation_procedure(&gNB->beam_info,
+            NR_beam_alloc_t beam = beam_allocation_procedure(&gNB->beam_info[0],
                                                              frameP,
                                                              slotP,
                                                              get_beam_from_ssbidx(gNB, i_ssb),
                                                              slots_per_frame);
             AssertFatal(beam.idx >= 0, "Cannot allocate SSB %d in any available beam\n", i_ssb);
-            const uint16_t alloc_beam_idx = get_allocated_beam(&gNB->beam_info, frameP, slotP, slots_per_frame, beam.idx);
-            const uint16_t fapi_beam = convert_to_fapi_beam(alloc_beam_idx, gNB->beam_info.beam_mode);
+            const uint16_t alloc_beam_idx = get_allocated_beam(&gNB->beam_info[0], frameP, slotP, slots_per_frame, beam.idx);
+            const uint16_t fapi_beam = convert_to_fapi_beam(alloc_beam_idx, gNB->beam_info[0].beam_mode);
             schedule_ssb(frameP, slotP, scc, dl_req, i_ssb, fapi_beam, ssbSubcarrierOffset, offset_pointa, mib_pdu);
             fill_ssb_vrb_map(cc, prb_offset, ssbSubcarrierOffset, ssb_start_symbol, CC_id, beam.idx);
             if (IS_SA_MODE(get_softmodem_params())) {
-              get_type0_PDCCH_CSS_config_parameters(&gNB->type0_PDCCH_CSS_config[i_ssb],
+              get_type0_PDCCH_CSS_config_parameters(&gNB->type0_PDCCH_CSS_config[0][i_ssb],
                                                     frameP,
                                                     mib,
                                                     slots_per_frame,
@@ -213,7 +213,7 @@ void schedule_nr_mib(module_id_t module_idP, frame_t frameP, slot_t slotP, nfapi
                                                     i_ssb,
                                                     ssb_frame_periodicity,
                                                     prb_offset);
-              gNB->type0_PDCCH_CSS_config[i_ssb].active = true;
+              gNB->type0_PDCCH_CSS_config[0][i_ssb].active = true;
             }
           }
         }
@@ -348,7 +348,7 @@ static void nr_fill_nfapi_dl_SIB_pdu(gNB_MAC_INST *gNB_mac,
   dl_tti_pdsch_pdu->PDUSize = (uint16_t)(4+sizeof(nfapi_nr_dl_tti_pdsch_pdu));
   dl_req->nPDUs += 1;
 
-  const uint16_t fapi_beam = convert_to_fapi_beam(beam_index, gNB_mac->beam_info.beam_mode);
+  const uint16_t fapi_beam = convert_to_fapi_beam(beam_index, gNB_mac->beam_info[0].beam_mode);
   nfapi_nr_dl_tti_pdsch_pdu_rel15_t *pdsch_pdu_rel15 =
       prepare_pdsch_pdu(dl_tti_pdsch_pdu, gNB_mac, NULL, pdsch, NULL, is_sib1, 0, SI_RNTI, fapi_beam, 1, pdu_index);
   LOG_D(NR_MAC,
@@ -389,7 +389,7 @@ static void nr_fill_nfapi_dl_SIB_pdu(gNB_MAC_INST *gNB_mac,
                      search_space,
                      coreset,
                      0,
-                     gNB_mac->cset0_bwp_size);
+                     gNB_mac->cset0_bwp_size[0]);
 
   LOG_D(MAC,
         "BWPSize: %3i, BWPStart: %3i, SubcarrierSpacing: %i, CyclicPrefix: %i, StartSymbolIndex: %i, DurationSymbols: %i, "
@@ -421,7 +421,7 @@ static bool check_sib1_tda(gNB_MAC_INST *gNB_mac,
 {
   NR_COMMON_channels_t *cc = &gNB_mac->common_channels[CC_id];
   NR_ServingCellConfigCommon_t *scc = cc->ServingCellConfigCommon;
-  NR_Type0_PDCCH_CSS_config_t *type0_PDCCH_CSS_config = &gNB_mac->type0_PDCCH_CSS_config[ssb_index];
+  NR_Type0_PDCCH_CSS_config_t *type0_PDCCH_CSS_config = &gNB_mac->type0_PDCCH_CSS_config[0][ssb_index];
   default_table_type_t table_type = get_default_table_type(type0_PDCCH_CSS_config->type0_pdcch_ss_mux_pattern);
   // If the PDSCH was scheduled with SI-RNTI in PDCCH Type0 common search space,
   // the UE may assume that this PDSCH resource allocation is not applied (Table 5.1.2.1.1-4 and 5 in 38.214)
@@ -438,7 +438,7 @@ static bool check_sib1_tda(gNB_MAC_INST *gNB_mac,
   if (tda_info.startSymbolIndex < type0_PDCCH_CSS_config->first_symbol_index + type0_PDCCH_CSS_config->num_symbols)
     return false;
 
-  gNB_mac->sib1_pdsch[ssb_index] = allocate_sib1(gNB_mac,
+  gNB_mac->sib1_pdsch[0][ssb_index] = allocate_sib1(gNB_mac,
                                                  CC_id,
                                                  sched_pdcch,
                                                  type0_PDCCH_CSS_config,
@@ -449,7 +449,7 @@ static bool check_sib1_tda(gNB_MAC_INST *gNB_mac,
                                                  beam->idx,
                                                  cc->sib1_bcch_length);
 
-  if (gNB_mac->sib1_pdsch[ssb_index].tb_size > 0) {
+  if (gNB_mac->sib1_pdsch[0][ssb_index].tb_size > 0) {
     LOG_D(NR_MAC, "Found TDA for SIB1: %d\n", tda);
     return true;
   } else {
@@ -499,25 +499,25 @@ void schedule_nr_sib1(module_id_t module_idP,
 
   for (int i = 0; i < L_max; i++) {
 
-    NR_Type0_PDCCH_CSS_config_t *type0_PDCCH_CSS_config = &gNB_mac->type0_PDCCH_CSS_config[i];
+    NR_Type0_PDCCH_CSS_config_t *type0_PDCCH_CSS_config = &gNB_mac->type0_PDCCH_CSS_config[0][i];
 
     if(check_frame_sib1(scc, type0_PDCCH_CSS_config, frameP) &&
        (slotP == type0_PDCCH_CSS_config->slot) &&
        (type0_PDCCH_CSS_config->num_rbs > 0) &&
        (type0_PDCCH_CSS_config->active == true)) {
 
-      AssertFatal(is_dl_slot(slotP, &gNB_mac->frame_structure),
+      AssertFatal(is_dl_slot(slotP, &gNB_mac->frame_structure[0]),
                   "Trying to schedule SIB1 for SSB %d in slot %d which is not DL. Check searchSpaceZero configuration.\n",
                   type0_PDCCH_CSS_config->ssb_index,
                   slotP);
-      const int n_slots_frame = gNB_mac->frame_structure.numb_slots_frame;
+      const int n_slots_frame = gNB_mac->frame_structure[0].numb_slots_frame;
       int beam_index = get_beam_from_ssbidx(gNB_mac, i);
-      NR_beam_alloc_t beam = beam_allocation_procedure(&gNB_mac->beam_info, frameP, slotP, beam_index, n_slots_frame);
+      NR_beam_alloc_t beam = beam_allocation_procedure(&gNB_mac->beam_info[0], frameP, slotP, beam_index, n_slots_frame);
       AssertFatal(beam.idx >= 0, "Cannot allocate SIB1 corresponding to SSB %d in any available beam\n", i);
       LOG_D(NR_MAC,"(%d.%d) SIB1 transmission: ssb_index %d\n", frameP, slotP, type0_PDCCH_CSS_config->ssb_index);
       NR_sched_pdcch_t sched_pdcch = set_pdcch_structure(NULL,
-                                                         &gNB_mac->sched_ctrlSIB1->search_space[i],
-                                                         &gNB_mac->sched_ctrlSIB1->coreset,
+                                                         &gNB_mac->sched_ctrlSIB1[0]->search_space[i],
+                                                         &gNB_mac->sched_ctrlSIB1[0]->coreset,
                                                          scc,
                                                          NULL,
                                                          type0_PDCCH_CSS_config);
@@ -526,7 +526,7 @@ void schedule_nr_sib1(module_id_t module_idP,
       for (int c = 0; c < 3; c++) {
         find_aggregation_candidates(&aggregation_level,
                                     &nr_of_candidates,
-                                    &gNB_mac->sched_ctrlSIB1->search_space[i],
+                                    &gNB_mac->sched_ctrlSIB1[0]->search_space[i],
                                     4 << c);
         if (nr_of_candidates > 0)
           break; // choosing the lower value of aggregation level available
@@ -538,11 +538,11 @@ void schedule_nr_sib1(module_id_t module_idP,
                                            nr_of_candidates,
                                            beam.idx,
                                            &sched_pdcch,
-                                           &gNB_mac->sched_ctrlSIB1->coreset,
+                                           &gNB_mac->sched_ctrlSIB1[0]->coreset,
                                            0);
 
       bool res = false;
-      if (gNB_mac->sib1_pdsch[i].time_domain_allocation < 0) {
+      if (gNB_mac->sib1_pdsch[0][i].time_domain_allocation < 0) {
         for (int t = 0; t < 16; t++) {
           if (check_sib1_tda(gNB_mac, &sched_pdcch, &beam, aggregation_level, cce_index, t, i, CC_id)) {
             res = true;
@@ -550,25 +550,25 @@ void schedule_nr_sib1(module_id_t module_idP,
           }
         }
       }
-      AssertFatal(gNB_mac->sib1_pdsch[i].time_domain_allocation >= 0, "Couldn't select any TDA for SIB1\n");
+      AssertFatal(gNB_mac->sib1_pdsch[0][i].time_domain_allocation >= 0, "Couldn't select any TDA for SIB1\n");
       if (!res)
         res = check_sib1_tda(gNB_mac,
                              &sched_pdcch,
                              &beam,
                              aggregation_level,
                              cce_index,
-                             gNB_mac->sib1_pdsch[i].time_domain_allocation,
+                             gNB_mac->sib1_pdsch[0][i].time_domain_allocation,
                              i,
                              CC_id);
-      int tb_size = gNB_mac->sib1_pdsch[i].tb_size;
+      int tb_size = gNB_mac->sib1_pdsch[0][i].tb_size;
       AssertFatal(res && tb_size > 0, "Couldn't allocate TB for SIB1 for an already allocated TDA\n");
       nfapi_nr_dl_tti_request_body_t *dl_req = &DL_req->dl_tti_request_body;
       int pdu_index = gNB_mac->pdu_index[0]++;
       nr_fill_nfapi_dl_SIB_pdu(gNB_mac,
-                               &gNB_mac->sib1_pdsch[i],
+                               &gNB_mac->sib1_pdsch[0][i],
                                &sched_pdcch,
-                               &gNB_mac->sched_ctrlSIB1->search_space[i],
-                               &gNB_mac->sched_ctrlSIB1->coreset,
+                               &gNB_mac->sched_ctrlSIB1[0]->search_space[i],
+                               &gNB_mac->sched_ctrlSIB1[0]->coreset,
                                aggregation_level,
                                cce_index,
                                dl_req,
@@ -629,19 +629,19 @@ static void other_sib_sched_control(module_id_t module_idP,
                                     int payload_idx)
 {
   gNB_MAC_INST *gNB_mac = RC.nrmac[module_idP];
-  AssertFatal(is_dl_slot(slot, &gNB_mac->frame_structure),
+  AssertFatal(is_dl_slot(slot, &gNB_mac->frame_structure[0]),
               "Trying to schedule otherSIB in slot %d which is not DL. Wrong Configuration\n",
               slot);
   NR_ServingCellConfigCommon_t *scc = gNB_mac->common_channels[0].ServingCellConfigCommon;
-  int n_slots_frame = gNB_mac->frame_structure.numb_slots_frame;
+  int n_slots_frame = gNB_mac->frame_structure[0].numb_slots_frame;
   beam_index = get_beam_from_ssbidx(gNB_mac, beam_index);
-  NR_beam_alloc_t beam = beam_allocation_procedure(&gNB_mac->beam_info, frame, slot, beam_index, n_slots_frame);
+  NR_beam_alloc_t beam = beam_allocation_procedure(&gNB_mac->beam_info[0], frame, slot, beam_index, n_slots_frame);
   AssertFatal(beam.idx >= 0, "Cannot allocate otherSIB corresponding for SSB number %d in any available beam\n", beam_index);
   LOG_D(NR_MAC, "(%d.%d) otherSIB payload %d transmission for ssb number %d\n", frame, slot, payload_idx, beam_index);
 
   NR_COMMON_channels_t *cc = &gNB_mac->common_channels[0];
   int ssb_index = get_ssbidx_from_beam(gNB_mac, beam_index);
-  NR_Type0_PDCCH_CSS_config_t *type0_PDCCH_CSS_config = &gNB_mac->type0_PDCCH_CSS_config[ssb_index];
+  NR_Type0_PDCCH_CSS_config_t *type0_PDCCH_CSS_config = &gNB_mac->type0_PDCCH_CSS_config[0][ssb_index];
   NR_PDSCH_ConfigCommon_t *pdsch_ConfigCommon = scc->downlinkConfigCommon->initialDownlinkBWP->pdsch_ConfigCommon->choice.setup;
   int time_domain_allocation = 1;
   NR_tda_info_t tda_info = set_tda_info_from_list(pdsch_ConfigCommon->pdsch_TimeDomainAllocationList, time_domain_allocation);
@@ -660,23 +660,23 @@ static void other_sib_sched_control(module_id_t module_idP,
   AssertFatal(nr_of_candidates > 0, "nr_of_candidates is 0\n");
   AssertFatal(ss->controlResourceSetId, "ss->controlResourceSetId is NULL\n");
   NR_ControlResourceSet_t *coreset = get_coreset(gNB_mac, scc, NULL, *ss->controlResourceSetId);
-  if (!gNB_mac->sched_pdcch_otherSI) {
-    gNB_mac->sched_pdcch_otherSI = calloc(1, sizeof(*gNB_mac->sched_pdcch_otherSI));
-    *gNB_mac->sched_pdcch_otherSI = set_pdcch_structure(gNB_mac, ss, coreset, scc, NULL, type0_PDCCH_CSS_config);
+  if (!gNB_mac->sched_pdcch_otherSI[0]) {
+    gNB_mac->sched_pdcch_otherSI[0] = calloc(1, sizeof(*gNB_mac->sched_pdcch_otherSI[0]));
+    *gNB_mac->sched_pdcch_otherSI[0] = set_pdcch_structure(gNB_mac, ss, coreset, scc, NULL, type0_PDCCH_CSS_config);
   }
   int cce_index = find_pdcch_candidate(gNB_mac,
                                        0,
                                        aggregation_level,
                                        nr_of_candidates,
                                        beam.idx,
-                                       gNB_mac->sched_pdcch_otherSI,
+                                       gNB_mac->sched_pdcch_otherSI[0],
                                        coreset,
                                        0);
 
   AssertFatal(cce_index >= 0, "Could not find CCE for otherSIB DCI\n");
 
   // Mark the corresponding RBs as used
-  fill_pdcch_vrb_map(gNB_mac, 0, gNB_mac->sched_pdcch_otherSI, cce_index, aggregation_level, beam.idx);
+  fill_pdcch_vrb_map(gNB_mac, 0, gNB_mac->sched_pdcch_otherSI[0], cce_index, aggregation_level, beam.idx);
 
   NR_sched_pdsch_t sched_pdsch_otherSI = {0};
   sched_pdsch_otherSI.time_domain_allocation = time_domain_allocation;
@@ -701,7 +701,7 @@ static void other_sib_sched_control(module_id_t module_idP,
   nfapi_nr_dl_tti_request_body_t *dl_req = &DL_req->dl_tti_request_body;
   nr_fill_nfapi_dl_SIB_pdu(gNB_mac,
                            &sched_pdsch_otherSI,
-                           gNB_mac->sched_pdcch_otherSI,
+                           gNB_mac->sched_pdcch_otherSI[0],
                            ss,
                            coreset,
                            aggregation_level,
@@ -786,7 +786,7 @@ void schedule_nr_other_sib(module_id_t module_idP,
     }
   }
 
-  int n_slots_frame = gNB_mac->frame_structure.numb_slots_frame;
+  int n_slots_frame = gNB_mac->frame_structure[0].numb_slots_frame;
   int window_length_sl = 5 << schedInfo->si_WindowLength;
   int window_length_f = (window_length_sl / n_slots_frame) + ((window_length_sl % n_slots_frame) > 0);
   int num_ssb = cc->num_active_ssb;
@@ -806,7 +806,7 @@ void schedule_nr_other_sib(module_id_t module_idP,
   int ssb = 0;
   while (ssb < num_ssb) {
     AssertFatal(temp_frame < window_length_f, "Couldn't fit %d SSB in window length of %d slots\n", num_ssb, window_length_sl);
-    if (is_dl_slot(temp_slot, &gNB_mac->frame_structure)) {
+    if (is_dl_slot(temp_slot, &gNB_mac->frame_structure[0])) {
       rel_slot[ssb] = temp_slot;
       rel_frame[ssb] = temp_frame;
       ssb++;

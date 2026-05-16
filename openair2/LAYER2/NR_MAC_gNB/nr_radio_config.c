@@ -356,7 +356,7 @@ static bool check_periodicity(int val, int ideal_period, const frame_structure_t
 
 static int set_ideal_period(bool is_csi)
 {
-  const frame_structure_t *fs = &RC.nrmac[0]->frame_structure;
+  const frame_structure_t *fs = &RC.nrmac[0]->frame_structure[0];
   const int nb_slots_per_period = fs->numb_slots_period;
   const int n_ul_slots_per_period = get_ul_slots_per_period(fs); // full UL + mixed with UL symbols
   // 2 reports per UE (RSRP and RI-PMI-CQI)
@@ -504,7 +504,7 @@ static void config_csirs(const NR_ServingCellConfigCommon_t *servingcellconfigco
     nzpcsi0->scramblingID = *servingcellconfigcommon->physCellId;
 
     const int ideal_period = set_ideal_period(true); // same periodicity as CSI measurement report
-    const frame_structure_t *fs = &(RC.nrmac[0]->frame_structure);
+    const frame_structure_t *fs = &(RC.nrmac[0]->frame_structure[0]);
     set_csirs_periodicity(nzpcsi0, id, ideal_period, fs);
 
     nzpcsi0->qcl_InfoPeriodicCSI_RS = calloc(1,sizeof(*nzpcsi0->qcl_InfoPeriodicCSI_RS));
@@ -664,7 +664,7 @@ static void set_dl_maxmimolayers(NR_PDSCH_ServingCellConfig_t *pdsch_servingcell
 
 static struct NR_SRS_Resource__resourceType__periodic *configure_periodic_srs(const int uid)
 {
-  frame_structure_t *fs = &RC.nrmac[0]->frame_structure;
+  frame_structure_t *fs = &RC.nrmac[0]->frame_structure[0];
   int offset = get_ul_slot_offset(fs, uid, false); // only full UL slots for SRS
   // checked for validity in verify_radio_configuration
   AssertFatal(offset < 2560, "Cannot allocate SRS configuration for uid %d, not enough resources\n", uid);
@@ -1330,7 +1330,7 @@ static void set_pucch_power_config(NR_PUCCH_Config_t *pucch_Config)
 
 static void set_SR_periodandoffset(NR_SchedulingRequestResourceConfig_t *schedulingRequestResourceConfig, int scs)
 {
-  const frame_structure_t *fs = &RC.nrmac[0]->frame_structure;
+  const frame_structure_t *fs = &RC.nrmac[0]->frame_structure[0];
   int sr_slot = 1; // in FDD SR in slot 1
   if (fs->frame_type == TDD)
     sr_slot = get_first_ul_slot(fs, true);
@@ -1935,7 +1935,7 @@ static void set_csi_meas_periodicity(const NR_ServingCellConfigCommon_t *scc,
   const int ideal_period = set_ideal_period(true);
   const int num_pucch2 = get_nb_pucch2_per_slot(scc, curr_bwp, antennaports);
   const int idx = (uid * 2 / num_pucch2) + is_rsrp;
-  frame_structure_t *fs = &RC.nrmac[0]->frame_structure;
+  frame_structure_t *fs = &RC.nrmac[0]->frame_structure[0];
   int offset = get_ul_slot_offset(fs, idx, true);
   LOG_D(NR_MAC, "set_csi_meas_periodicity: uid = %d, offset = %d, ideal_period = %d", uid, offset, ideal_period);
   // checked for validity in verify_radio_configuration
@@ -3715,7 +3715,7 @@ NR_RLC_BearerConfig_t *get_DRB_RLC_BearerConfig(long lcChannelId,
 
 static bool verify_radio_configuration(int uid, const NR_ServingCellConfigCommon_t *scc, const nr_mac_config_t *configuration)
 {
-  frame_structure_t *fs = &RC.nrmac[0]->frame_structure;
+  frame_structure_t *fs = &RC.nrmac[0]->frame_structure[0];
   int srs_offset = get_ul_slot_offset(fs, uid, false);
   // see configure_periodic_srs
   if (srs_offset >= 2560) {

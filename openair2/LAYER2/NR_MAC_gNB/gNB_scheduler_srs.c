@@ -456,9 +456,9 @@ static void nr_configure_srs(gNB_MAC_INST *nrmac,
     srs_pdu->beamforming.num_prgs = m_SRS[srs_pdu->config_index];
     srs_pdu->beamforming.prg_size = srs_pdu->srs_parameters_v4.srs_bandwidth_size;
   }
-  const uint16_t fapi_beam = convert_to_fapi_beam(UE->UE_beam_index, nrmac->beam_info.beam_mode);
+  const uint16_t fapi_beam = convert_to_fapi_beam(UE->UE_beam_index, nrmac->beam_info[0].beam_mode);
   srs_pdu->beamforming.prgs_list[0].dig_bf_interface_list[0].beam_idx = fapi_beam;
-  NR_beam_alloc_t beam = beam_allocation_procedure(&nrmac->beam_info, frame, slot, UE->UE_beam_index, slots_per_frame);
+  NR_beam_alloc_t beam = beam_allocation_procedure(&nrmac->beam_info[0], frame, slot, UE->UE_beam_index, slots_per_frame);
   AssertFatal(beam.idx >= 0, "Cannot allocate SRS in any available beam\n");
   uint16_t *vrb_map_UL = &nrmac->common_channels[CC_id].vrb_map_UL[beam.idx][buffer_index * MAX_BWP_SIZE];
   uint16_t num = 1 << srs_pdu->num_symbols; // 0,1,2 means 1,2,4 symbols, see 222.10.04 table 3-105
@@ -468,7 +468,7 @@ static void nr_configure_srs(gNB_MAC_INST *nrmac,
   for (int i = 0; i < srs_pdu->bwp_size; ++i) {
     int rb = i + srs_pdu->bwp_start;
     uint16_t alloc = vrb_map_UL[rb] & mask;
-    AssertFatal(nrmac->ulprbbl[rb] != 0 || alloc == 0, "RB %d not free for SRS: alloc 0x%02x for mask 0x%02x\n", rb, alloc, mask);
+    AssertFatal(nrmac->ulprbbl[0][rb] != 0 || alloc == 0, "RB %d not free for SRS: alloc 0x%02x for mask 0x%02x\n", rb, alloc, mask);
     vrb_map_UL[rb] |= mask;
   }
 }
@@ -481,8 +481,8 @@ static void nr_fill_nfapi_srs(gNB_MAC_INST *nrmac,
                               NR_SRS_ResourceSet_t *srs_resource_set,
                               NR_SRS_Resource_t *srs_resource)
 {
-  int slots_frame = nrmac->frame_structure.numb_slots_frame;
-  int index = ul_buffer_index(frame, slot, slots_frame, nrmac->UL_tti_req_ahead_size);
+  int slots_frame = nrmac->frame_structure[0].numb_slots_frame;
+  int index = ul_buffer_index(frame, slot, slots_frame, nrmac->UL_tti_req_ahead_size[0]);
   nfapi_nr_ul_tti_request_t *future_ul_tti_req = &nrmac->UL_tti_req_ahead[0][index];
   AssertFatal(future_ul_tti_req->n_pdus <
               sizeof(future_ul_tti_req->pdus_list) / sizeof(future_ul_tti_req->pdus_list[0]),
@@ -492,7 +492,7 @@ static void nr_fill_nfapi_srs(gNB_MAC_INST *nrmac,
   nfapi_nr_srs_pdu_t *srs_pdu = &future_ul_tti_req->pdus_list[future_ul_tti_req->n_pdus].srs_pdu;
   memset(srs_pdu, 0, sizeof(nfapi_nr_srs_pdu_t));
   future_ul_tti_req->n_pdus += 1;
-  index = ul_buffer_index(frame, slot, slots_frame, nrmac->vrb_map_UL_size);
+  index = ul_buffer_index(frame, slot, slots_frame, nrmac->vrb_map_UL_size[0]);
   nr_configure_srs(nrmac, srs_pdu, frame, slot, CC_id, UE, srs_resource_set, srs_resource, index, slots_frame);
 }
 
@@ -555,7 +555,7 @@ void nr_schedule_srs(int module_id, frame_t frame, int slot)
       }
 
       // we are sheduling SRS max_k2 slot in advance for the presence of SRS to be taken into account when scheduling PUSCH
-      const int n_slots_frame = nrmac->frame_structure.numb_slots_frame;
+      const int n_slots_frame = nrmac->frame_structure[0].numb_slots_frame;
       const int n_ahead = n_slots_frame - 1 + get_NTN_Koffset(nrmac->common_channels[0].ServingCellConfigCommon);
       const int sched_slot = (slot + n_ahead) % n_slots_frame;
       const int sched_frame = (frame + (slot + n_ahead) / n_slots_frame) % MAX_FRAME_NUMBER;

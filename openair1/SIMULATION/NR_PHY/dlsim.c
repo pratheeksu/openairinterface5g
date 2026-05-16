@@ -798,7 +798,7 @@ int main(int argc, char **argv)
   RC.nb_nr_macrlc_inst = 1;
   mac_top_init_gNB(ngran_gNB, scc, &conf, &rlc_config);
   gNB_mac = RC.nrmac[0];
-  nr_mac_config_scc(RC.nrmac[0], scc, &conf);
+  nr_mac_config_scc(RC.nrmac[0], 0, scc, &conf);
 
   gNB_mac->dl_bler.harq_round_max = num_rounds;
 

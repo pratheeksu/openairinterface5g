@@ -59,8 +59,8 @@ void nvIPC_send_stop_request()
 }
 
 
-static uint16_t old_sfn = 0;
-static uint16_t old_slot = 0;
+static uint16_t old_sfn[NFAPI_CC_MAX];
+static uint16_t old_slot[NFAPI_CC_MAX];
 ////////////////////////////////////////////////////////////////////////
 // Handle an RX message
 static int ipc_handle_rx_msg(nv_ipc_msg_t *msg)
@@ -134,22 +134,28 @@ static int ipc_handle_rx_msg(nv_ipc_msg_t *msg)
           NFAPI_TRACE(NFAPI_TRACE_ERROR, "%s: Failed to unpack message\n", __FUNCTION__);
         } else {
           NFAPI_TRACE(NFAPI_TRACE_DEBUG, "%s: Handling NR SLOT Indication\n", __FUNCTION__);
+          // use transport-level cell_id (0-based) from the nvIPC header —
+          // ind.header.phy_id is not reliably populated by cuBB in incoming messages;
+          // normalize it here so downstream callbacks can rely on it
+          uint8_t cc_id = msg->cell_id;
+          AssertFatal(cc_id < NFAPI_CC_MAX, "cell_id %d exceeds NFAPI_CC_MAX %d\n", cc_id, NFAPI_CC_MAX);
+          ind.header.phy_id = cc_id + 1; // 1-based, consistent with outgoing P7 path
           // check if the sfn/slot unpacked come wrong at any time, should be old + 1 (slot 0 -- 19, sfn 0 -- 1023)
-          // add 1 to current sfn number
-          uint16_t old_slot_plus = ((old_slot + 1) % 20);
-          uint16_t old_sfn_plus = old_slot_plus == 0 ? ((old_sfn + 1) % 1024) : old_sfn;
+          uint16_t old_slot_plus = ((old_slot[cc_id] + 1) % 20);
+          uint16_t old_sfn_plus = old_slot_plus == 0 ? ((old_sfn[cc_id] + 1) % 1024) : old_sfn[cc_id];
           if (old_slot_plus != ind.slot || old_sfn_plus != ind.sfn) {
             LOG_E(NFAPI_VNF,
                   "\n============================================================================\n"
-                  "sfn slot doesn't match unpacked one! L2->L1 %d.%d  vs L1->L2 %d.%d  \n"
+                  "sfn slot doesn't match unpacked one! CC %d L2->L1 %d.%d  vs L1->L2 %d.%d  \n"
                   "============================================================================\n",
-                  old_sfn,
-                  old_slot,
+                  cc_id,
+                  old_sfn[cc_id],
+                  old_slot[cc_id],
                   ind.sfn,
                   ind.slot);
           }
-          old_sfn = ind.sfn;
-          old_slot = ind.slot;
+          old_sfn[cc_id] = ind.sfn;
+          old_slot[cc_id] = ind.slot;
           if (vnf_p7_config->_public.nr_slot_indication) {
             (vnf_p7_config->_public.nr_slot_indication)(&ind);
           }
@@ -210,7 +216,7 @@ bool aerial_nr_send_p5_message(vnf_t *vnf, uint16_t p5_idx, nfapi_nr_p4_p5_messa
   if (pnf) {
     // Create the message
     nv_ipc_msg_t send_msg = {.msg_id = msg->message_id,
-                             .cell_id = 0,
+                             .cell_id = (msg->phy_id > 0) ? msg->phy_id - 1 : 0,
                              // By default, P5 uses only message pool.
                              .data_pool = NV_IPC_MEMPOOL_CPU_MSG,
                              .data_len = 0,
@@ -410,11 +416,11 @@ int nvIPC_Init(nvipc_params_t nvipc_params_s)
   return 0;
 }
 
-int oai_fapi_ul_tti_req(nfapi_nr_ul_tti_request_t *ul_tti_req)
+int oai_fapi_ul_tti_req(nfapi_nr_ul_tti_request_t *ul_tti_req, uint8_t CC_id)
 {
   nfapi_vnf_p7_config_t *p7_config = get_p7_vnf_config();
 
-  ul_tti_req->header.phy_id = 1; // DJP HACK TODO FIXME - need to pass this around!!!!
+  ul_tti_req->header.phy_id = CC_id + 1;
   ul_tti_req->header.message_id = NFAPI_NR_PHY_MSG_TYPE_UL_TTI_REQUEST;
 
   bool retval = p7_config->send_p7_msg(get_p7_vnf(), &ul_tti_req->header);
@@ -431,10 +437,10 @@ int oai_fapi_ul_tti_req(nfapi_nr_ul_tti_request_t *ul_tti_req)
   return retval;
 }
 
-int oai_fapi_ul_dci_req(nfapi_nr_ul_dci_request_t *ul_dci_req)
+int oai_fapi_ul_dci_req(nfapi_nr_ul_dci_request_t *ul_dci_req, uint8_t CC_id)
 {
   nfapi_vnf_p7_config_t *p7_config = get_p7_vnf_config();
-  ul_dci_req->header.phy_id = 1; // DJP HACK TODO FIXME - need to pass this around!!!!
+  ul_dci_req->header.phy_id = CC_id + 1;
   ul_dci_req->header.message_id = NFAPI_NR_PHY_MSG_TYPE_UL_DCI_REQUEST;
 
   bool retval = p7_config->send_p7_msg(get_p7_vnf(), &ul_dci_req->header);
@@ -446,10 +452,10 @@ int oai_fapi_ul_dci_req(nfapi_nr_ul_dci_request_t *ul_dci_req)
   return retval;
 }
 
-int oai_fapi_tx_data_req(nfapi_nr_tx_data_request_t *tx_data_req)
+int oai_fapi_tx_data_req(nfapi_nr_tx_data_request_t *tx_data_req, uint8_t CC_id)
 {
   nfapi_vnf_p7_config_t *p7_config = get_p7_vnf_config();
-  tx_data_req->header.phy_id = 1; // DJP HACK TODO FIXME - need to pass this around!!!!
+  tx_data_req->header.phy_id = CC_id + 1;
   tx_data_req->header.message_id = NFAPI_NR_PHY_MSG_TYPE_TX_DATA_REQUEST;
 
   bool retval = p7_config->send_p7_msg(get_p7_vnf(), &tx_data_req->header);
@@ -462,11 +468,11 @@ int oai_fapi_tx_data_req(nfapi_nr_tx_data_request_t *tx_data_req)
   return retval;
 }
 
-int oai_fapi_dl_tti_req(nfapi_nr_dl_tti_request_t *dl_config_req)
+int oai_fapi_dl_tti_req(nfapi_nr_dl_tti_request_t *dl_config_req, uint8_t CC_id)
 {
   nfapi_vnf_p7_config_t *p7_config = get_p7_vnf_config();
   dl_config_req->header.message_id = NFAPI_NR_PHY_MSG_TYPE_DL_TTI_REQUEST;
-  dl_config_req->header.phy_id = 1; // DJP HACK TODO FIXME - need to pass this around!!!!
+  dl_config_req->header.phy_id = CC_id + 1;
 
   bool retval = p7_config->send_p7_msg(get_p7_vnf(), &dl_config_req->header);
   dl_config_req->dl_tti_request_body.nPDUs = 0;
@@ -478,10 +484,11 @@ int oai_fapi_dl_tti_req(nfapi_nr_dl_tti_request_t *dl_config_req)
   return retval;
 }
 
-int oai_fapi_send_end_request(uint32_t frame, uint32_t slot)
+int oai_fapi_send_end_request(uint32_t frame, uint32_t slot, uint8_t CC_id)
 {
   nfapi_vnf_p7_config_t *p7_config = get_p7_vnf_config();
-  nfapi_nr_slot_indication_scf_t nr_slot_resp = {.header.message_id = 0x8F, .sfn = frame, .slot = slot};
+  nfapi_nr_slot_indication_scf_t nr_slot_resp = {
+      .header.message_id = 0x8F, .header.phy_id = CC_id + 1, .sfn = frame, .slot = slot};
 
   bool retval = p7_config->send_p7_msg(get_p7_vnf(), &nr_slot_resp.header);
   if (!retval) {

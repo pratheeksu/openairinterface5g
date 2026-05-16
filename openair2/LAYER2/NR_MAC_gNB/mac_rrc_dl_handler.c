@@ -535,16 +535,16 @@ static NR_UE_info_t *create_new_UE(gNB_MAC_INST *mac, uint32_t cu_id, const NR_C
   bool success = du_add_f1_ue_data(rnti, &new_ue_data);
   DevAssert(success);
 
-  NR_UE_info_t *UE = get_new_nr_ue_inst(&mac->UE_info.uid_allocator, rnti, NULL, &mac->radio_config);
+  NR_UE_info_t *UE = get_new_nr_ue_inst(&mac->UE_info.uid_allocator, rnti, NULL, &mac->radio_config[0]);
   AssertFatal(UE->uid < MAX_MOBILES_PER_GNB, "cannot create UE context, UE context setup failure not implemented\n");
 
   NR_CellGroupConfig_t *cellGroupConfig = NULL;
   NR_COMMON_channels_t *cc = &mac->common_channels[CC_id];
   const NR_ServingCellConfigCommon_t *scc = cc->ServingCellConfigCommon;
-  const nr_mac_config_t *configuration = &mac->radio_config;
+  const nr_mac_config_t *configuration = &mac->radio_config[0];
   int ssb_index = get_ssbidx_from_beam(mac, UE->UE_beam_index);
   if (is_SA) {
-    cellGroupConfig = get_initial_cellGroupConfig(UE->uid, scc, &mac->radio_config, &mac->rlc_config, ssb_index);
+    cellGroupConfig = get_initial_cellGroupConfig(UE->uid, scc, &mac->radio_config[0], &mac->rlc_config, ssb_index);
     cellGroupConfig->spCellConfig->reconfigurationWithSync = get_reconfiguration_with_sync(UE->rnti, UE->uid, scc, mac->frame);
   } else {
     NR_UE_NR_Capability_t *cap = get_ue_nr_cap_from_cg_config_info(cgci);
@@ -735,7 +735,7 @@ void ue_context_setup_request(const f1ap_ue_context_setup_req_t *req)
   if (ue_cap != NULL && cg_configinfo == NULL) {
     // store the new UE capabilities, and update the cellGroupConfig
     // only to be done if we did not already update through the cg_configinfo
-    update_cellGroupConfig(new_CellGroup, UE->uid, UE->capability, &mac->radio_config, scc);
+    update_cellGroupConfig(new_CellGroup, UE->uid, UE->capability, &mac->radio_config[0], scc);
   }
 
   /* During re-establishment, prepare CellGroupConfig for UE Context Setup response.
@@ -766,7 +766,7 @@ void ue_context_setup_request(const f1ap_ue_context_setup_req_t *req)
 
   if (mtc) {
     /* creates a suitable measGap config to be used in the gNB */
-    UE->measgap_config = create_measgap_config(mtc, UE->current_DL_BWP.scs, mac->radio_config.minRXTXTIME);
+    UE->measgap_config = create_measgap_config(mtc, UE->current_DL_BWP.scs, mac->radio_config[0].minRXTXTIME);
     /* encodes the measGapConfig created, if useful (or not!) */
     byte_array_t *mgc = calloc_or_fail(1, sizeof(*mgc));
     mgc->buf = calloc_or_fail(1, 1024);
@@ -862,7 +862,7 @@ void ue_context_modification_request(const f1ap_ue_context_mod_req_t *req)
     ASN_STRUCT_FREE(asn_DEF_NR_UE_NR_Capability, UE->capability);
     UE->capability = ue_cap;
     LOG_I(NR_MAC, "UE %04x: received capabilities, updating CellGroupConfig\n", UE->rnti);
-    update_cellGroupConfig(new_CellGroup, UE->uid, UE->capability, &mac->radio_config, scc);
+    update_cellGroupConfig(new_CellGroup, UE->uid, UE->capability, &mac->radio_config[0], scc);
   }
 
   /* 3GPP TS 38.473 Clause 8.3.4: If gNB-DU Configuration Query is present, include CellGroupConfig

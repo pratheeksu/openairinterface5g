@@ -46,7 +46,7 @@ void nr_preprocessor_phytest(gNB_MAC_INST *mac, post_process_pdsch_t *pp_pdsch)
   slot_t slot = pp_pdsch->slot;
 
   /* already mutex protected: held in gNB_dlsch_ulsch_scheduler() */
-  int slot_period = slot % mac->frame_structure.numb_slots_period;
+  int slot_period = slot % mac->frame_structure[0].numb_slots_period;
   if (!is_xlsch_in_slot(dlsch_slot_bitmap, dlsch_slot_modval, slot_period))
     return;
   NR_UE_info_t *UE = mac->UE_info.connected_ue_list[0];
@@ -89,16 +89,16 @@ void nr_preprocessor_phytest(gNB_MAC_INST *mac, post_process_pdsch_t *pp_pdsch)
       const long band = *scc->downlinkConfigCommon->frequencyInfoDL->frequencyBandList.list.array[0];
       uint16_t ssb_start_symbol = get_ssb_start_symbol(band, scs, i_ssb);
       // select beam for PDSCH in current slot based on SSB beam
-      if ((ssb_start_symbol / NR_SYMBOLS_PER_SLOT) == (slot % mac->frame_structure.numb_slots_period)) {
+      if ((ssb_start_symbol / NR_SYMBOLS_PER_SLOT) == (slot % mac->frame_structure[0].numb_slots_period)) {
         ssb_idx_beam = i_ssb;
         break;
       }
     }
   }
   int beam_idx = get_beam_from_ssbidx(mac, ssb_idx_beam);
-  NR_beam_alloc_t beam = beam_allocation_procedure(&mac->beam_info, frame, slot, beam_idx, mac->frame_structure.numb_slots_frame);
+  NR_beam_alloc_t beam = beam_allocation_procedure(&mac->beam_info[0], frame, slot, beam_idx, mac->frame_structure[0].numb_slots_frame);
   AssertFatal(beam.idx > -1, "Can't allocate beam %d in phytest scheduler\n", beam_idx);
-  UE->UE_beam_index = get_allocated_beam(&mac->beam_info, frame, slot, mac->frame_structure.numb_slots_frame, beam.idx);
+  UE->UE_beam_index = get_allocated_beam(&mac->beam_info[0], frame, slot, mac->frame_structure[0].numb_slots_frame, beam.idx);
 
   int rbStart = 0;
   int rbSize = 0;
@@ -219,7 +219,7 @@ void nr_ul_preprocessor_phytest(gNB_MAC_INST *nr_mac, post_process_pusch_t *pp_p
   uint16_t rbStart = 0;
   uint16_t rbSize = min(bw, target_ul_bw);
 
-  DevAssert(seq_arr_size(&nr_mac->ul_tda) > 0);
+  DevAssert(seq_arr_size(&nr_mac->ul_tda[0]) > 0);
   const int tda = 0;
   NR_tda_info_t tda_info = get_ul_tda_info(ul_bwp,
                                            sched_ctrl->coreset->controlResourceSetId,
@@ -229,14 +229,14 @@ void nr_ul_preprocessor_phytest(gNB_MAC_INST *nr_mac, post_process_pusch_t *pp_p
   DevAssert(tda_info.valid_tda);
 
   int K2 = tda_info.k2 + get_NTN_Koffset(scc);
-  int slots_frame = nr_mac->frame_structure.numb_slots_frame;
+  int slots_frame = nr_mac->frame_structure[0].numb_slots_frame;
   const int sched_frame = (frame + (slot + K2) / slots_frame) % MAX_FRAME_NUMBER;
   const int sched_slot = (slot + K2) % slots_frame;
 
   /* check if slot is UL, and that slot is 8 (assuming K2=6 because of UE
    * limitations).  Note that if K2 or the TDD configuration is changed, below
    * conditions might exclude each other and never be true */
-  int slot_period = sched_slot % nr_mac->frame_structure.numb_slots_period;
+  int slot_period = sched_slot % nr_mac->frame_structure[0].numb_slots_period;
   if (!is_xlsch_in_slot(ulsch_slot_bitmap, ulsch_slot_modval, slot_period))
     return;
 
@@ -250,7 +250,7 @@ void nr_ul_preprocessor_phytest(gNB_MAC_INST *nr_mac, post_process_pusch_t *pp_p
   get_best_ul_tda(nr_mac, beam, tda_p, 1, sched_frame, sched_slot, &rb_s, &rb_l);
   DevAssert(rb_s == rbStart && rb_l == rbSize);
 
-  const int buffer_index = ul_buffer_index(sched_frame, sched_slot, slots_frame, nr_mac->vrb_map_UL_size);
+  const int buffer_index = ul_buffer_index(sched_frame, sched_slot, slots_frame, nr_mac->vrb_map_UL_size[0]);
   uint16_t *vrb_map_UL = &nr_mac->common_channels[CC_id].vrb_map_UL[beam][buffer_index * MAX_BWP_SIZE];
   for (int i = rbStart; i < rbStart + rbSize; ++i) {
     if ((vrb_map_UL[i+BWPStart] & SL_to_bitmap(tda_info.startSymbolIndex, tda_info.nrOfSymbols)) != 0) {

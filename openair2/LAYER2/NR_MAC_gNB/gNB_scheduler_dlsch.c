@@ -32,7 +32,7 @@
 int get_dl_tda(const gNB_MAC_INST *nrmac, int slot)
 {
   /* we assume that this function is mutex-protected from outside */
-  const frame_structure_t *fs = &nrmac->frame_structure;
+  const frame_structure_t *fs = &nrmac->frame_structure[0];
 
   // Use special TDA in case of CSI-RS
   if (nrmac->UE_info.sched_csirs > 0)
@@ -90,7 +90,7 @@ int nr_write_ce_dlsch_pdu(module_id_t module_idP,
     AssertFatal(timing_advance_cmd < 64, "timing_advance_cmd %d > 63\n", timing_advance_cmd);
     ((NR_MAC_CE_TA *) ce_ptr)->TA_COMMAND = timing_advance_cmd;    //(timing_advance_cmd+31)&0x3f;
 
-    tag_id = gNB->tag->tag_Id;
+    tag_id = gNB->tag[0]->tag_Id;
     ((NR_MAC_CE_TA *) ce_ptr)->TAGID = tag_id;
 
     LOG_D(NR_MAC, "NR MAC CE timing advance command = %d (%d) TAG ID = %d\n", timing_advance_cmd, ((NR_MAC_CE_TA *) ce_ptr)->TA_COMMAND, tag_id);
@@ -366,8 +366,8 @@ bwp_info_t get_pdsch_bwp_start_size(gNB_MAC_INST *nr_mac, NR_UE_info_t *UE)
 {
   bwp_info_t bwp_info;
   if (!UE) {
-    bwp_info.bwpStart = nr_mac->cset0_bwp_start;
-    bwp_info.bwpSize = nr_mac->cset0_bwp_size;
+    bwp_info.bwpStart = nr_mac->cset0_bwp_start[0];
+    bwp_info.bwpSize = nr_mac->cset0_bwp_size[0];
     return bwp_info;
   }
   NR_UE_DL_BWP_t *dl_bwp = &UE->current_DL_BWP;
@@ -387,13 +387,13 @@ bwp_info_t get_pdsch_bwp_start_size(gNB_MAC_INST *nr_mac, NR_UE_info_t *UE)
       && sched_ctrl->search_space->searchSpaceType
       && sched_ctrl->search_space->searchSpaceType->present == NR_SearchSpace__searchSpaceType_PR_common) {
     if (sched_ctrl->coreset->controlResourceSetId == 0) {
-      bwp_info.bwpStart = nr_mac->cset0_bwp_start;
+      bwp_info.bwpStart = nr_mac->cset0_bwp_start[0];
     } else {
       int additional_offset = (dl_bwp->BWPStart + 5) / 6 * 6 - dl_bwp->BWPStart;
       bwp_info.bwpStart = dl_bwp->BWPStart + sched_ctrl->sched_pdcch.rb_start + additional_offset;
     }
-    if (nr_mac->cset0_bwp_size > 0) {
-      bwp_info.bwpSize = min(dl_bwp->BWPSize, nr_mac->cset0_bwp_size);
+    if (nr_mac->cset0_bwp_size[0] > 0) {
+      bwp_info.bwpSize = min(dl_bwp->BWPSize, nr_mac->cset0_bwp_size[0]);
     } else {
       bwp_info.bwpSize = min(dl_bwp->BWPSize, UE->sc_info.initial_dl_BWPSize);
     }
@@ -421,7 +421,7 @@ static bool allocate_dl_retransmission(gNB_MAC_INST *nr_mac,
   NR_UE_UL_BWP_t *ul_bwp = &UE->current_UL_BWP;
   NR_sched_pdsch_t new_sched = sched_ctrl->harq_processes[current_harq_pid].sched_pdsch;
   int layers = get_dl_nrOfLayers(sched_ctrl, dl_bwp->dci_format);
-  int pm_index = get_pm_index(nr_mac, UE, dl_bwp->dci_format, layers, nr_mac->radio_config.pdsch_AntennaPorts.XP);
+  int pm_index = get_pm_index(nr_mac, UE, dl_bwp->dci_format, layers, nr_mac->radio_config[0].pdsch_AntennaPorts.XP);
 
   // If the RI changed between current rtx and a previous transmission
   // we need to verify if it is not decreased
@@ -625,7 +625,7 @@ static void pf_dl(gNB_MAC_INST *mac,
     remainUEs[i] = max_num_ue;
   int numUE = 0;
   int CC_id = 0;
-  int slots_per_frame = mac->frame_structure.numb_slots_frame;
+  int slots_per_frame = mac->frame_structure[0].numb_slots_frame;
 
   /* Loop UE_info->list to check retransmission */
   UE_iterator(UE_list, UE) {
@@ -659,14 +659,14 @@ static void pf_dl(gNB_MAC_INST *mac,
 
     /* retransmission */
     if (harq_pid >= 0) {
-      NR_beam_alloc_t beam = beam_allocation_procedure(&mac->beam_info, frame, slot, UE->UE_beam_index, slots_per_frame);
+      NR_beam_alloc_t beam = beam_allocation_procedure(&mac->beam_info[0], frame, slot, UE->UE_beam_index, slots_per_frame);
       bool sch_ret = beam.idx >= 0;
       /* Allocate retransmission */
       if (sch_ret)
         sch_ret = allocate_dl_retransmission(mac, pp_pdsch, &n_rb_sched[beam.idx], UE, beam.idx, harq_pid);
       if (!sch_ret) {
         LOG_D(NR_MAC, "[UE %04x][%4d.%2d] DL retransmission could not be allocated\n", UE->rnti, frame, slot);
-        reset_beam_status(&mac->beam_info, frame, slot, UE->UE_beam_index, slots_per_frame, beam.new_beam);
+        reset_beam_status(&mac->beam_info[0], frame, slot, UE->UE_beam_index, slots_per_frame, beam.new_beam);
         continue;
       }
       /* reduce max_num_ue once we are sure UE can be allocated, i.e., has CCE */
@@ -751,7 +751,7 @@ static void pf_dl(gNB_MAC_INST *mac,
       continue;
     }
 
-    NR_beam_alloc_t beam = beam_allocation_procedure(&mac->beam_info, frame, slot, iterator->UE->UE_beam_index, slots_per_frame);
+    NR_beam_alloc_t beam = beam_allocation_procedure(&mac->beam_info[0], frame, slot, iterator->UE->UE_beam_index, slots_per_frame);
 
     if (beam.idx < 0) {
       // no available beam
@@ -759,7 +759,7 @@ static void pf_dl(gNB_MAC_INST *mac,
       continue;
     }
     if (remainUEs[beam.idx] == 0 || n_rb_sched[beam.idx] < min_rbSize) {
-      reset_beam_status(&mac->beam_info, frame, slot, iterator->UE->UE_beam_index, slots_per_frame, beam.new_beam);
+      reset_beam_status(&mac->beam_info[0], frame, slot, iterator->UE->UE_beam_index, slots_per_frame, beam.new_beam);
       iterator++;
       continue;
     }
@@ -796,7 +796,7 @@ static void pf_dl(gNB_MAC_INST *mac,
             rnti,
             rbStart,
             max_rbSize);
-      reset_beam_status(&mac->beam_info, frame, slot, iterator->UE->UE_beam_index, slots_per_frame, beam.new_beam);
+      reset_beam_status(&mac->beam_info[0], frame, slot, iterator->UE->UE_beam_index, slots_per_frame, beam.new_beam);
       iterator++;
       continue;
     }
@@ -814,7 +814,7 @@ static void pf_dl(gNB_MAC_INST *mac,
     if (CCEIndex < 0) {
       sched_ctrl->dl_cce_fail++;
       LOG_D(NR_MAC, "[UE %04x][%4d.%2d] could not find free CCE for DL DCI\n", rnti, frame, slot);
-      reset_beam_status(&mac->beam_info, frame, slot, iterator->UE->UE_beam_index, slots_per_frame, beam.new_beam);
+      reset_beam_status(&mac->beam_info[0], frame, slot, iterator->UE->UE_beam_index, slots_per_frame, beam.new_beam);
       iterator++;
       continue;
     }
@@ -828,7 +828,7 @@ static void pf_dl(gNB_MAC_INST *mac,
       alloc = nr_acknack_scheduling(mac, iterator->UE, frame, slot, iterator->UE->UE_beam_index, r_pucch, 0);
       if (alloc < 0) {
         LOG_D(NR_MAC, "[UE %04x][%4d.%2d] could not find PUCCH for DL DCI\n", rnti, frame, slot);
-        reset_beam_status(&mac->beam_info, frame, slot, iterator->UE->UE_beam_index, slots_per_frame, beam.new_beam);
+        reset_beam_status(&mac->beam_info[0], frame, slot, iterator->UE->UE_beam_index, slots_per_frame, beam.new_beam);
         iterator++;
         continue;
       }
@@ -847,7 +847,7 @@ static void pf_dl(gNB_MAC_INST *mac,
       // tb_size below
       .dl_harq_pid = sched_ctrl->available_dl_harq.head,
       .pucch_allocation = alloc,
-      .pm_index = get_pm_index(mac, iterator->UE, dl_bwp->dci_format, l, mac->radio_config.pdsch_AntennaPorts.XP),
+      .pm_index = get_pm_index(mac, iterator->UE, dl_bwp->dci_format, l, mac->radio_config[0].pdsch_AntennaPorts.XP),
       .nrOfLayers = l,
       .bwp_info = bwp_info,
       .dmrs_parms = get_dl_dmrs_params(scc, dl_bwp, &tda_info, l),
@@ -900,7 +900,7 @@ static void nr_dlsch_preprocessor(gNB_MAC_INST *mac, post_process_pdsch_t *pp_pd
 
   NR_ServingCellConfigCommon_t *scc = mac->common_channels[0].ServingCellConfigCommon;
   int bw = scc->downlinkConfigCommon->frequencyInfoDL->scs_SpecificCarrierList.list.array[0]->carrierBandwidth;
-  int num_beams = mac->beam_info.beam_allocation ? mac->beam_info.beams_per_period : 1;
+  int num_beams = mac->beam_info[0].beam_allocation ? mac->beam_info[0].beams_per_period : 1;
   int n_rb_sched[num_beams];
   for (int i = 0; i < num_beams; i++)
     n_rb_sched[i] = bw;
@@ -1113,7 +1113,7 @@ void post_process_dlsch(gNB_MAC_INST *nr_mac, post_process_pdsch_t *pdsch, NR_UE
     maxMIMO_Layers = 1;
   }
   const int nl_tbslbrm = min(maxMIMO_Layers, 4);
-  const uint16_t fapi_beam = convert_to_fapi_beam(UE->UE_beam_index, nr_mac->beam_info.beam_mode);
+  const uint16_t fapi_beam = convert_to_fapi_beam(UE->UE_beam_index, nr_mac->beam_info[0].beam_mode);
   nfapi_nr_dl_tti_pdsch_pdu_rel15_t *pdsch_pdu = prepare_pdsch_pdu(dl_tti_pdsch_pdu,
                                                                    nr_mac,
                                                                    UE,
@@ -1187,7 +1187,7 @@ void post_process_dlsch(gNB_MAC_INST *nr_mac, post_process_pdsch_t *pdsch, NR_UE
                      sched_ctrl->search_space,
                      sched_ctrl->coreset,
                      UE->pdsch_HARQ_ACK_Codebook,
-                     nr_mac->cset0_bwp_size);
+                     nr_mac->cset0_bwp_size[0]);
 
   LOG_D(NR_MAC,
         "coreset params: FreqDomainResource %llx, start_symbol %d  n_symb %d\n",
@@ -1377,7 +1377,7 @@ void nr_schedule_ue_spec(module_id_t module_id,
   AssertFatal(pthread_mutex_trylock(&gNB_mac->sched_lock) == EBUSY,
               "this function should be called with the scheduler mutex locked\n");
 
-  if (!is_dl_slot(slot, &gNB_mac->frame_structure))
+  if (!is_dl_slot(slot, &gNB_mac->frame_structure[0]))
     return;
 
   NR_ServingCellConfigCommon_t *scc = gNB_mac->common_channels[CC_id].ServingCellConfigCommon;

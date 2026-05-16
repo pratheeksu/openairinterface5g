@@ -278,22 +278,22 @@ void mac_top_init_gNB(ngran_node_t node_type,
       
       RC.nrmac[i]->Mod_id = i;
 
-      RC.nrmac[i]->tag = (NR_TAG_t*)malloc(sizeof(NR_TAG_t));
-      memset((void*)RC.nrmac[i]->tag,0,sizeof(NR_TAG_t));
+      RC.nrmac[i]->tag[0] = (NR_TAG_t*)malloc(sizeof(NR_TAG_t));
+      memset((void*)RC.nrmac[i]->tag[0],0,sizeof(NR_TAG_t));
       for(int n = 0; n < MAX_NUM_OF_SSB; n++)
-        RC.nrmac[i]->sib1_pdsch[n].time_domain_allocation = -1;
+        RC.nrmac[i]->sib1_pdsch[0][n].time_domain_allocation = -1;
       RC.nrmac[i]->common_channels[0].ServingCellConfigCommon = scc;
-      RC.nrmac[i]->radio_config = *config;
+      RC.nrmac[i]->radio_config[0] = *config;
       RC.nrmac[i]->rlc_config = *default_rlc_config;
 
-      RC.nrmac[i]->first_MIB = true;
+      RC.nrmac[i]->first_MIB[0] = true;
       RC.nrmac[i]->num_scheduled_prach_rx = 0;
       RC.nrmac[i]->common_channels[0].mib = get_new_MIB_NR(scc);
 
-      RC.nrmac[i]->cset0_bwp_start = 0;
-      RC.nrmac[i]->cset0_bwp_size = 0;
+      RC.nrmac[i]->cset0_bwp_start[0] = 0;
+      RC.nrmac[i]->cset0_bwp_size[0] = 0;
 
-      RC.nrmac[i]->ul_next = (fsn_t) {.mu = *scc->ssbSubcarrierSpacing};
+      RC.nrmac[i]->ul_next[0] = (fsn_t) {.mu = *scc->ssbSubcarrierSpacing};
       RC.nrmac[i]->print_ue_stats = true;
 
       pthread_mutex_init(&RC.nrmac[i]->sched_lock, NULL);

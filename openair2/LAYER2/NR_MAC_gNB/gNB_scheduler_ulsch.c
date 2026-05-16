@@ -25,9 +25,9 @@ int get_num_ul_tda(gNB_MAC_INST *nrmac, int slot, int k2, const NR_tda_info_t **
   /* we assume that this function is mutex-protected from outside */
   NR_SCHED_ENSURE_LOCKED(&nrmac->sched_lock);
 
-  const uint16_t ul_bitmap = get_ul_bitmap(&nrmac->frame_structure, slot);
+  const uint16_t ul_bitmap = get_ul_bitmap(&nrmac->frame_structure[0], slot);
   *first_idx = NULL;
-  FOR_EACH_SEQ_ARR(NR_tda_info_t *, tda, &nrmac->ul_tda) {
+  FOR_EACH_SEQ_ARR(NR_tda_info_t *, tda, &nrmac->ul_tda[0]) {
     DevAssert(tda->valid_tda);
     // nr_rrc_config_ul_tda() orders by k2, so skip smaller and return for
     // bigger ones
@@ -49,19 +49,19 @@ int get_num_ul_tda(gNB_MAC_INST *nrmac, int slot, int k2, const NR_tda_info_t **
   if (*first_idx == NULL) /* nothing fit */
     return 0;
 
-  NR_tda_info_t *end_it = seq_arr_next(&nrmac->ul_tda, *first_idx);
-  while (end_it != seq_arr_end(&nrmac->ul_tda) && end_it->k2 == k2) {
+  NR_tda_info_t *end_it = seq_arr_next(&nrmac->ul_tda[0], *first_idx);
+  while (end_it != seq_arr_end(&nrmac->ul_tda[0]) && end_it->k2 == k2) {
     /* the following TDAs should all fit as long as the k2 is the same */
     uint16_t tda_bitmap = SL_to_bitmap(end_it->startSymbolIndex, end_it->nrOfSymbols);
     AssertFatal((tda_bitmap & ul_bitmap) == tda_bitmap,
                 "TDA should fit inside slot, but is not the case for k2 %ld bitmap 0x%04x\n",
                 end_it->k2,
                 tda_bitmap);
-    end_it = seq_arr_next(&nrmac->ul_tda, end_it);
+    end_it = seq_arr_next(&nrmac->ul_tda[0], end_it);
   }
 
-  ptrdiff_t diff = seq_arr_dist(&nrmac->ul_tda, *first_idx, end_it);
-  AssertFatal(diff > 0 && diff <= seq_arr_size(&nrmac->ul_tda), "dist %ld\n", diff);
+  ptrdiff_t diff = seq_arr_dist(&nrmac->ul_tda[0], *first_idx, end_it);
+  AssertFatal(diff > 0 && diff <= seq_arr_size(&nrmac->ul_tda[0]), "dist %ld\n", diff);
   return diff;
 }
 
@@ -96,8 +96,8 @@ static void get_max_rb_range(const uint16_t *vrb_map_ul, const uint16_t *ulprbbl
 const NR_tda_info_t *get_best_ul_tda(const gNB_MAC_INST *nrmac, int beam, const NR_tda_info_t *tdas, int n_tda, int frame, int slot, int *rb_start, int *rb_len)
 {
   /* there is a mixed slot only when in TDD */
-  const frame_structure_t *fs = &nrmac->frame_structure;
-  const int index = ul_buffer_index(frame, slot, fs->numb_slots_frame, nrmac->vrb_map_UL_size);
+  const frame_structure_t *fs = &nrmac->frame_structure[0];
+  const int index = ul_buffer_index(frame, slot, fs->numb_slots_frame, nrmac->vrb_map_UL_size[0]);
   uint16_t *vrb_map_UL = &nrmac->common_channels[0].vrb_map_UL[beam][index * MAX_BWP_SIZE];
 
   DevAssert(n_tda <= 16);
@@ -110,7 +110,7 @@ const NR_tda_info_t *get_best_ul_tda(const gNB_MAC_INST *nrmac, int beam, const 
     int start = check_rb_start;
     int len = check_rb_len;
     uint16_t tda_mask = SL_to_bitmap(tdas->startSymbolIndex, tdas->nrOfSymbols);
-    get_max_rb_range(vrb_map_UL, nrmac->ulprbbl, tda_mask, &start, &len);
+    get_max_rb_range(vrb_map_UL, nrmac->ulprbbl[0], tda_mask, &start, &len);
     uint64_t s = (uint64_t)tdas->nrOfSymbols * len;
     if (s > score) {
       best_tda = tdas;
@@ -647,7 +647,7 @@ static void abort_nr_ul_harq(NR_UE_info_t *UE, int8_t harq_pid)
 
 static void handle_nr_ul_harq(gNB_MAC_INST *nrmac, NR_UE_info_t *UE, rnti_t rnti, int crc_harq_id, bool crc_status)
 {
-  if (nrmac->radio_config.disable_harq) {
+  if (nrmac->radio_config[0].disable_harq) {
     LOG_D(NR_MAC, "skipping UL feedback handling as HARQ is disabled\n");
     return;
   }
@@ -906,7 +906,7 @@ static void _nr_rx_sdu(const module_id_t gnb_mod_idP,
   gNB_MAC_INST *gNB_mac = RC.nrmac[gnb_mod_idP];
   const int current_rnti = rntiP;
   LOG_D(NR_MAC, "rx_sdu for rnti %04x\n", current_rnti);
-  const int pusch_failure_thres = gNB_mac->radio_config.pusch.failure_thres;
+  const int pusch_failure_thres = gNB_mac->radio_config[0].pusch.failure_thres;
   NR_UE_info_t *UE = find_nr_UE(&gNB_mac->UE_info, current_rnti);
   if (UE) {
     NR_UE_sched_ctrl_t *UE_scheduling_control = &UE->UE_sched_ctrl;
@@ -1527,8 +1527,8 @@ void handle_nr_srs_measurements(const module_id_t module_id,
 
       sprintf(stats->srs_stats, "UL-SNR %i dB", wide_band_snr_dB);
 
-      const int ul_prbblack_SNR_threshold = nr_mac->radio_config.ul_prbblack_SNR_threshold;
-      uint16_t *ulprbbl = nr_mac->ulprbbl;
+      const int ul_prbblack_SNR_threshold = nr_mac->radio_config[0].ul_prbblack_SNR_threshold;
+      uint16_t *ulprbbl = nr_mac->ulprbbl[0];
 
       uint16_t num_rbs = nr_srs_bf_report.prg_size * nr_srs_bf_report.reported_symbol_list[0].num_prgs;
       memset(ulprbbl, 0, num_rbs * sizeof(uint16_t));
@@ -1736,7 +1736,7 @@ static bool allocate_ul_retransmission(gNB_MAC_INST *nrmac,
   LOG_D(NR_MAC,"retInfo->time_domain_allocation = %d, tda = %d\n", retInfo->time_domain_allocation, tda);
 
   /* mark when retransmission will happen */
-  int slots_frame = nrmac->frame_structure.numb_slots_frame;
+  int slots_frame = nrmac->frame_structure[0].numb_slots_frame;
   new_sched.frame = (frame + (slot + tda_info->k2 + get_NTN_Koffset(scc)) / slots_frame) % MAX_FRAME_NUMBER;
   new_sched.slot = (slot + tda_info->k2 + get_NTN_Koffset(scc)) % slots_frame;
   new_sched.bwp_info = bwp_info;
@@ -1886,12 +1886,12 @@ static int  pf_ul(gNB_MAC_INST *nrmac,
   int frame = pp_pusch->frame;
   int slot = pp_pusch->slot;
   NR_ServingCellConfigCommon_t *scc = nrmac->common_channels[CC_id].ServingCellConfigCommon;
-  int slots_per_frame = nrmac->frame_structure.numb_slots_frame;
+  int slots_per_frame = nrmac->frame_structure[0].numb_slots_frame;
   DevAssert(tda_info->valid_tda);
   const int k2 = tda_info->k2 + get_NTN_Koffset(scc);
   const int sched_frame = (frame + (slot + k2) / slots_per_frame) % MAX_FRAME_NUMBER;
   const int sched_slot = (slot + k2) % slots_per_frame;
-  DevAssert(is_ul_slot(sched_slot, &nrmac->frame_structure));
+  DevAssert(is_ul_slot(sched_slot, &nrmac->frame_structure[0]));
 
   const int min_rb = nrmac->min_grant_prb;
   // UEs that could be scheduled
@@ -1928,19 +1928,19 @@ static int  pf_ul(gNB_MAC_INST *nrmac,
     if (total_rem_ues == 0)
       continue;
 
-    NR_beam_alloc_t dci_beam = beam_allocation_procedure(&nrmac->beam_info, frame, slot, UE->UE_beam_index, slots_per_frame);
+    NR_beam_alloc_t dci_beam = beam_allocation_procedure(&nrmac->beam_info[0], frame, slot, UE->UE_beam_index, slots_per_frame);
     if (dci_beam.idx < 0) {
       LOG_D(NR_MAC, "[UE %04x][%4d.%2d] ULSCH DCI Beam could not be allocated\n", UE->rnti, frame, slot);
       continue;
     }
 
-    NR_beam_alloc_t beam = beam_allocation_procedure(&nrmac->beam_info, sched_frame, sched_slot, UE->UE_beam_index, slots_per_frame);
+    NR_beam_alloc_t beam = beam_allocation_procedure(&nrmac->beam_info[0], sched_frame, sched_slot, UE->UE_beam_index, slots_per_frame);
     if (beam.idx < 0) {
       LOG_D(NR_MAC, "[UE %04x][%4d.%2d] ULSCH Beam could not be allocated\n", UE->rnti, frame, slot);
-      reset_beam_status(&nrmac->beam_info, frame, slot, UE->UE_beam_index, slots_per_frame, dci_beam.new_beam);
+      reset_beam_status(&nrmac->beam_info[0], frame, slot, UE->UE_beam_index, slots_per_frame, dci_beam.new_beam);
       continue;
     }
-    const int index = ul_buffer_index(sched_frame, sched_slot, slots_per_frame, nrmac->vrb_map_UL_size);
+    const int index = ul_buffer_index(sched_frame, sched_slot, slots_per_frame, nrmac->vrb_map_UL_size[0]);
     uint16_t *rballoc_mask = &nrmac->common_channels[CC_id].vrb_map_UL[beam.idx][index * MAX_BWP_SIZE];
 
     /* Check if retransmission is necessary */
@@ -1960,8 +1960,8 @@ static int  pf_ul(gNB_MAC_INST *nrmac,
                                           tda_info);
       if (!r) {
         LOG_D(NR_MAC, "[UE %04x][%4d.%2d] UL retransmission could not be allocated\n", UE->rnti, frame, slot);
-        reset_beam_status(&nrmac->beam_info, sched_frame, sched_slot, UE->UE_beam_index, slots_per_frame, beam.new_beam);
-        reset_beam_status(&nrmac->beam_info, frame, slot, UE->UE_beam_index, slots_per_frame, dci_beam.new_beam);
+        reset_beam_status(&nrmac->beam_info[0], sched_frame, sched_slot, UE->UE_beam_index, slots_per_frame, beam.new_beam);
+        reset_beam_status(&nrmac->beam_info[0], frame, slot, UE->UE_beam_index, slots_per_frame, dci_beam.new_beam);
         continue;
       }
       else
@@ -1978,15 +1978,15 @@ static int  pf_ul(gNB_MAC_INST *nrmac,
      * if the UE disconnected in L2sim, in which case the gNB is not notified
      * (this can be considered a design flaw) */
     if (sched_ctrl->available_ul_harq.head < 0) {
-      reset_beam_status(&nrmac->beam_info, sched_frame, sched_slot, UE->UE_beam_index, slots_per_frame, beam.new_beam);
-      reset_beam_status(&nrmac->beam_info, frame, slot, UE->UE_beam_index, slots_per_frame, dci_beam.new_beam);
+      reset_beam_status(&nrmac->beam_info[0], sched_frame, sched_slot, UE->UE_beam_index, slots_per_frame, beam.new_beam);
+      reset_beam_status(&nrmac->beam_info[0], frame, slot, UE->UE_beam_index, slots_per_frame, dci_beam.new_beam);
       LOG_D(NR_MAC, "[UE %04x][%4d.%2d] has no free UL HARQ process, skipping\n", UE->rnti, frame, slot);
       continue;
     }
 
     const int B = max(0, sched_ctrl->estimated_ul_buffer - sched_ctrl->sched_ul_bytes);
     /* preprocessor computed sched_frame/sched_slot */
-    const bool do_sched = nr_UE_is_to_be_scheduled(&nrmac->frame_structure,
+    const bool do_sched = nr_UE_is_to_be_scheduled(&nrmac->frame_structure[0],
                                                    UE,
                                                    sched_frame,
                                                    sched_slot,
@@ -1994,8 +1994,8 @@ static int  pf_ul(gNB_MAC_INST *nrmac,
 
     LOG_D(NR_MAC,"pf_ul: do_sched UE %04x => %s\n", UE->rnti, do_sched ? "yes" : "no");
     if ((B == 0 && !do_sched) || nr_timer_is_active(&sched_ctrl->transm_interrupt)) {
-      reset_beam_status(&nrmac->beam_info, sched_frame, sched_slot, UE->UE_beam_index, slots_per_frame, beam.new_beam);
-      reset_beam_status(&nrmac->beam_info, frame, slot, UE->UE_beam_index, slots_per_frame, dci_beam.new_beam);
+      reset_beam_status(&nrmac->beam_info[0], sched_frame, sched_slot, UE->UE_beam_index, slots_per_frame, beam.new_beam);
+      reset_beam_status(&nrmac->beam_info[0], frame, slot, UE->UE_beam_index, slots_per_frame, dci_beam.new_beam);
       continue;
     }
 
@@ -2053,7 +2053,7 @@ static int  pf_ul(gNB_MAC_INST *nrmac,
     NR_UE_UL_BWP_t *current_BWP = &iterator->UE->current_UL_BWP;
     NR_UE_sched_ctrl_t *sched_ctrl = &iterator->UE->UE_sched_ctrl;
 
-    NR_beam_alloc_t beam = beam_allocation_procedure(&nrmac->beam_info, sched_frame, sched_slot, iterator->UE->UE_beam_index, slots_per_frame);
+    NR_beam_alloc_t beam = beam_allocation_procedure(&nrmac->beam_info[0], sched_frame, sched_slot, iterator->UE->UE_beam_index, slots_per_frame);
     if (beam.idx < 0) {
       LOG_D(NR_MAC, "[UE %04x][%4d.%2d] ULSCH Beam could not be allocated\n", iterator->UE->rnti, sched_frame, sched_slot);
       iterator++;
@@ -2061,15 +2061,15 @@ static int  pf_ul(gNB_MAC_INST *nrmac,
     }
 
     if (remainUEs[beam.idx] == 0 || n_rb_sched[beam.idx] < min_rb) {
-      reset_beam_status(&nrmac->beam_info, sched_frame, sched_slot, iterator->UE->UE_beam_index, slots_per_frame, beam.new_beam);
+      reset_beam_status(&nrmac->beam_info[0], sched_frame, sched_slot, iterator->UE->UE_beam_index, slots_per_frame, beam.new_beam);
       iterator++;
       continue;
     }
 
-    NR_beam_alloc_t dci_beam = beam_allocation_procedure(&nrmac->beam_info, frame, slot, iterator->UE->UE_beam_index, slots_per_frame);
+    NR_beam_alloc_t dci_beam = beam_allocation_procedure(&nrmac->beam_info[0], frame, slot, iterator->UE->UE_beam_index, slots_per_frame);
     if (dci_beam.idx < 0) {
       LOG_D(NR_MAC, "[UE %04x][%4d.%2d] ULSCH DCI Beam could not be allocated\n", iterator->UE->rnti, frame, slot);
-      reset_beam_status(&nrmac->beam_info, sched_frame, sched_slot, iterator->UE->UE_beam_index, slots_per_frame, beam.new_beam);
+      reset_beam_status(&nrmac->beam_info[0], sched_frame, sched_slot, iterator->UE->UE_beam_index, slots_per_frame, beam.new_beam);
       iterator++;
       continue;
     }
@@ -2085,8 +2085,8 @@ static int  pf_ul(gNB_MAC_INST *nrmac,
 
     if (CCEIndex < 0) {
       sched_ctrl->ul_cce_fail++;
-      reset_beam_status(&nrmac->beam_info, frame, slot, iterator->UE->UE_beam_index, slots_per_frame, dci_beam.new_beam);
-      reset_beam_status(&nrmac->beam_info, sched_frame, sched_slot, iterator->UE->UE_beam_index, slots_per_frame, beam.new_beam);
+      reset_beam_status(&nrmac->beam_info[0], frame, slot, iterator->UE->UE_beam_index, slots_per_frame, dci_beam.new_beam);
+      reset_beam_status(&nrmac->beam_info[0], sched_frame, sched_slot, iterator->UE->UE_beam_index, slots_per_frame, beam.new_beam);
       LOG_D(NR_MAC, "[UE %04x][%4d.%2d] no free CCE for UL DCI\n", iterator->UE->rnti, frame, slot);
       iterator++;
       continue;
@@ -2094,7 +2094,7 @@ static int  pf_ul(gNB_MAC_INST *nrmac,
     else
       LOG_D(NR_MAC, "%4d.%2d free CCE for UL DCI UE %04x\n", frame, slot, iterator->UE->rnti);
 
-    const int index = ul_buffer_index(sched_frame, sched_slot, slots_per_frame, nrmac->vrb_map_UL_size);
+    const int index = ul_buffer_index(sched_frame, sched_slot, slots_per_frame, nrmac->vrb_map_UL_size[0]);
     uint16_t *rballoc_mask = &nrmac->common_channels[CC_id].vrb_map_UL[beam.idx][index * MAX_BWP_SIZE];
 
     /* find maximum amount of RBs that we can schedule starting from first free RB */
@@ -2106,8 +2106,8 @@ static int  pf_ul(gNB_MAC_INST *nrmac,
      * would be the maximum */
     uint16_t max_rbSize = iterator->sched_inactive ? min_rb : bi.bwpSize;
     if (!get_rb_alloc(min_rb, max_rbSize, bi.bwpStart, bi.bwpSize, rballoc_mask, slbitmap, &rbStart, &available_rb)) {
-      reset_beam_status(&nrmac->beam_info, frame, slot, iterator->UE->UE_beam_index, slots_per_frame, dci_beam.new_beam);
-      reset_beam_status(&nrmac->beam_info, sched_frame, sched_slot, iterator->UE->UE_beam_index, slots_per_frame, beam.new_beam);
+      reset_beam_status(&nrmac->beam_info[0], frame, slot, iterator->UE->UE_beam_index, slots_per_frame, dci_beam.new_beam);
+      reset_beam_status(&nrmac->beam_info[0], sched_frame, sched_slot, iterator->UE->UE_beam_index, slots_per_frame, beam.new_beam);
       LOG_D(NR_MAC, "[UE %04x][%4d.%2d] could not allocate UL data: no resources (rbStart %d, min_rb %d, bwpSize %d)\n",
             iterator->UE->rnti,
             frame,
@@ -2349,7 +2349,7 @@ void post_process_ulsch(gNB_MAC_INST *nr_mac, post_process_pusch_t *pusch, NR_UE
   }
   NR_UE_ul_harq_t *cur_harq = &sched_ctrl->ul_harq_processes[harq_id];
   DevAssert(!cur_harq->is_waiting);
-  if (nr_mac->radio_config.disable_harq) {
+  if (nr_mac->radio_config[0].disable_harq) {
     finish_nr_ul_harq(sched_ctrl, harq_id);
   } else {
     add_tail_nr_list(&sched_ctrl->feedback_ul_harq, harq_id);
@@ -2385,8 +2385,8 @@ void post_process_ulsch(gNB_MAC_INST *nr_mac, post_process_pusch_t *pusch, NR_UE
   /* PUSCH in a later slot, but corresponding DCI now! */
   const int index = ul_buffer_index(sched_pusch->frame,
                                     sched_pusch->slot,
-                                    nr_mac->frame_structure.numb_slots_frame,
-                                    nr_mac->UL_tti_req_ahead_size);
+                                    nr_mac->frame_structure[0].numb_slots_frame,
+                                    nr_mac->UL_tti_req_ahead_size[0]);
   nfapi_nr_ul_tti_request_t *req = &nr_mac->UL_tti_req_ahead[0][index];
   if (req->SFN != sched_pusch->frame || req->Slot != sched_pusch->slot)
     LOG_W(NR_MAC,
@@ -2412,7 +2412,7 @@ void post_process_ulsch(gNB_MAC_INST *nr_mac, post_process_pusch_t *pusch, NR_UE
                                                       cur_harq->round,
                                                       current_BWP->pusch_Config && current_BWP->pusch_Config->frequencyHopping,
                                                       UE->rnti,
-                                                      nr_mac->beam_info.beam_mode);
+                                                      nr_mac->beam_info[0].beam_mode);
   req->n_pdus += 1;
 
   // Calculate the normalized tx_power for PHR
@@ -2479,7 +2479,7 @@ void post_process_ulsch(gNB_MAC_INST *nr_mac, post_process_pusch_t *pusch, NR_UE
                                                    coreset,
                                                    sched_ctrl->aggregation_level,
                                                    sched_ctrl->cce_index,
-                                                   convert_to_fapi_beam(UE->UE_beam_index, nr_mac->beam_info.beam_mode),
+                                                   convert_to_fapi_beam(UE->UE_beam_index, nr_mac->beam_info[0].beam_mode),
                                                    UE->rnti);
   pdcch_pdu->numDlDci++;
 
@@ -2523,7 +2523,7 @@ void post_process_ulsch(gNB_MAC_INST *nr_mac, post_process_pusch_t *pusch, NR_UE
                      ss,
                      coreset,
                      UE->pdsch_HARQ_ACK_Codebook,
-                     nr_mac->cset0_bwp_size);
+                     nr_mac->cset0_bwp_size[0]);
 }
 
 static void nr_ulsch_preprocessor(gNB_MAC_INST *nr_mac, post_process_pusch_t *pp_pusch)
@@ -2534,13 +2534,13 @@ static void nr_ulsch_preprocessor(gNB_MAC_INST *nr_mac, post_process_pusch_t *pp
   NR_COMMON_channels_t *cc = nr_mac->common_channels;
   NR_ServingCellConfigCommon_t *scc = cc->ServingCellConfigCommon;
   AssertFatal(scc, "We need one serving cell config common\n");
-  const frame_structure_t *fs = &nr_mac->frame_structure;
+  const frame_structure_t *fs = &nr_mac->frame_structure[0];
 
   // we assume the same K2 for all UEs
   const int koffset = get_NTN_Koffset(scc);
-  const int min_rxtx = nr_mac->radio_config.minRXTXTIME + koffset;
+  const int min_rxtx = nr_mac->radio_config[0].minRXTXTIME + koffset;
 
-  int num_beams = nr_mac->beam_info.beam_allocation ? nr_mac->beam_info.beams_per_period : 1;
+  int num_beams = nr_mac->beam_info[0].beam_allocation ? nr_mac->beam_info[0].beams_per_period : 1;
   int bw = scc->uplinkConfigCommon->frequencyInfoUL->scs_SpecificCarrierList.list.array[0]->carrierBandwidth;
 
   int average_agg_level = 4; // TODO find a better estimation
@@ -2556,7 +2556,7 @@ static void nr_ulsch_preprocessor(gNB_MAC_INST *nr_mac, post_process_pusch_t *pp
    * might starve HARQ processes that need a retransmission in a specific slot
    * but we might not necessarily reach it */
   bool last_dl = (current.s % fs->numb_slots_period) == (fs->period_cfg.num_dl_slots - 1);
-  fsn_t *next = &nr_mac->ul_next;
+  fsn_t *next = &nr_mac->ul_next[0];
   while (max_dci > 0) {
     /* go to the next UL slot, skipping DL if necessary */
     *next = fsn_get_max(*next, min_next);
@@ -2584,7 +2584,7 @@ static void nr_ulsch_preprocessor(gNB_MAC_INST *nr_mac, post_process_pusch_t *pp
     int rb_len = bw;
     tda_info = get_best_ul_tda(nr_mac, beam, tda_info, n_tda, next->f, next->s, &rb_start, &rb_len);
     DevAssert(tda_info->valid_tda);
-    int tda = seq_arr_dist(&nr_mac->ul_tda, seq_arr_front(&nr_mac->ul_tda), tda_info);
+    int tda = seq_arr_dist(&nr_mac->ul_tda[0], seq_arr_front(&nr_mac->ul_tda[0]), tda_info);
     AssertFatal(tda >= 0 && tda < 16, "illegal TDA index %d\n", tda);
 
     nr_mac->mac_stats.ul.total_prb_aggregate += bw;

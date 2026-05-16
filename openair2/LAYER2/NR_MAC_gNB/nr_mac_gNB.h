@@ -904,20 +904,20 @@ typedef struct gNB_MAC_INST_s {
   /// Module
   module_id_t                     Mod_id;
   /// timing advance group
-  NR_TAG_t                        *tag;
+  NR_TAG_t                        *tag[NFAPI_CC_MAX];
   /// Pointer to IF module instance for PHY
   NR_IF_Module_t                  *if_inst;
   pthread_t                       stats_thread;
   /// Subcarrier Offset
-  int                             ssb_SubcarrierOffset;
-  int                             ssb_OffsetPointA;
+  int                             ssb_SubcarrierOffset[NFAPI_CC_MAX];
+  int                             ssb_OffsetPointA[NFAPI_CC_MAX];
 
   /// Common cell resources
   NR_COMMON_channels_t common_channels[NFAPI_CC_MAX];
   /// current PDU index (BCH,DLSCH)
   uint16_t pdu_index[NFAPI_CC_MAX];
   /// UL PRBs blacklist
-  uint16_t ulprbbl[MAX_BWP_SIZE];
+  uint16_t ulprbbl[NFAPI_CC_MAX][MAX_BWP_SIZE];
   /// NFAPI Config Request Structure
   nfapi_nr_config_request_scf_t     config[NFAPI_CC_MAX];
   /// a PDCCH PDU groups DCIs per BWP and CORESET. The following structure
@@ -927,8 +927,8 @@ typedef struct gNB_MAC_INST_s {
   /// NFAPI UL TTI Request Structure for future TTIs, dynamically allocated
   /// because length depends on number of slots
   nfapi_nr_ul_tti_request_t        *UL_tti_req_ahead[NFAPI_CC_MAX];
-  int UL_tti_req_ahead_size;
-  int vrb_map_UL_size;
+  int UL_tti_req_ahead_size[NFAPI_CC_MAX];
+  int vrb_map_UL_size[NFAPI_CC_MAX];
 
   NR_UEs_t UE_info;
 
@@ -950,40 +950,40 @@ typedef struct gNB_MAC_INST_s {
   /// processing time of gNB ULSCH reception
   time_stats_t rx_ulsch_sdu;  // include rlc_data_ind
 
-  NR_beam_info_t beam_info;
+  NR_beam_info_t beam_info[NFAPI_CC_MAX];
 
   /// maximum number of slots before a UE will be scheduled ULSCH automatically
   uint32_t ulsch_max_frame_inactivity;
   /// instance of the frame structure configuration
-  frame_structure_t frame_structure;
+  frame_structure_t frame_structure[NFAPI_CC_MAX];
 
   /// DL preprocessor for differentiated scheduling
   nr_pp_impl_dl pre_processor_dl;
   /// UL preprocessor for differentiated scheduling
   nr_pp_impl_ul pre_processor_ul;
 
-  nr_mac_config_t radio_config;
+  nr_mac_config_t radio_config[NFAPI_CC_MAX];
   nr_rlc_configuration_t rlc_config;
 
-  NR_sched_ctrl_sib1_t *sched_ctrlSIB1;
-  NR_sched_pdcch_t *sched_pdcch_otherSI;
-  uint16_t cset0_bwp_start;
-  uint16_t cset0_bwp_size;
-  NR_Type0_PDCCH_CSS_config_t type0_PDCCH_CSS_config[MAX_NUM_OF_SSB];
+  NR_sched_ctrl_sib1_t *sched_ctrlSIB1[NFAPI_CC_MAX];
+  NR_sched_pdcch_t *sched_pdcch_otherSI[NFAPI_CC_MAX];
+  uint16_t cset0_bwp_start[NFAPI_CC_MAX];
+  uint16_t cset0_bwp_size[NFAPI_CC_MAX];
+  NR_Type0_PDCCH_CSS_config_t type0_PDCCH_CSS_config[NFAPI_CC_MAX][MAX_NUM_OF_SSB];
 
-  bool first_MIB;
+  bool first_MIB[NFAPI_CC_MAX];
   NR_bler_options_t dl_bler;
   NR_bler_options_t ul_bler;
   uint16_t min_grant_prb;
   bool identity_pm;
-  int precoding_matrix_size[NR_MAX_NB_LAYERS];
-  int beam_index_list[MAX_NUM_OF_SSB];
-  NR_sched_pdsch_t sib1_pdsch[MAX_NUM_OF_SSB];
+  int precoding_matrix_size[NFAPI_CC_MAX][NR_MAX_NB_LAYERS];
+  int beam_index_list[NFAPI_CC_MAX][MAX_NUM_OF_SSB];
+  NR_sched_pdsch_t sib1_pdsch[NFAPI_CC_MAX][MAX_NUM_OF_SSB];
 
   /// dedicate UL TDA, common for all UEs
-  seq_arr_t ul_tda;
+  seq_arr_t ul_tda[NFAPI_CC_MAX];
   /// next UL slot to schedule
-  fsn_t ul_next;
+  fsn_t ul_next[NFAPI_CC_MAX];
 
   nr_mac_rrc_ul_if_t mac_rrc;
   f1_config_t f1_config;

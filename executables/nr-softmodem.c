@@ -411,7 +411,7 @@ int start_L1L2(module_id_t gnb_id)
   /* update config */
   gNB_MAC_INST *mac = RC.nrmac[0];
   NR_ServingCellConfigCommon_t *scc = mac->common_channels[0].ServingCellConfigCommon;
-  nr_mac_config_scc(mac, scc, &mac->radio_config);
+  nr_mac_config_scc(mac, 0, scc, &mac->radio_config[0]);
 
   NR_BCCH_BCH_Message_t *mib = mac->common_channels[0].mib;
   const NR_BCCH_DL_SCH_Message_t *sib1 = mac->common_channels[0].sib1;

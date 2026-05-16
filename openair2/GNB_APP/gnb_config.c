@@ -1737,15 +1737,15 @@ void RCconfig_nr_macrlc(configmodule_interface_t *cfg)
       int num_ulprbbl = get_prb_blacklist(prbbl);
       if (num_ulprbbl != -1) {
         LOG_I(NR_PHY, "Copying %d blacklisted PRB to L1 context\n", num_ulprbbl);
-        memcpy(RC.nrmac[j]->ulprbbl, prbbl, MAX_BWP_SIZE * sizeof(prbbl[0]));
+        memcpy(RC.nrmac[j]->ulprbbl[0], prbbl, MAX_BWP_SIZE * sizeof(prbbl[0]));
       }
       // config_get_processedint() takes only paramdef_t *, so cast const away
       paramdef_t *p_ab = (paramdef_t *)gpd(params, np, MACRLC_ANALOG_BEAMFORMING);
-      RC.nrmac[j]->beam_info.beam_mode = config_get_processedint(cfg, p_ab);
-      if (RC.nrmac[j]->beam_info.beam_mode != NO_BEAM_MODE) {
-        if (RC.nrmac[j]->beam_info.beam_mode == PRECONFIGURED_BEAM_IDX)
+      RC.nrmac[j]->beam_info[0].beam_mode = config_get_processedint(cfg, p_ab);
+      if (RC.nrmac[j]->beam_info[0].beam_mode != NO_BEAM_MODE) {
+        if (RC.nrmac[j]->beam_info[0].beam_mode == PRECONFIGURED_BEAM_IDX)
           AssertFatal(NFAPI_MODE == NFAPI_MONOLITHIC, "Analog beamforming only supported for monolithic scenario\n");
-        NR_beam_info_t *beam_info = &RC.nrmac[j]->beam_info;
+        NR_beam_info_t *beam_info = &RC.nrmac[j]->beam_info[0];
         int beams_per_period = *gpd(params, np, MACRLC_BEAMS_PERIOD)->u8ptr;
         beam_info->beam_allocation = malloc16(beams_per_period * sizeof(beam_info->beam_allocation));
         beam_info->beam_duration = *gpd(params, np, MACRLC_BEAM_DURATION)->u8ptr;
@@ -1764,7 +1764,7 @@ void RCconfig_nr_macrlc(configmodule_interface_t *cfg)
       if (n > 0) {
         AssertFatal(!das_enabled, "No need to set beam weights in case of DAS\n");
         int num_beam = n;
-        if (RC.nrmac[j]->beam_info.beam_mode == PRECONFIGURED_BEAM_IDX) {
+        if (RC.nrmac[j]->beam_info[0].beam_mode == PRECONFIGURED_BEAM_IDX) {
           AssertFatal(n % num_tx == 0, "Error! Number of beam input needs to be multiple of TX antennas\n");
           num_beam = n / num_tx;
         }
@@ -1800,7 +1800,7 @@ void RCconfig_nr_macrlc(configmodule_interface_t *cfg)
             read_dbt_from_config(prefix, &config.bt.num_beams, &config.bt.num_weights_per_beam, &config.bt.beam_ids);
       }
       // triggers also PHY initialization in case we have L1 via FAPI
-      nr_mac_config_scc(RC.nrmac[j], scc, &config);
+      nr_mac_config_scc(RC.nrmac[j], 0, scc, &config);
     } //  for (j=0;j<RC.nb_nr_macrlc_inst;j++)
 
     uint64_t gnb_du_id = 0;

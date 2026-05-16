@@ -95,7 +95,7 @@ static const uint16_t cqi_table3[16][2] = {{0, 0},
 int get_ssbidx_from_beam(gNB_MAC_INST *mac, int beam_idx)
 {
   for (int i = 0; i < MAX_NUM_OF_SSB; i++)
-    if (beam_idx == mac->beam_index_list[i])
+    if (beam_idx == mac->beam_index_list[0][i])
       return i;
   AssertFatal(false, "beam_idx %d not found\n", beam_idx);
   return 0;
@@ -182,7 +182,7 @@ uint16_t get_pm_index(const gNB_MAC_INST *nrmac,
 
   int prev_layers_size = 0;
   for (int i = 1; i < layers; i++)
-    prev_layers_size += nrmac->precoding_matrix_size[i - 1];
+    prev_layers_size += nrmac->precoding_matrix_size[0][i - 1];
 
   // need to return PM index to matrix initialized in init_DL_MIMO_codebook
   // index 0 is for identity matrix
@@ -371,7 +371,7 @@ NR_ControlResourceSet_t *get_coreset(gNB_MAC_INST *nrmac,
                                      NR_ControlResourceSetId_t coreset_id)
 {
   if (coreset_id == 0) {
-    return &nrmac->sched_ctrlSIB1->coreset; // this is coreset 0
+    return &nrmac->sched_ctrlSIB1[0]->coreset; // this is coreset 0
   }
   if (bwp_dedicated) {
     const int n = bwp_dedicated->pdcch_Config->choice.setup->controlResourceSetToAddModList->list.count;
@@ -459,8 +459,8 @@ NR_sched_pdcch_t set_pdcch_structure(gNB_MAC_INST *gNB_mac,
   NR_sched_pdcch_t pdcch;
   if (bwp) { // This is not for SIB1
     if(coreset->controlResourceSetId == 0) {
-      pdcch.BWPSize = gNB_mac->cset0_bwp_size;
-      pdcch.BWPStart = gNB_mac->cset0_bwp_start;
+      pdcch.BWPSize = gNB_mac->cset0_bwp_size[0];
+      pdcch.BWPStart = gNB_mac->cset0_bwp_start[0];
     } else {
       pdcch.BWPSize = NRRIV2BW(bwp->locationAndBandwidth, MAX_BWP_SIZE);
       pdcch.BWPStart = NRRIV2PRBOFFSET(bwp->locationAndBandwidth, MAX_BWP_SIZE);
@@ -905,10 +905,10 @@ dci_pdu_rel15_t prepare_dci_dl_payload(const gNB_MAC_INST *gNB_mac,
   dci_payload.vrb_to_prb_mapping.val = 0;
   int riv_bwp = pdsch_pdu->BWPSize;
   if (!UE)
-    riv_bwp = gNB_mac->cset0_bwp_size;
+    riv_bwp = gNB_mac->cset0_bwp_size[0];
   else if (dl_BWP->dci_format == NR_DL_DCI_FORMAT_1_0 && ss_type == NR_SearchSpace__searchSpaceType_PR_common) {
-    if (gNB_mac->cset0_bwp_size > 0)
-      riv_bwp = gNB_mac->cset0_bwp_size;
+    if (gNB_mac->cset0_bwp_size[0] > 0)
+      riv_bwp = gNB_mac->cset0_bwp_size[0];
     else
       riv_bwp = UE->sc_info.initial_dl_BWPSize;
   }
@@ -2900,7 +2900,7 @@ void configure_UE_BWP(gNB_MAC_INST *nr_mac,
                                                   sched_ctrl->coreset,
                                                   scc,
                                                   &dl_genericParameters,
-                                                  nr_mac->type0_PDCCH_CSS_config);
+                                                  nr_mac->type0_PDCCH_CSS_config[0]);
 
     // set DL DCI format
     DL_BWP->dci_format = (sched_ctrl->search_space->searchSpaceType &&
@@ -2941,7 +2941,7 @@ void configure_UE_BWP(gNB_MAC_INST *nr_mac,
                                                   sched_ctrl->coreset,
                                                   scc,
                                                   &dl_genericParameters,
-                                                  &nr_mac->type0_PDCCH_CSS_config[ssb_index]);
+                                                  &nr_mac->type0_PDCCH_CSS_config[0][ssb_index]);
 
     UL_BWP->dci_format = NR_UL_DCI_FORMAT_0_0;
     DL_BWP->dci_format = NR_DL_DCI_FORMAT_1_0;
@@ -2952,7 +2952,7 @@ void configure_UE_BWP(gNB_MAC_INST *nr_mac,
   create_ul_harq_list(sched_ctrl, sc_info, format_00_10);
 
   set_max_fb_time(UL_BWP);
-  set_sched_pucch_list(sched_ctrl, UL_BWP, scc, &nr_mac->frame_structure);
+  set_sched_pucch_list(sched_ctrl, UL_BWP, scc, &nr_mac->frame_structure[0]);
 
   // Set MCS tables
   long *dl_mcs_Table = DL_BWP->pdsch_Config ? DL_BWP->pdsch_Config->mcs_Table : NULL;
@@ -3216,7 +3216,7 @@ void nr_csirs_scheduling(int Mod_idP, frame_t frame, slot_t slot, nfapi_nr_dl_tt
   int CC_id = 0;
   NR_UEs_t *UE_info = &RC.nrmac[Mod_idP]->UE_info;
   gNB_MAC_INST *gNB_mac = RC.nrmac[Mod_idP];
-  int n_slots_frame = gNB_mac->frame_structure.numb_slots_frame;
+  int n_slots_frame = gNB_mac->frame_structure[0].numb_slots_frame;
   NR_SCHED_ENSURE_LOCKED(&gNB_mac->sched_lock);
 
   UE_info->sched_csirs = 0;
@@ -3270,7 +3270,7 @@ void nr_csirs_scheduling(int Mod_idP, frame_t frame, slot_t slot, nfapi_nr_dl_tt
         if((frame * n_slots_frame + slot - offset) % period == 0) {
 
           LOG_D(NR_MAC,"Scheduling CSI-RS in frame %d slot %d Resource ID %ld\n", frame, slot, nzpcsi->nzp_CSI_RS_ResourceId);
-          NR_beam_alloc_t beam_csi = beam_allocation_procedure(&gNB_mac->beam_info, frame, slot, UE->UE_beam_index, n_slots_frame);
+          NR_beam_alloc_t beam_csi = beam_allocation_procedure(&gNB_mac->beam_info[0], frame, slot, UE->UE_beam_index, n_slots_frame);
           AssertFatal(beam_csi.idx >= 0, "Cannot allocate CSI-RS in any available beam\n");
           uint16_t *vrb_map = gNB_mac->common_channels[CC_id].vrb_map[beam_csi.idx];
           UE_info->sched_csirs |= (1 << dl_bwp->bwp_id);
@@ -3285,7 +3285,7 @@ void nr_csirs_scheduling(int Mod_idP, frame_t frame, slot_t slot, nfapi_nr_dl_tt
           csirs_pdu_rel15->precodingAndBeamforming.prg_size = resourceMapping.freqBand.nrofRBs; //1 PRG of max size
           csirs_pdu_rel15->precodingAndBeamforming.dig_bf_interfaces = 1;
           csirs_pdu_rel15->precodingAndBeamforming.prgs_list[0].pm_idx = 0;
-          const uint16_t fapi_beam = convert_to_fapi_beam(UE->UE_beam_index, gNB_mac->beam_info.beam_mode);
+          const uint16_t fapi_beam = convert_to_fapi_beam(UE->UE_beam_index, gNB_mac->beam_info[0].beam_mode);
           csirs_pdu_rel15->precodingAndBeamforming.prgs_list[0].dig_bf_interface_list[0].beam_idx = fapi_beam;
           csirs_pdu_rel15->bwp_size = dl_bwp->BWPSize;
           csirs_pdu_rel15->bwp_start = dl_bwp->BWPStart;
@@ -3483,7 +3483,7 @@ void nr_measgap_scheduling(gNB_MAC_INST *nr_mac, frame_t frame, sub_frame_t slot
     if (!mgc->enable)
       continue;
 
-    const int slots_frame = nr_mac->frame_structure.numb_slots_frame;
+    const int slots_frame = nr_mac->frame_structure[0].numb_slots_frame;
     const frame_t f = (frame + (slot + mgc->n_slots_advance) / slots_frame) % MAX_FRAME_NUMBER;
     const slot_t s = (slot + mgc->n_slots_advance) % slots_frame;
 
@@ -3662,9 +3662,9 @@ void UL_tti_req_ahead_initialization(gNB_MAC_INST *gNB, int n, int CCid, frame_t
   /* fill in slot/frame numbers: slot is fixed, frame will be updated by scheduler
    * consider that scheduler runs sl_ahead: the first sl_ahead slots are
    * already "in the past" and thus we put frame 1 instead of 0! */
-  for (int i = 0; i < gNB->UL_tti_req_ahead_size; ++i) {
+  for (int i = 0; i < gNB->UL_tti_req_ahead_size[0]; ++i) {
     int abs_slot = frameP * n + slotP + i;
-    nfapi_nr_ul_tti_request_t *req = &gNB->UL_tti_req_ahead[CCid][abs_slot % gNB->UL_tti_req_ahead_size];
+    nfapi_nr_ul_tti_request_t *req = &gNB->UL_tti_req_ahead[CCid][abs_slot % gNB->UL_tti_req_ahead_size[0]];
     req->SFN = (abs_slot / n) % MAX_FRAME_NUMBER;
     req->Slot = abs_slot % n;
   }
@@ -3672,7 +3672,7 @@ void UL_tti_req_ahead_initialization(gNB_MAC_INST *gNB, int n, int CCid, frame_t
 
 int get_beam_from_ssbidx(gNB_MAC_INST *mac, int ssb_idx)
 {
-  int beam_idx = mac->beam_index_list[ssb_idx];
+  int beam_idx = mac->beam_index_list[0][ssb_idx];
   AssertFatal(beam_idx >= 0, "Invalid beamforming index %d\n", beam_idx);
   return beam_idx;
 }
@@ -3699,7 +3699,7 @@ uint64_t get_ssb_bitmap_and_len(const NR_ServingCellConfigCommon_t *scc, uint8_t
 // for now the fapi beam index is the number of SSBs transmitted before ssb_index i
 void fill_beam_index_list(NR_ServingCellConfigCommon_t *scc, const nr_mac_config_t *config, gNB_MAC_INST *mac)
 {
-  if (mac->beam_info.beam_mode == NO_BEAM_MODE)
+  if (mac->beam_info[0].beam_mode == NO_BEAM_MODE)
     return;
 
   uint8_t len = 0;
@@ -3707,11 +3707,11 @@ void fill_beam_index_list(NR_ServingCellConfigCommon_t *scc, const nr_mac_config
   int index = 0;
   for (int i = 0; i < len; ++i) {
     if (IS_BIT_SET(ssbBitmap, (63 - i))) {
-      int fapi_index = mac->beam_info.beam_mode == LOPHY_BEAM_IDX ? config->bw_list[index] : index;
-      mac->beam_index_list[i] = fapi_index;
+      int fapi_index = mac->beam_info[0].beam_mode == LOPHY_BEAM_IDX ? config->bw_list[index] : index;
+      mac->beam_index_list[0][i] = fapi_index;
       index++;
     } else
-      mac->beam_index_list[i] = -1;
+      mac->beam_index_list[0][i] = -1;
   }
 }
 
@@ -3773,14 +3773,14 @@ void reset_beam_status(NR_beam_info_t *beam_info, int frame, int slot, int16_t b
 int beam_selection_procedures(gNB_MAC_INST *mac, NR_UE_info_t *UE)
 {
   // do not perform beam procedures if there is no beam information
-  if (mac->beam_info.beam_mode == NO_BEAM_MODE)
+  if (mac->beam_info[0].beam_mode == NO_BEAM_MODE)
     return -1;
 
   // simple beam switching algorithm -> we select beam with highest RSRP from CSI report
   NR_UE_sched_ctrl_t *sched_ctrl = &UE->UE_sched_ctrl;
   RSRP_report_list_t *rsrp_report = &sched_ctrl->CSI_report.ssb_rsrp_report;
   int new_bf_index = get_beam_from_ssbidx(mac, rsrp_report->r[0].resource_id);
-  if (!mac->radio_config.do_TCI) { // if not TCI is configure we switch beam directly
+  if (!mac->radio_config[0].do_TCI) { // if not TCI is configure we switch beam directly
     if (UE->UE_beam_index == new_bf_index)
       return -1; // no beam change needed
     return new_bf_index;
@@ -3857,10 +3857,10 @@ bool prepare_initial_ul_rrc_message(gNB_MAC_INST *mac, NR_UE_info_t *UE)
   int srb_id = 1;
   const NR_ServingCellConfigCommon_t *scc = mac->common_channels[CC_id].ServingCellConfigCommon;
   int ssb_index = get_ssbidx_from_beam(mac, UE->UE_beam_index);
-  NR_CellGroupConfig_t *cellGroupConfig = get_initial_cellGroupConfig(UE->uid, scc, &mac->radio_config, &mac->rlc_config, ssb_index);
+  NR_CellGroupConfig_t *cellGroupConfig = get_initial_cellGroupConfig(UE->uid, scc, &mac->radio_config[0], &mac->rlc_config, ssb_index);
   ASN_STRUCT_FREE(asn_DEF_NR_CellGroupConfig, UE->CellGroup);
   UE->CellGroup = cellGroupConfig;
-  UE->local_bwp_id = mac->radio_config.first_active_bwp;
+  UE->local_bwp_id = mac->radio_config[0].first_active_bwp;
 
   if (!cellGroupConfig)
     return true;
@@ -3993,7 +3993,7 @@ void nr_mac_trigger_reconfiguration(const gNB_MAC_INST *nrmac, NR_UE_info_t *UE,
       current_BWP->srs_Config = NULL;
       int ssb_index = nrmac->common_channels[0].ssb_index[UE->UE_beam_index];
       cellGroup_for_UE = update_cellGroupConfig_for_beam_switch(UE->CellGroup,
-                                                               &nrmac->radio_config,
+                                                               &nrmac->radio_config[0],
                                                                UE->capability,
                                                                nrmac->common_channels[0].ServingCellConfigCommon,
                                                                UE->uid,
@@ -4002,14 +4002,14 @@ void nr_mac_trigger_reconfiguration(const gNB_MAC_INST *nrmac, NR_UE_info_t *UE,
   } else {
     if (new_bwp_id >= 0) {
       AssertFatal(UE->current_DL_BWP.bwp_id == UE->current_UL_BWP.bwp_id, "We only support same BWP for UL and DL\n");
-      if (!verify_bwp_switch(UE, &nrmac->radio_config, new_bwp_id))
+      if (!verify_bwp_switch(UE, &nrmac->radio_config[0], new_bwp_id))
         return;
       else {
         UE->sc_info.csi_MeasConfig = NULL;  // to avoid segfault when freeing csi_MeasConfig in configDedicated
         UE->local_bwp_id = new_bwp_id;
         int ssb_index = nrmac->common_channels[0].ssb_index[UE->UE_beam_index];
         cellGroup_for_UE = update_cellGroupConfig_for_BWP_switch(UE->CellGroup,
-                                                                &nrmac->radio_config,
+                                                                &nrmac->radio_config[0],
                                                                 UE->capability,
                                                                 nrmac->common_channels[0].ServingCellConfigCommon,
                                                                 UE->uid,
