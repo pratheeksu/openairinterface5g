@@ -14,7 +14,7 @@
 // input  [a_31 a_30 ... a_0]
 // output [f_31 f_30 ... f_0] [f_63 f_62 ... f_32] ...
 
-void polar_encoder(uint32_t *in, uint32_t *out, int8_t messageType, uint16_t messageLength, uint8_t aggregation_level)
+void polar_encoder(uint32_t *in, uint32_t *out, int8_t messageType, uint16_t messageLength, uint16_t aggregation_level)
 {
   t_nrPolar_params *polarParams = nr_polar_params(messageType, messageLength, aggregation_level);
   uint8_t nr_polar_A[polarParams->payloadBits];
@@ -113,7 +113,7 @@ void polar_encoder_dci(uint32_t *in,
                        uint16_t n_RNTI,
                        int8_t messageType,
                        uint16_t messageLength,
-                       uint8_t aggregation_level)
+                       uint16_t aggregation_level)
 {
   t_nrPolar_params *polarParams = nr_polar_params(messageType, messageLength, aggregation_level);
 
@@ -446,7 +446,7 @@ void polar_encoder_fast(uint64_t *A,
                         uint8_t ones_flag,
                         int8_t messageType,
                         uint16_t messageLength,
-                        uint8_t aggregation_level)
+                        uint16_t aggregation_level)
 {
   t_nrPolar_params *polarParams = nr_polar_params(messageType, messageLength, aggregation_level);
 

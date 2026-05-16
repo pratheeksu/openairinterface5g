@@ -103,14 +103,14 @@ typedef struct nrPolar_params {
   } tree_linearization;
 } t_nrPolar_params;
 
-void polar_encoder(uint32_t *input, uint32_t *output, int8_t messageType, uint16_t messageLength, uint8_t aggregation_level);
+void polar_encoder(uint32_t *input, uint32_t *output, int8_t messageType, uint16_t messageLength, uint16_t aggregation_level);
 
 void polar_encoder_dci(uint32_t *in,
                        uint32_t *out,
                        uint16_t n_RNTI,
                        int8_t messageType,
                        uint16_t messageLength,
-                       uint8_t aggregation_level);
+                       uint16_t aggregation_level);
 
 void polar_encoder_fast(uint64_t *A,
                         void *out,
@@ -118,21 +118,21 @@ void polar_encoder_fast(uint64_t *A,
                         uint8_t ones_flag,
                         int8_t messageType,
                         uint16_t messageLength,
-                        uint8_t aggregation_level);
+                        uint16_t aggregation_level);
 
 int8_t polar_decoder(double *input,
                      uint32_t *output,
                      uint8_t listSize,
                      int8_t messageType,
                      uint16_t messageLength,
-                     uint8_t aggregation_level);
+                     uint16_t aggregation_level);
 
 uint32_t polar_decoder_int16(int16_t *input,
                              uint64_t *out,
                              uint8_t ones_flag,
                              int8_t messageType,
                              uint16_t messageLength,
-                             uint8_t aggregation_level);
+                             uint16_t aggregation_level);
 
 int8_t polar_decoder_dci(double *input,
                          uint32_t *out,
@@ -140,7 +140,7 @@ int8_t polar_decoder_dci(double *input,
                          uint16_t n_RNTI,
                          int8_t messageType,
                          uint16_t messageLength,
-                         uint8_t aggregation_level);
+                         uint16_t aggregation_level);
 
 void generic_polar_decoder(t_nrPolar_params *pp, decoder_node_t *node, uint8_t *nr_polar_U);
 
@@ -159,9 +159,9 @@ void build_polar_tables(t_nrPolar_params *polarParams);
 
 void nr_polar_print_polarParams(void);
 
-t_nrPolar_params *nr_polar_params(int8_t messageType, uint16_t messageLength, uint8_t aggregation_level);
+t_nrPolar_params *nr_polar_params(int8_t messageType, uint16_t messageLength, uint16_t aggregation_level);
 
-uint16_t nr_polar_aggregation_prime(uint8_t aggregation_level);
+uint16_t nr_polar_aggregation_prime(uint16_t aggregation_level);
 
 const uint8_t **nr_polar_kronecker_power_matrices(uint8_t n);
 
