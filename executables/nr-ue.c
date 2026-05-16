@@ -215,9 +215,8 @@ static void UE_synch(void *arg) {
         ((ret.rx_offset << 1) / fp->samples_per_subframe * fp->slots_per_subframe)
         + round((float)((ret.rx_offset << 1) % fp->samples_per_subframe) / fp->samples_per_slot0);
 
-    if (get_nrUE_params()->cont_fo_comp) {
-      UE->freq_offset = freq_offset - UE->dl_Doppler_shift;
-    } else {
+    UE->freq_offset = freq_offset - UE->dl_Doppler_shift;
+    if (!get_nrUE_params()->cont_fo_comp) {
       // rerun with new cell parameters and frequency-offset
       nrue_ru_set_freq(UE, ul_carrier, dl_carrier, freq_offset);
     }
@@ -709,6 +708,18 @@ static inline int get_readBlockSize(uint16_t slot, const NR_DL_FRAME_PARMS *fp)
   if (slot < (fp->slots_per_frame-1))
     next_slot_first_symbol = get_firstSymSamp(slot+1, fp);
   return rem_samples + next_slot_first_symbol;
+}
+
+void trs_freq_correction(PHY_VARS_NR_UE *ue, int cfo)
+{
+  if (abs(cfo) > TRS_CFO_THRESH) {
+    LOG_A(PHY, "CFO estimated (%d) from TRS exceeded threshold (%d). Adjusting radio CF\n", cfo, TRS_CFO_THRESH);
+    ue->freq_offset += cfo;
+    uint64_t dl_carrier;
+    uint64_t ul_carrier;
+    nr_get_carrier_frequencies(ue, &dl_carrier, &ul_carrier);
+    nrue_ru_set_freq(ue, dl_carrier, ul_carrier, ue->freq_offset);
+  }
 }
 
 void *UE_thread(void *arg)

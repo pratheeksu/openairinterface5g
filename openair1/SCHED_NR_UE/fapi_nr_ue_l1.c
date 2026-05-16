@@ -155,8 +155,15 @@ static void nr_ue_scheduled_response_dl(NR_UE_MAC_INST_t *mac,
         phy_data->csiim_vars.active = true;
         break;
       case FAPI_NR_DL_CONFIG_TYPE_CSI_RS:
-        phy_data->csirs_vars.csirs_config_pdu = pdu->csirs_config_pdu.csirs_config_rel15;
-        phy_data->csirs_vars.active = true;
+        AssertFatal(phy_data->num_csirs < MAX_CSI_RES_SLOT, "CSI resources per slot exceeded limit\n");
+        const int c = phy_data->num_csirs;
+        if (phy_data->csirs_vars[c].active) {
+          AssertFatal(false, "Resource should not be active before its configured\n");
+          continue;
+        }
+        phy_data->csirs_vars[c].csirs_config_pdu = pdu->csirs_config_pdu.csirs_config_rel15;
+        phy_data->csirs_vars[c].active = true;
+        phy_data->num_csirs++;
         break;
       case FAPI_NR_DL_CONFIG_TYPE_RA_DLSCH: {
         fapi_nr_dl_config_dlsch_pdu_rel15_t *dlsch_config_pdu = &pdu->dlsch_config_pdu.dlsch_config_rel15;

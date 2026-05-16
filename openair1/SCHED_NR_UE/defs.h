@@ -133,7 +133,12 @@ void nr_ue_csi_im_procedures(PHY_VARS_NR_UE *ue,
 void nr_ue_csi_rs_procedures(PHY_VARS_NR_UE *ue,
                              const UE_nr_rxtx_proc_t *proc,
                              const c16_t rxdataF[][ue->frame_parms.samples_per_slot_wCP],
-                             fapi_nr_dl_config_csirs_pdu_rel15_t *csirs_config_pdu);
+                             fapi_nr_dl_config_csirs_pdu_rel15_t *csirs_config_pdu,
+                             c16_t trs_estimates[][1][ue->frame_parms.ofdm_symbol_size],
+                             const int res_idx,
+                             const int trs_sym0);
+
+void trs_freq_correction(PHY_VARS_NR_UE *ue, int cfo);
 
 int psbch_pscch_processing(PHY_VARS_NR_UE *ue, const UE_nr_rxtx_proc_t *proc, nr_phy_data_t *phy_data);
 void phy_procedures_nrUE_SL_TX(PHY_VARS_NR_UE *ue, const UE_nr_rxtx_proc_t *proc, nr_phy_data_tx_t *phy_data, c16_t **txp);

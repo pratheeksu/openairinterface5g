@@ -1221,16 +1221,32 @@ void pdsch_processing(PHY_VARS_NR_UE *ue, const UE_nr_rxtx_proc_t *proc, nr_phy_
   }
 
   // do procedures for CSI-RS
-  if (phy_data->csirs_vars.active == 1) {
-    for(int symb = 0; symb < ue->frame_parms.symbols_per_slot; symb++) {
-      if(is_csi_rs_in_symbol(phy_data->csirs_vars.csirs_config_pdu, symb)) {
-        if (!slot_fep_map[symb]) {
-          nr_slot_fep(ue, &ue->frame_parms, proc->nr_slot_rx, symb, rxdataF, link_type_dl, 0, ue->common_vars.rxdata);
-          slot_fep_map[symb] = true;
+  {
+    /*
+    CSI-RS for tracking use only one port.
+    Number of CSI-RS resources for tracking is always 2 per slot.
+    Computed estimates from first resource is saved and used while estimating second resource.
+    */
+    c16_t trs_estimates[ue->frame_parms.nb_antennas_rx][1][ue->frame_parms.ofdm_symbol_size];
+    for (int res = 0; res < MAX_CSI_RES_SLOT; res++) {
+      if (phy_data->csirs_vars[res].active == 1) {
+        for (int symb = 0; symb < ue->frame_parms.symbols_per_slot; symb++) {
+          if (is_csi_rs_in_symbol(phy_data->csirs_vars[res].csirs_config_pdu, symb)) {
+            if (!slot_fep_map[symb]) {
+              nr_slot_fep(ue, &ue->frame_parms, proc->nr_slot_rx, symb, rxdataF, link_type_dl, 0, ue->common_vars.rxdata);
+              slot_fep_map[symb] = true;
+            }
+          }
         }
+        nr_ue_csi_rs_procedures(ue,
+                                proc,
+                                rxdataF,
+                                &phy_data->csirs_vars[res].csirs_config_pdu,
+                                trs_estimates,
+                                res,
+                                (res == 1) ? phy_data->csirs_vars[0].csirs_config_pdu.symb_l0 : -1);
       }
     }
-    nr_ue_csi_rs_procedures(ue, proc, rxdataF, &phy_data->csirs_vars.csirs_config_pdu);
   }
 
   int G[2] = {0};

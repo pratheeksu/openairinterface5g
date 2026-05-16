@@ -465,12 +465,6 @@ nr_initial_sync_t nr_initial_sync(UE_nr_rxtx_proc_t *proc,
   LOG_D(PHY, "nr_initial sync ue RB_DL %d\n", fp->N_RB_DL);
 
   if (res) {
-    // digital compensation of FFO for SSB symbols
-    if (res->freqOffset && ue->UE_fo_compensation) {
-      // In SA we need to perform frequency offset correction until the end of buffer because we need to decode SIB1
-      // and we do not know yet in which slot it goes.
-      compensate_freq_offset(ue->common_vars.rxdata, fp, res->freqOffset, res->syncRes.frame_id);
-    }
     // sync at symbol ue->symbol_offset
     // computing the offset wrt the beginning of the frame
     int mu = fp->numerology_index;

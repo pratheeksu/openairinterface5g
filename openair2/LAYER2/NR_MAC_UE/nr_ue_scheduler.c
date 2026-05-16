@@ -1110,7 +1110,8 @@ static void schedule_ta_command(fapi_nr_dl_config_request_t *dl_config, NR_UE_MA
 
 static NR_CSI_ResourceConfigId_t find_CSI_resourceconfig(NR_CSI_MeasConfig_t *csi_measconfig,
                                                          NR_BWP_Id_t dl_bwp_id,
-                                                         NR_NZP_CSI_RS_ResourceId_t csi_id)
+                                                         NR_NZP_CSI_RS_ResourceId_t csi_id,
+                                                         bool *is_last_res)
 {
   bool found = false;
   for (int csi_list = 0; csi_list < csi_measconfig->csi_ResourceConfigToAddModList->list.count; csi_list++) {
@@ -1135,14 +1136,14 @@ static NR_CSI_ResourceConfigId_t find_CSI_resourceconfig(NR_CSI_MeasConfig_t *cs
           AssertFatal(csi_res->nzp_CSI_RS_Resources.list.array[k], "NZP_CSI_RS_ResourceId shoulan't be NULL\n");
           if (csi_id == *csi_res->nzp_CSI_RS_Resources.list.array[k]) {
             found = true;
+            *is_last_res = (k == (csi_res->nzp_CSI_RS_Resources.list.count - 1));
             break;
           }
         }
         if (found && csi_res->trs_Info)
-          // CRI-RS for Tracking (not implemented yet)
-          // in this case we there is no associated CSI report
-          // therefore to signal this we return a value higher than
-          // maxNrofCSI-ResourceConfigurations
+          /* CRI-RS for Tracking. In this case there is no associated CSI report
+           * therefore to signal this we return a value higher than
+           * maxNrofCSI-ResourceConfigurations. */
           return NR_maxNrofCSI_ResourceConfigurations + 1;
         else if (found)
           return csires->csi_ResourceConfigId;
@@ -1212,7 +1213,8 @@ static void nr_schedule_csirs_reception(NR_UE_MAC_INST_t *mac, int frame, int sl
     csi_period_offset(NULL, nzpcsi->periodicityAndOffset, &period, &offset);
     if((frame * mac->frame_structure.numb_slots_frame + slot-offset) % period != 0)
       continue;
-    NR_CSI_ResourceConfigId_t csi_res_id = find_CSI_resourceconfig(csi_measconfig, dl_bwp_id, nzpcsi->nzp_CSI_RS_ResourceId);
+    bool is_last_res = false;
+    NR_CSI_ResourceConfigId_t csi_res_id = find_CSI_resourceconfig(csi_measconfig, dl_bwp_id, nzpcsi->nzp_CSI_RS_ResourceId, &is_last_res);
     // do not schedule reseption of this CSI-RS if not associated with current BWP
     if(csi_res_id < 0)
       continue;
@@ -1222,9 +1224,12 @@ static void nr_schedule_csirs_reception(NR_UE_MAC_INST_t *mac, int frame, int sl
     csirs_config_pdu->subcarrier_spacing = mu;
     csirs_config_pdu->cyclic_prefix = current_DL_BWP->cyclicprefix ? *current_DL_BWP->cyclicprefix : 0;
 
-    if (csi_res_id > NR_maxNrofCSI_ResourceConfigurations)
+    if (csi_res_id > NR_maxNrofCSI_ResourceConfigurations) {
+      /* According to 38.214 5.1.6.1.1, the number of resources indicate if one
+       * or two consequtive slots for TRS is used. We indicate to phy the last slot. */
+      csirs_config_pdu->last_trs_slot = is_last_res;
       csirs_config_pdu->csi_type = 0; // TRS
-    else
+    } else
       csirs_config_pdu->csi_type = 1; // NZP-CSI-RS
 
     csirs_config_pdu->scramb_id = nzpcsi->scramblingID;
