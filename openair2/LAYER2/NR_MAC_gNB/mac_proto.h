@@ -168,8 +168,8 @@ void nr_srs_ri_computation(const nfapi_nr_srs_normalized_channel_iq_matrix_t *nr
 
 int get_pucch_resourceid(NR_PUCCH_Config_t *pucch_Config, int O_uci, int pucch_resource);
 
-void nr_schedule_srs(int module_id, frame_t frame, int slot);
-
+void nr_schedule_periodic_srs(int module_id, frame_t frame, int slot);
+void nr_schedule_aperiodic_srs(gNB_MAC_INST *nrmac, NR_UE_info_t *UE, int sched_frame, int sched_slot, int k2);
 void nr_csirs_scheduling(int Mod_idP, frame_t frame, slot_t slot, nfapi_nr_dl_tti_request_t *DL_req);
 
 void nr_csi_meas_reporting(int Mod_idP, frame_t frameP, slot_t slotP);
@@ -238,6 +238,7 @@ void fill_dci_pdu_rel15(const NR_UE_ServingCell_Info_t *servingCellInfo,
                         dci_pdu_rel15_t *dci_pdu_rel15,
                         int dci_format,
                         int rnti_type,
+                        int srs_request,
                         NR_SearchSpace_t *ss,
                         NR_ControlResourceSet_t *coreset,
                         long pdsch_HARQ_ACK_Codebook,
@@ -381,15 +382,14 @@ bool add_UE_to_list(int list_size, NR_UE_info_t *list[list_size], NR_UE_info_t *
 NR_UE_info_t *remove_UE_from_list(int list_size, NR_UE_info_t *list[list_size], rnti_t rnti);
 int get_dl_tda(const gNB_MAC_INST *nrmac, int slot);
 int get_num_ul_tda(gNB_MAC_INST *nrmac, int slot, int k2, const NR_tda_info_t **first_idx);
-const NR_tda_info_t *get_best_ul_tda(const gNB_MAC_INST *nrmac,
-                                     int beam,
-                                     const NR_tda_info_t *tdas,
-                                     int n_tda,
-                                     int frame,
-                                     int slot,
-                                     int *rb_start,
-                                     int *rb_len);
-
+void get_rb_for_tda_candidates(const gNB_MAC_INST *nrmac,
+                               int beam,
+                               const NR_tda_info_t *tdas,
+                               int n_tda,
+                               int frame,
+                               int slot,
+                               int *rb_start,
+                               int *rb_len);
 int get_cce_index(const gNB_MAC_INST *nrmac,
                   const int CC_id,
                   const int slot,
@@ -496,7 +496,11 @@ void prepare_du_configuration_update(gNB_MAC_INST *mac,
 void nr_mac_clean_cellgroup(NR_CellGroupConfig_t *cell_group);
 
 void post_process_dlsch(gNB_MAC_INST *nr_mac, post_process_pdsch_t *pdsch, NR_UE_info_t *UE, NR_sched_pdsch_t *sched_pdsch);
-void post_process_ulsch(gNB_MAC_INST *nr_mac, post_process_pusch_t *pusch, NR_UE_info_t *UE, NR_sched_pusch_t *sched_pusch);
+void post_process_ulsch(gNB_MAC_INST *nr_mac,
+                        post_process_pusch_t *pusch,
+                        NR_UE_info_t *UE,
+                        NR_sched_pusch_t *sched_pusch,
+                        bool sched_srs);
 
 float nr_mac_get_snr(const nr_power_control_t *pc);
 void nr_mac_pc_snr(nr_power_control_t *pc, int snrx10, int rssi);
@@ -505,5 +509,4 @@ void nr_mac_set_target_snrx10(nr_power_control_t *pc, int target_snrx10);
 void nr_mac_set_rssi_threshold(nr_power_control_t *pc, int rssi_threshold);
 void nr_mac_signal_dtx(nr_power_control_t *pc);
 int nr_mac_get_tpc(nr_power_control_t *pc);
-
 #endif /*__LAYER2_NR_MAC_PROTO_H__*/

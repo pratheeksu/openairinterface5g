@@ -1184,6 +1184,7 @@ void post_process_dlsch(gNB_MAC_INST *nr_mac, post_process_pdsch_t *pdsch, NR_UE
                      &dci_payload,
                      current_BWP->dci_format,
                      rnti_type,
+                     0,
                      sched_ctrl->search_space,
                      sched_ctrl->coreset,
                      UE->pdsch_HARQ_ACK_Codebook,

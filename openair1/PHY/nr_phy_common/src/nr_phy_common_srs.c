@@ -184,16 +184,18 @@ bool generate_srs_nr(const NR_DL_FRAME_PARMS *frame_parms,
     return false;
   }
 
-  if (nr_srs_info->T_SRS == 0) {
-    LOG_E(NR_PHY, "generate_srs: inconsistent parameter T_SRS %d can not be equal to zero !\n", nr_srs_info->T_SRS);
-    return false;
-  } else {
-    int index = 0;
-    while (srs_periodicity[index] != nr_srs_info->T_SRS) {
-      index++;
-      if (index == SRS_PERIODICITY) {
-        LOG_E(NR_PHY, "generate_srs: inconsistent parameter T_SRS %d not specified !\n", nr_srs_info->T_SRS);
-        return false;
+  if (nr_srs_info->resource_type != aperiodic) {
+    if (nr_srs_info->T_SRS == 0) {
+      LOG_E(NR_PHY, "generate_srs: inconsistent parameter T_SRS %d can not be equal to zero !\n", nr_srs_info->T_SRS);
+      return false;
+    } else {
+      int index = 0;
+      while (srs_periodicity[index] != nr_srs_info->T_SRS) {
+        index++;
+        if (index == SRS_PERIODICITY) {
+          LOG_E(NR_PHY, "generate_srs: inconsistent parameter T_SRS %d not specified !\n", nr_srs_info->T_SRS);
+          return false;
+        }
       }
     }
   }
