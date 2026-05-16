@@ -524,7 +524,7 @@ static void fill_ul_rb_mask(PHY_VARS_gNB *gNB,
 
   for (int i = 0; i < n_srs; i++) {
     const nfapi_nr_srs_pdu_t *srs_pdu = &srs[i].srs_pdu;
-    const uint8_t l0 = gNB->frame_parms.symbols_per_slot - 1 - srs_pdu->time_start_position;
+    const uint8_t l0 = srs_pdu->time_start_position; // L2 already sends the absolute symbol index
     for (int symbol = 0; symbol < (1 << srs_pdu->num_symbols); symbol++) {
       for (int rb = srs_pdu->bwp_start; rb < (srs_pdu->bwp_start + srs_pdu->bwp_size); rb++) {
         rb_mask_ul[l0 + symbol][rb] = 1;
