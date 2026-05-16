@@ -1711,6 +1711,10 @@ void RCconfig_nr_macrlc(configmodule_interface_t *cfg)
       }
       RC.nrmac[j]->ulsch_max_frame_inactivity = *gpd(params, np, MACRLC_ULSCH_MAX_FRAME_INACTIVITY)->uptr;
       RC.nrmac[j]->stats_max_ue = *gpd(params, np, MACRLC_STATS_MAX_UE)->iptr;
+      RC.nrmac[j]->L2_tx_thread_core = *gpd(params, np, MACRLC_L2_TX_THREAD_CORE)->iptr;
+      RC.nrmac[j]->L2_ul_tdd_thread_core = *gpd(params, np, MACRLC_L2_UL_TDD_THREAD_CORE)->iptr;
+      LOG_I(NR_MAC, "L2_tx_thread_core %d, L2_ul_tdd_thread_core %d\n",
+            RC.nrmac[j]->L2_tx_thread_core, RC.nrmac[j]->L2_ul_tdd_thread_core);
       RC.nrmac[j]->print_ue_stats = RC.nrmac[j]->stats_max_ue > 0;
       NR_bler_options_t *dl_bler_options = &RC.nrmac[j]->dl_bler;
       dl_bler_options->upper = *gpd(params, np, MACRLC_DL_BLER_TARGET_UPPER)->dblptr;

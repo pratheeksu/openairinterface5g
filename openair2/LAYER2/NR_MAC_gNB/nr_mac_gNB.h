@@ -16,6 +16,7 @@
 #include <string.h>
 #include <complex.h>
 #include <pthread.h>
+#include <stdatomic.h>
 #include "fsn.h"
 #include "common/utils/ds/seq_arr.h"
 #include "common/utils/nr/nr_common.h"
@@ -34,10 +35,16 @@
     AssertFatal(rc == 0, "error while locking scheduler mutex, pthread_mutex_unlock() returned %d\n", rc); \
   } while (0)
 
+/// Set to true on the UL pre-computation thread so it can call scheduler
+/// functions without holding sched_lock (safe during TDD DL-only slots).
+extern __thread bool nr_sched_lock_bypassed;
+
 #define NR_SCHED_ENSURE_LOCKED(lock)\
   do {\
-    int rc = pthread_mutex_trylock(lock); \
-    AssertFatal(rc == EBUSY, "this function should be called with the scheduler mutex locked, pthread_mutex_trylock() returned %d\n", rc);\
+    if (!nr_sched_lock_bypassed) {\
+      int rc = pthread_mutex_trylock(lock); \
+      AssertFatal(rc == EBUSY, "this function should be called with the scheduler mutex locked, pthread_mutex_trylock() returned %d\n", rc);\
+    }\
   } while (0)
 
 /* Commmon */
@@ -995,6 +1002,25 @@ typedef struct gNB_MAC_INST_s {
   bool print_ue_stats;
 
   pthread_mutex_t sched_lock;
+
+  pthread_t L2_tx_thread;     ///< MAC DL scheduling thread
+  /// Core affinity for L2 TX (MAC scheduling) thread, -1 = floating
+  int L2_tx_thread_core;
+
+  /// TDD UL pre-scheduling: pre-computed UL DCIs per slot in TDD period.
+  /// Filled by L2_UL_TDD_thread at period start; consumed by L2_tx_thread.
+  nfapi_nr_ul_dci_request_t *ul_precomp_dci;
+  int ul_precomp_period_len;
+  pthread_mutex_t ul_precomp_mutex;
+  pthread_cond_t ul_precomp_start_cond;
+  bool ul_precomp_start_req;   ///< DL thread sets, UL thread clears
+  _Atomic int ul_precomp_slots_done; ///< UL thread increments per slot, DL thread reads
+  int ul_precomp_frame;        ///< frame of the period being pre-computed
+  int ul_precomp_slot;         ///< first slot of the period being pre-computed
+
+  pthread_t L2_UL_TDD_thread;    ///< UL pre-scheduling thread (TDD)
+  /// Core affinity for L2 UL pre-scheduling thread, -1 = floating
+  int L2_ul_tdd_thread_core;
 
   dlul_mac_stats_t mac_stats;
   uint64_t num_scheduled_prach_rx;

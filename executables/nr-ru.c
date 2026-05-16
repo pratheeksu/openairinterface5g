@@ -990,7 +990,7 @@ void *ru_thread(void *param)
       } // end if (ru->feprx)
     } // end if (slot_type == NR_UPLINK_SLOT || slot_type == NR_MIXED_SLOT) {
 
-    notifiedFIFO_elt_t *resTx = newNotifiedFIFO_elt(sizeof(processingData_L1tx_t), 0, &gNB->L1_tx_out, NULL);
+    notifiedFIFO_elt_t *resTx = newNotifiedFIFO_elt(sizeof(processingData_L1tx_t), 0, &gNB->L2_tx_out, NULL);
     resTx->key = proc->tti_tx;
     processingData_L1tx_t *syncMsgTx = NotifiedFifoData(resTx);
     *syncMsgTx = (processingData_L1tx_t){.gNB = gNB,
@@ -999,7 +999,7 @@ void *ru_thread(void *param)
                                          .frame_rx = proc->frame_rx,
                                          .slot_rx = proc->tti_rx,
                                          .timestamp_tx = proc->timestamp_tx};
-    pushNotifiedFIFO(&gNB->L1_tx_out, resTx);
+    pushNotifiedFIFO(&gNB->L2_tx_out, resTx);
   }
 
   ru_thread_status = 0;

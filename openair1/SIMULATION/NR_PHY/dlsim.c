@@ -977,6 +977,8 @@ int main(int argc, char **argv)
   int ret = 1;
   initNamedTpool(gNBthreads, &gNB->threadPool, true, "gNB-tpool");
   initNotifiedFIFO(&gNB->L1_tx_out);
+  initNotifiedFIFO(&gNB->L2_tx_out);
+  initNotifiedFIFO(&gNB->sched_free_list);
 
   // Buffers to store internal memory of slot process
   int rx_size = (((14 * UE->frame_parms.N_RB_DL * 12 * sizeof(int32_t)) + 15) >> 4) << 4;

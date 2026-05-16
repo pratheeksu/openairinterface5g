@@ -21,6 +21,7 @@
 #include "common/utils/threadPool/task_ans.h"
 #include "openair1/PHY/defs_RU.h"
 #include "common/utils/ds/spsc_q.h"
+#include <stdatomic.h>
 
 #define MAX_NUM_RU_PER_gNB 8
 #define MAX_PUCCH0_NID 8
@@ -381,6 +382,12 @@ typedef struct PHY_VARS_gNB_s {
   spsc_q_t pucch_queue;
   spsc_q_t pusch_queue;
   spsc_q_t srs_queue;
+
+  /// L1→L2 UL indication ring buffer: L1_rx writes, scheduler drains
+  #define UL_IND_POOL_SIZE 16
+  NR_UL_IND_t *ul_ind_pool;    ///< pool of UL indication buffers
+  _Atomic unsigned int ul_ind_write; ///< L1_rx increments after filling pool entry
+  _Atomic unsigned int ul_ind_read;  ///< scheduler increments after processing pool entry
   NR_gNB_ULSCH_t *ulsch;
   NR_gNB_PHY_STATS_t phy_stats[MAX_MOBILES_PER_GNB];
   t_nrPolar_params **polarParams;
@@ -477,7 +484,17 @@ typedef struct PHY_VARS_gNB_s {
   time_stats_t srs_iq_matrix_stats;
 
   notifiedFIFO_t resp_L1;
-  notifiedFIFO_t L1_tx_out;
+  notifiedFIFO_t L1_tx_out;        ///< L2 (MAC) → L1 TX (PHY TX) FIFO
+  notifiedFIFO_t L2_tx_out;        ///< RU → L2 (MAC scheduling) FIFO
+  /// Pool of pre-allocated processingData_phyTx_t buffers.
+  /// Single-owner handoff pattern — each element is owned by exactly one thread at a time:
+  ///   sched_free_list → MAC (fills it) → L1_tx_out → PHY (reads it) → sched_free_list
+  /// No concurrent access: MAC gives up the element on push, PHY acquires it on pull.
+  /// The FIFO mutex provides the memory barrier ensuring PHY sees all MAC writes.
+  /// Backpressure: MAC blocks on pull if all elements are in-flight (late but correct).
+  notifiedFIFO_t sched_free_list;
+  notifiedFIFO_elt_t **sched_pool; ///< Array of pool element pointers (for cleanup at shutdown)
+  int sched_pool_size;
   notifiedFIFO_t L1_rx_out;
   tpool_t threadPool;
   int num_pusch_symbols_per_thread;
@@ -485,7 +502,7 @@ typedef struct PHY_VARS_gNB_s {
   int dmrs_num_antennas_per_thread;
   pthread_t L1_rx_thread;
   int L1_rx_thread_core;
-  pthread_t L1_tx_thread;
+  pthread_t L1_tx_thread;     ///< PHY TX processing thread
   int L1_tx_thread_core;
   void *scopeData;
 } PHY_VARS_gNB;
@@ -564,6 +581,16 @@ typedef struct processingData_L1tx {
   openair0_timestamp_t timestamp_tx;
   PHY_VARS_gNB *gNB;
 } processingData_L1tx_t;
+
+/// Data passed to the PHY TX thread for pipelined MAC/PHY processing.
+/// Each element is pre-allocated in a pool and cycles between sched_free_list and L1_tx_out.
+typedef struct processingData_phyTx {
+  int frame_tx;
+  int slot_tx;
+  openair0_timestamp_t timestamp_tx;
+  PHY_VARS_gNB *gNB;
+  NR_Sched_Rsp_t sched_response; ///< embedded sched_response (pool-managed, no malloc in steady state)
+} processingData_phyTx_t;
 
 typedef struct processingData_L1rx {
   int frame_rx;

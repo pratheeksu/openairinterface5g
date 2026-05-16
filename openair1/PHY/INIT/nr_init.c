@@ -168,6 +168,12 @@ void phy_init_nr_gNB(PHY_VARS_gNB *gNB)
   // PRACH
   init_nr_prach(gNB);
 
+  // L1→L2 UL indication pool (ring buffer drained by scheduler)
+  gNB->ul_ind_pool = calloc(UL_IND_POOL_SIZE, sizeof(NR_UL_IND_t));
+  AssertFatal(gNB->ul_ind_pool, "Failed to allocate UL indication pool\n");
+  atomic_init(&gNB->ul_ind_write, 0);
+  atomic_init(&gNB->ul_ind_read, 0);
+
   int N_RB_UL = cfg->carrier_config.ul_grid_size[cfg->ssb_config.scs_common.value].value;
   int n_buf = Prx*max_ul_mimo_layers;
 
@@ -209,6 +215,8 @@ void phy_free_nr_gNB(PHY_VARS_gNB *gNB)
 
   reset_nr_transport(gNB);
   reset_nr_prach(gNB);
+  free(gNB->ul_ind_pool);
+  gNB->ul_ind_pool = NULL;
 
   destroy_DLSCH_struct(gNB);
 

@@ -23,6 +23,8 @@
 #include <errno.h>
 #include <string.h>
 
+__thread bool nr_sched_lock_bypassed = false;
+
 uint8_t nr_get_rv(int rel_round)
 {
   const uint8_t nr_rv_round_map[4] = {0, 2, 3, 1};
@@ -213,7 +215,40 @@ void gNB_dlsch_ulsch_scheduler(module_id_t module_idP, frame_t frame, slot_t slo
 
   // This schedules the DCI for Uplink and subsequently PUSCH
   start_meas(&gNB->schedule_ulsch);
-  nr_schedule_ulsch(module_idP, frame, slot, &sched_info->UL_dci_req);
+  if (scc->tdd_UL_DL_ConfigurationCommon && gNB->ul_precomp_dci) {
+    // TDD with UL pre-scheduling thread active
+    const frame_structure_t *fs = &gNB->frame_structure;
+    const int slot_in_period = slot % fs->numb_slots_period;
+    int done = atomic_load_explicit(&gNB->ul_precomp_slots_done, memory_order_acquire);
+    if (slot_in_period == 0) {
+      // Verify previous period completed, then reset and trigger new period
+      int prev = done;
+      AssertFatal(prev == 0 || prev >= fs->numb_slots_period,
+                  "%d.%d previous UL pre-computation incomplete (%d/%d)\n",
+                  frame, slot, prev, fs->numb_slots_period);
+      atomic_store_explicit(&gNB->ul_precomp_slots_done, 0, memory_order_release);
+      pthread_mutex_lock(&gNB->ul_precomp_mutex);
+      gNB->ul_precomp_frame = frame;
+      gNB->ul_precomp_slot = slot;
+      gNB->ul_precomp_start_req = true;
+      pthread_cond_signal(&gNB->ul_precomp_start_cond);
+      pthread_mutex_unlock(&gNB->ul_precomp_mutex);
+      done = 0; // just reset
+    }
+    // At startup the first slot may land mid-period (e.g. ORAN timing sync),
+    // before the UL thread has ever been triggered.  Schedule inline until the
+    // first period boundary (slot_in_period == 0) is reached.
+    if (done == 0 && slot_in_period != 0) {
+      nr_schedule_ulsch(module_idP, frame, slot, &sched_info->UL_dci_req);
+    } else {
+      while (atomic_load_explicit(&gNB->ul_precomp_slots_done, memory_order_acquire) <= slot_in_period)
+        ;
+      if (gNB->ul_precomp_dci[slot_in_period].numPdus > 0)
+        sched_info->UL_dci_req = gNB->ul_precomp_dci[slot_in_period];
+    }
+  } else {
+    nr_schedule_ulsch(module_idP, frame, slot, &sched_info->UL_dci_req);
+  }
   stop_meas(&gNB->schedule_ulsch);
 
   // This schedules the DCI for Downlink and PDSCH

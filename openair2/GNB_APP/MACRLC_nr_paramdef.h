@@ -54,6 +54,8 @@
 #define MACRLC_PUSCH_RSSI_THRESHOLD          "pusch_RSSI_Threshold"
 #define MACRLC_PUCCH_RSSI_THRESHOLD          "pucch_RSSI_Threshold"
 #define MACRLC_STATS_MAX_UE                  "stats_max_ue"
+#define MACRLC_L2_TX_THREAD_CORE             "L2_tx_thread_core"
+#define MACRLC_L2_UL_TDD_THREAD_CORE         "L2_ul_tdd_thread_core"
 
 #define HLP_MACRLC_UL_PRBBLACK "SNR threshold to decide whether a PRB will be blacklisted or not"
 #define HLP_MACRLC_DL_BLER_UP "Upper threshold of BLER to decrease DL MCS"
@@ -123,6 +125,8 @@
   {MACRLC_PUCCH_RSSI_THRESHOLD,        HLP_MACRLC_PUCCH_RSSI_THRESHOLD, \
                                                                                0, .iptr=NULL,   .defintval=0,               TYPE_INT,     0}, \
   {MACRLC_STATS_MAX_UE,                HLP_MACRLC_STATS_MAX_UE,  0, .iptr=NULL,   .defintval=8,               TYPE_INT,     0}, \
+  {MACRLC_L2_TX_THREAD_CORE,           NULL,                     0, .iptr=NULL,   .defintval=-1,              TYPE_INT,     0}, \
+  {MACRLC_L2_UL_TDD_THREAD_CORE,           NULL,                     0, .iptr=NULL,   .defintval=-1,              TYPE_INT,     0}, \
 }
 // clang-format off
 
@@ -168,6 +172,8 @@
   { .s5 = { NULL } }, \
   { .s2 =  { config_check_intrange, {-1280, 0}} }, /* PUSCH RSSI threshold range */ \
   { .s2 =  { config_check_intrange, {-1280, 0}} }, /* PUCCH RSSI threshold range */ \
+  { .s5 = { NULL } }, \
+  { .s5 = { NULL } }, \
   { .s5 = { NULL } }, \
 }
 
