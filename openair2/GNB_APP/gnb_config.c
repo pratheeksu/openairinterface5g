@@ -1699,6 +1699,7 @@ void RCconfig_nr_macrlc(configmodule_interface_t *cfg)
         nvipc_params_t nvipc_p = {
           .nvipc_shm_prefix = strdup(*gpd(params, np, MACRLC_TRANSPORT_S_SHM_PREFIX)->strptr),
           .nvipc_poll_core = *gpd(params, np, MACRLC_TRANSPORT_S_POLL_CORE)->i8ptr,
+          .num_phys = 1,
         };
         RC.nrmac[j]->nvipc_params_s = nvipc_p;
         LOG_I(GNB_APP, "Configuring VNF for Aerial connection with prefix %s\n", nvipc_p.nvipc_shm_prefix);

@@ -897,25 +897,26 @@ int phy_nr_slot_indication(nfapi_nr_slot_indication_scf_t *ind)
   ifi->NR_slot_indication(ind, &sched_response);
 
 #ifdef ENABLE_AERIAL
+    uint8_t PHY_id = ind->header.phy_id;
     bool send_slt_resp = false;
     if (sched_response.DL_req.dl_tti_request_body.nPDUs> 0) {
-      oai_fapi_dl_tti_req(&sched_response.DL_req);
+      oai_fapi_dl_tti_req(&sched_response.DL_req, PHY_id);
       send_slt_resp = true;
     }
     if (sched_response.UL_tti_req.n_pdus > 0) {
-      oai_fapi_ul_tti_req(&sched_response.UL_tti_req);
+      oai_fapi_ul_tti_req(&sched_response.UL_tti_req, PHY_id);
       send_slt_resp = true;
     }
     if (sched_response.TX_req.Number_of_PDUs > 0) {
-      oai_fapi_tx_data_req(&sched_response.TX_req);
+      oai_fapi_tx_data_req(&sched_response.TX_req, PHY_id);
       send_slt_resp = true;
     }
     if (sched_response.UL_dci_req.numPdus > 0) {
-      oai_fapi_ul_dci_req(&sched_response.UL_dci_req);
+      oai_fapi_ul_dci_req(&sched_response.UL_dci_req, PHY_id);
       send_slt_resp = true;
     }
     if (send_slt_resp) {
-      oai_fapi_send_end_request(ind->sfn, ind->slot);
+      oai_fapi_send_end_request(ind->sfn, ind->slot, PHY_id);
     }
 #else
   if (sched_response.DL_req.dl_tti_request_body.nPDUs > 0)
@@ -1365,7 +1366,8 @@ int nr_param_resp_cb(nfapi_vnf_config_t *config, int p5_idx, nfapi_nr_param_resp
   vnf_p7_info *p7_vnf = vnf->p7_vnfs;
   pnf_info *pnf = vnf->pnfs;
   phy_info *phy = pnf->phys;
-  nfapi_nr_config_request_scf_t *req = &RC.nrmac[0]->config[0]; // check
+  phy->id = p5_idx;
+  nfapi_nr_config_request_scf_t *req = &RC.nrmac[0]->config[p5_idx];
 #ifndef ENABLE_AERIAL
   struct sockaddr_in pnf_p7_sockaddr;
   phy->remote_port = resp->nfapi_config.p7_pnf_port.value;
@@ -1780,32 +1782,16 @@ void configure_nr_nfapi_vnf(eth_params_t params)
   config->pack_func = &fapi_nr_p5_message_pack;
   config->send_p5_msg = &aerial_nr_send_p5_message;
   NFAPI_TRACE(NFAPI_TRACE_INFO, "[VNF] Created VNF NFAPI start thread %s\n", __FUNCTION__);
-  nfapi_vnf_pnf_info_t *pnf = (nfapi_vnf_pnf_info_t *)malloc(sizeof(nfapi_vnf_pnf_info_t));
-  NFAPI_TRACE(NFAPI_TRACE_INFO, "MALLOC nfapi_vnf_pnf_info_t for pnf_list pnf:%p\n", pnf);
-  memset(pnf, 0, sizeof(nfapi_vnf_pnf_info_t));
-  pnf->p5_idx = 1;
-  pnf->connected = 1;
-  // Add needed parameters
-
-  pnf_info *pnf_info = vnf->pnfs;
-
-  for (int i = 0; i < 1; ++i) {
-    phy_info phy;
-    memset(&phy, 0, sizeof(phy));
-    phy.index = 0;
-    NFAPI_TRACE(NFAPI_TRACE_INFO, "[VNF] (PHY:%d) phy_config_idx:%d\n", i, 0);
-    nfapi_vnf_allocate_phy(config, 1, &(phy.id));
-
-    for (int j = 0; j < 1; ++j) {
-      NFAPI_TRACE(NFAPI_TRACE_INFO, "[VNF] (PHY:%d) (RF%d) %d\n", i, j, 0);
-      phy.rfs[0] = 0;
-    }
-
-    pnf_info->phys[0] = phy;
+  // One pnf list entry per configured PHY so that aerial_nr_send_p5_message()
+  // can route CONFIG/START requests by phy_id.
+  uint8_t num_phys = RC.nrmac[0]->nvipc_params_s.num_phys;
+  for (int i = 0; i < num_phys; i++) {
+    nfapi_vnf_pnf_info_t *pnf = calloc(1, sizeof(*pnf));
+    pnf->p5_idx = i;
+    pnf->connected = 1;
+    nfapi_vnf_pnf_list_add(config, pnf);
+    NFAPI_TRACE(NFAPI_TRACE_INFO, "Registered aerial PNF entry for phy_id %d\n", i);
   }
-
-
-  nfapi_vnf_pnf_list_add(config, pnf);
 
   vnf_p7_info *p7_vnf = vnf->p7_vnfs;
 
