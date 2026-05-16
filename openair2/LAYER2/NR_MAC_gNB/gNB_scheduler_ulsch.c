@@ -8,6 +8,7 @@
 
 
 #include "LAYER2/NR_MAC_gNB/mac_proto.h"
+#include "NR_MAC_gNB/nr_radio_config.h"
 #include "executables/softmodem-common.h"
 #include "common/utils/nr/nr_common.h"
 #include "utils.h"
@@ -755,7 +756,7 @@ static void nr_rx_ra_sdu(const module_id_t mod_id,
     UE->UE_sched_ctrl.ta_frame = (frame + 100) % MAX_FRAME_NUMBER;
     if (!transition_ra_connected_nr_ue(mac, UE)) {
       LOG_E(NR_MAC, "cannot add UE %04x: list is full\n", UE->rnti);
-      delete_nr_ue_data(UE, &mac->UE_info.uid_allocator);
+      delete_nr_ue_data(UE, mac, &mac->UE_info.uid_allocator);
     } else {
       LOG_A(NR_MAC, "(rnti 0x%04x) CFRA procedure succeeded!\n", UE->rnti);
     }
@@ -1737,8 +1738,9 @@ static bool allocate_ul_retransmission(gNB_MAC_INST *nrmac,
 
   /* mark when retransmission will happen */
   int slots_frame = nrmac->frame_structure.numb_slots_frame;
-  new_sched.frame = (frame + (slot + tda_info->k2 + get_NTN_Koffset(scc)) / slots_frame) % MAX_FRAME_NUMBER;
-  new_sched.slot = (slot + tda_info->k2 + get_NTN_Koffset(scc)) % slots_frame;
+  int NTN_gNB_Koffset = get_NTN_Koffset(scc);
+  new_sched.frame = get_fb_frame(frame, slot, tda_info->k2, slots_frame, NTN_gNB_Koffset);
+  new_sched.slot = get_fb_slot(slot, tda_info->k2, slots_frame, NTN_gNB_Koffset);
   new_sched.bwp_info = bwp_info;
   DevAssert(new_sched.ul_harq_pid == harq_pid);
 

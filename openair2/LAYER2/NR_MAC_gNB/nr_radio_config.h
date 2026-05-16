@@ -16,14 +16,14 @@
 #include "NR_UL-CCCH-Message.h"
 #include "f1ap_messages_types.h"
 #include "common/platform_types.h"
+#include "common/utils/nr/nr_common.h"
 #include "openair2/LAYER2/nr_rlc/nr_rlc_configuration.h"
-struct NR_MeasurementTimingConfiguration;
-struct NR_PDSCH_TimeDomainResourceAllocationList;
 
 // forward declaration of MAC configuration parameters, definition is included in C file
 typedef struct nr_mac_config_s nr_mac_config_t;
 typedef struct nr_mac_timers nr_mac_timers_t;
 typedef struct measgap_config measgap_config_t;
+typedef struct NR_UE_UL_RRC_info NR_UE_UL_RRC_info_t;
 
 void nr_rrc_config_dl_tda(struct NR_PDSCH_TimeDomainResourceAllocationList *pdsch_TimeDomainAllocationList,
                           frame_type_t frame_type,
@@ -57,7 +57,6 @@ struct NR_MeasurementTimingConfiguration *get_new_MeasurementTimingConfiguration
 int encode_MeasurementTimingConfiguration(const struct NR_MeasurementTimingConfiguration *mtc, uint8_t *buf, int buf_len);
 void free_MeasurementTimingConfiguration(struct NR_MeasurementTimingConfiguration *mtc);
 
-#define NR_MAX_SIB_LENGTH 2976 // 3GPP TS 38.331 section 5.2.1
 NR_BCCH_DL_SCH_Message_t *get_SIB1_NR(const NR_ServingCellConfigCommon_t *scc,
                                       const plmn_id_t *plmn,
                                       uint64_t cellID,
@@ -69,8 +68,18 @@ void free_SIB1_NR(NR_BCCH_DL_SCH_Message_t *sib1);
 int encode_SIB_NR(NR_BCCH_DL_SCH_Message_t *sib, uint8_t *buffer, int max_buffer_size);
 void add_sib_to_systeminformation(NR_SystemInformation_IEs_t *si, struct NR_SystemInformation_IEs__sib_TypeAndInfo__Member *type);
 NR_SIB19_r17_t *get_SIB19_NR(const NR_ServingCellConfigCommon_t *scc);
-
+bool set_ul_periodic_resources(int **list,
+                               const nr_mac_config_t *configuration,
+                               NR_UE_UL_RRC_info_t *info,
+                               const frame_structure_t *fs,
+                               bool is_csi,
+                               int id,
+                               int bwp_start,
+                               int bwp_size,
+                               int period);
 NR_CellGroupConfig_t *get_initial_cellGroupConfig(int uid,
+                                                  NR_UE_UL_RRC_info_t sr_info,
+                                                  NR_UE_UL_RRC_info_t csi_info,
                                                   const NR_ServingCellConfigCommon_t *scc,
                                                   const nr_mac_config_t *configuration,
                                                   const nr_rlc_configuration_t *default_rlc_config,
@@ -87,6 +96,8 @@ int encode_cellGroupConfig(NR_CellGroupConfig_t *cellGroupConfig, uint8_t *buffe
  * parameter servingcellconfigdedicated! */
 NR_CellGroupConfig_t *get_default_secondaryCellGroup(const NR_ServingCellConfigCommon_t *servingcellconfigcommon,
                                                      const NR_UE_NR_Capability_t *uecap,
+                                                     NR_UE_UL_RRC_info_t sr_info,
+                                                     NR_UE_UL_RRC_info_t csi_info,
                                                      int scg_id,
                                                      int servCellIndex,
                                                      const nr_mac_config_t *configuration,
@@ -111,6 +122,8 @@ NR_CellGroupConfig_t *update_cellGroupConfig_for_BWP_switch(NR_CellGroupConfig_t
                                                             const nr_mac_config_t *configuration,
                                                             const NR_UE_NR_Capability_t *uecap,
                                                             const NR_ServingCellConfigCommon_t *scc,
+                                                            NR_UE_UL_RRC_info_t sr_info,
+                                                            NR_UE_UL_RRC_info_t csi_info,
                                                             int uid,
                                                             int old_bwp,
                                                             int new_bwp,
@@ -120,6 +133,8 @@ NR_CellGroupConfig_t *update_cellGroupConfig_for_beam_switch(NR_CellGroupConfig_
                                                             const NR_UE_NR_Capability_t *uecap,
                                                             const NR_ServingCellConfigCommon_t *scc,
                                                             int uid,
+                                                            const NR_PUCCH_Config_t *pucch_Config,
+                                                            NR_UE_UL_RRC_info_t csi_info,
                                                             int bwp,
                                                             int ssb_index);
 NR_MeasurementTimingConfiguration_t *get_nr_mtc(uint8_t *buf, uint32_t len);

@@ -698,7 +698,7 @@ void nr_initiate_ra_proc(module_id_t module_idP,
     UE = get_new_nr_ue_inst(&nr_mac->UE_info.uid_allocator, rnti, NULL, &nr_mac->radio_config);
     if (!add_new_UE_RA(nr_mac, UE)) {
       LOG_E(NR_MAC, "FAILURE: %4d.%2d initiating RA procedure for preamble index %d: no free RA process\n", frame, slot, preamble_index);
-      delete_nr_ue_data(UE, &nr_mac->UE_info.uid_allocator);
+      delete_nr_ue_data(UE, nr_mac, &nr_mac->UE_info.uid_allocator);
       NR_SCHED_UNLOCK(&nr_mac->sched_lock);
       return;
     }
@@ -784,9 +784,9 @@ static void nr_generate_Msg3_retransmission(module_id_t module_idP,
                                            ra->Msg3_tda_id);
 
   int slots_frame = nr_mac->frame_structure.numb_slots_frame;
-  uint16_t K2 = tda_info.k2 + get_NTN_Koffset(scc);
-  const int sched_frame = (frame + (slot + K2) / slots_frame) % MAX_FRAME_NUMBER;
-  const int sched_slot = (slot + K2) % slots_frame;
+  int NTN_gNB_Koffset = get_NTN_Koffset(scc);
+  const int sched_frame = get_fb_frame(frame, slot, tda_info.k2, slots_frame, NTN_gNB_Koffset);
+  const int sched_slot = get_fb_slot(slot, tda_info.k2, slots_frame, NTN_gNB_Koffset);
   uint16_t slot_bitmap = get_ul_bitmap(&nr_mac->frame_structure, sched_slot);
   uint16_t msg3_mask = SL_to_bitmap(tda_info.startSymbolIndex, tda_info.nrOfSymbols);
 
@@ -962,7 +962,7 @@ static void nr_generate_Msg3_retransmission(module_id_t module_idP,
   start_ra_contention_resolution_timer(
       ra,
       scc->uplinkConfigCommon->initialUplinkBWP->rach_ConfigCommon->choice.setup->ra_ContentionResolutionTimer,
-      K2,
+      NTN_gNB_Koffset + tda_info.k2,
       ul_bwp->scs);
 
   // reset state to wait msg3
@@ -2090,7 +2090,7 @@ void nr_release_ra_UE(gNB_MAC_INST *mac, rnti_t rnti)
   NR_UEs_t *UE_info = &mac->UE_info;
   NR_UE_info_t *UE = remove_UE_from_list(NR_NB_RA_PROC_MAX, UE_info->access_ue_list, rnti);
   if (UE) {
-    delete_nr_ue_data(UE, &UE_info->uid_allocator);
+    delete_nr_ue_data(UE, mac, &UE_info->uid_allocator);
   } else {
     LOG_W(NR_MAC,"Call to release RA UE with rnti %04x, but not existing\n", rnti);
   }
