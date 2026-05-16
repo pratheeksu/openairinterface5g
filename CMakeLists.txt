@@ -530,6 +530,8 @@ add_library(f1ap
             ${F1AP_DIR}/f1ap_du_ue_context_management.c
             ${F1AP_DIR}/f1ap_encoder.c
             ${F1AP_DIR}/f1ap_handlers.c
+            ${F1AP_DIR}/f1ap_cu_positioning.c
+            ${F1AP_DIR}/f1ap_du_positioning.c
             ${F1AP_DIR}/f1ap_itti_messaging.c)
 target_include_directories(f1ap PUBLIC F1AP_DIR)
 target_link_libraries(f1ap PUBLIC asn1_f1ap GTPV1U)
@@ -1206,6 +1208,7 @@ set(L2_NR_SRC
   ${NR_RRC_DIR}/rrc_gNB_cuup.c
   ${NR_RRC_DIR}/rrc_gNB_du.c
   ${NR_RRC_DIR}/rrc_gNB_mobility.c
+  ${NR_RRC_DIR}/rrc_gNB_NRPPA.c
   )
 
 set(L2_SRC_UE
@@ -1281,6 +1284,7 @@ set (MAC_NR_SRC
   ${NR_GNB_MAC_DIR}/mac_rrc_ul_direct.c
   ${NR_GNB_MAC_DIR}/mac_rrc_ul_f1ap.c
   ${NR_GNB_MAC_DIR}/nr_radio_config.c
+  ${NR_GNB_MAC_DIR}/nr_pos_ue_context.c
  )
 
 
@@ -1360,6 +1364,7 @@ add_library(L2_NR
   )
 target_link_libraries(L2_NR PRIVATE ds alg)
 target_link_libraries(L2_NR PRIVATE f1ap_lib)
+target_link_libraries(L2_NR PRIVATE nrppa)
 target_include_directories(L2_NR PRIVATE ${F1AP_DIR}/lib)
 if(E2_AGENT)
   target_compile_definitions(L2_NR PRIVATE ${E2AP_VERSION} ${KPM_VERSION} E2_AGENT)
@@ -1874,7 +1879,7 @@ target_link_libraries(nr-softmodem PRIVATE
   ITTI ${NAS_UE_LIB} nr_rrc
   ngap s1ap L2_LTE_NR L2_NR MAC_NR_COMMON NFAPI_LIB NFAPI_VNF_LIB NFAPI_PNF_LIB NFAPI_USER_LIB SIMU
   x2ap f1ap m2ap m3ap e1ap radio_common
-  time_management softmodem_common
+  time_management softmodem_common nrppa
   -Wl,--end-group dl)
 
 target_link_libraries(nr-softmodem PRIVATE pthread m CONFIG_LIB rt)
@@ -1900,7 +1905,7 @@ endif()
 
 # force the generation of ASN.1 so that we don't need to wait during the build
 target_link_libraries(nr-softmodem PRIVATE
-  asn1_lte_rrc asn1_nr_rrc asn1_s1ap asn1_ngap asn1_m2ap asn1_m3ap asn1_x2ap asn1_f1ap asn1_lpp)
+  asn1_lte_rrc asn1_nr_rrc asn1_s1ap asn1_ngap asn1_m2ap asn1_m3ap asn1_x2ap asn1_f1ap asn1_lpp asn1_nrppa)
 
 add_executable(nr-cuup
   executables/nr-cuup.c

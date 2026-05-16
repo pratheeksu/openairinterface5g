@@ -10,14 +10,16 @@
 #include "f1ap_cu_ue_context_management.h"
 #include "f1ap_du_ue_context_management.h"
 #include "f1ap_du_paging.h"
+#include "f1ap_du_positioning.h"
+#include "f1ap_cu_positioning.h"
 
 /* Handlers matrix. Only f1 related procedure present here */
 static const f1ap_message_processing_t f1ap_messages_processing[][3] = {
 
-    // TODO: How to handle RESET if CU/DU has their respective handlers? 
+    // TODO: How to handle RESET if CU/DU has their respective handlers?
     // We need to check node type and call the right handler.
-    {DU_handle_RESET, CU_handle_RESET_ACKNOWLEDGE, 0}, /* Reset */ 
-    // {CU_handle_RESET, DU_handle_RESET_ACKNOWLEDGE, 0}, /* Reset */ 
+    {DU_handle_RESET, CU_handle_RESET_ACKNOWLEDGE, 0}, /* Reset */
+    // {CU_handle_RESET, DU_handle_RESET_ACKNOWLEDGE, 0}, /* Reset */
     {CU_handle_F1_SETUP_REQUEST, DU_handle_F1_SETUP_RESPONSE, DU_handle_F1_SETUP_FAILURE}, /* F1Setup */
     {0, 0, 0}, /* ErrorIndication */
     {CU_handle_gNB_DU_CONFIGURATION_UPDATE, DU_handle_gNB_DU_CONFIGURATION_UPDATE_ACKNOWLEDGE, 0}, /* gNBDUConfigurationUpdate */
@@ -25,7 +27,9 @@ static const f1ap_message_processing_t f1ap_messages_processing[][3] = {
     {DU_handle_UE_CONTEXT_SETUP_REQUEST, CU_handle_UE_CONTEXT_SETUP_RESPONSE, 0}, /* UEContextSetup */
     {DU_handle_UE_CONTEXT_RELEASE_COMMAND, CU_handle_UE_CONTEXT_RELEASE_COMPLETE, 0}, /* UEContextRelease */
     {DU_handle_UE_CONTEXT_MODIFICATION_REQUEST, CU_handle_UE_CONTEXT_MODIFICATION_RESPONSE, 0}, /* UEContextModification */
-    {CU_handle_UE_CONTEXT_MODIFICATION_REQUIRED, DU_handle_UE_CONTEXT_MODIFICATION_CONFIRM, DU_handle_UE_CONTEXT_MODIFICATION_REFUSE}, /* UEContextModificationRequired */
+    {CU_handle_UE_CONTEXT_MODIFICATION_REQUIRED,
+     DU_handle_UE_CONTEXT_MODIFICATION_CONFIRM,
+     DU_handle_UE_CONTEXT_MODIFICATION_REFUSE}, /* UEContextModificationRequired */
     {0, 0, 0}, /* UEMobilityCommand */
     {CU_handle_UE_CONTEXT_RELEASE_REQUEST, 0, 0}, /* UEContextReleaseRequest */
     {CU_handle_INITIAL_UL_RRC_MESSAGE_TRANSFER, 0, 0}, /* InitialULRRCMessageTransfer */
@@ -41,6 +45,41 @@ static const f1ap_message_processing_t f1ap_messages_processing[][3] = {
     {0, 0, 0}, /* PWSCancel */
     {0, 0, 0}, /* PWSRestartIndication */
     {0, 0, 0}, /* PWSFailureIndication */
+    {0, 0, 0}, /* GNBDUStatusIndication */
+    {0, 0, 0}, /* RRCDeliveryReport */
+    {0, 0, 0}, /* F1Removal */
+    {0, 0, 0}, /* NetworkAccessRateReduction */
+    {0, 0, 0}, /* TraceStart */
+    {0, 0, 0}, /* DeactivateTrace */
+    {0, 0, 0}, /* DUCURadioInformationTransfer */
+    {0, 0, 0}, /* CUDURadioInformationTransfer */
+    {0, 0, 0}, /* BAPMappingConfiguration */
+    {0, 0, 0}, /* GNBDUResourceConfiguration */
+    {0, 0, 0}, /* IABTNLAddressAllocation */
+    {0, 0, 0}, /* IABUPConfigurationUpdate */
+    {0, 0, 0}, /* resourceStatusReportingInitiation */
+    {0, 0, 0}, /* resourceStatusReporting */
+    {0, 0, 0}, /* accessAndMobilityIndication */
+    {0, 0, 0}, /* accessSuccess */
+    {0, 0, 0}, /* cellTrafficTrace */
+    {DU_handle_POSITIONING_MEASUREMENT_REQUEST, CU_handle_POSITIONING_MEASUREMENT_RESPONSE, 0}, /* PositioningMeasurementExchange */
+    {0, 0, 0}, /* PositioningAssistanceInformationControl */
+    {0, 0, 0}, /* PositioningAssistanceInformationFeedback */
+    {0, 0, 0}, /* PositioningMeasurementReport */
+    {0, 0, 0}, /* PositioningMeasurementAbort */
+    {0, 0, 0}, /* PositioningMeasurementFailureIndication */
+    {0, 0, 0}, /* PositioningMeasurementUpdate */
+    {DU_handle_TRP_INFORMATION_REQUEST, CU_handle_TRP_INFORMATION_RESPONSE, 0}, /* TRPInformationExchange */
+    {DU_handle_POSITIONING_INFORMATION_REQUEST, CU_handle_POSITIONING_INFORMATION_RESPONSE, 0}, /* PositioningInformationExchange */
+    {DU_handle_POSITIONING_ACTIVATION_REQUEST, CU_handle_POSITIONING_ACTIVATION_RESPONSE, 0}, /* PositioningActivation */
+    {0, 0, 0}, /* PositioningDeactivation */
+    {0, 0, 0}, /* E_CIDMeasurementInitiation */
+    {0, 0, 0}, /* E_CIDMeasurementFailureIndication */
+    {0, 0, 0}, /* E_CIDMeasurementReport */
+    {0, 0, 0}, /* E_CIDMeasurementTermination */
+    {0, 0, 0}, /* PositioningInformationUpdate */
+    {0, 0, 0}, /* ReferenceTimeInformationReport */
+    {0, 0, 0}, /* ReferenceTimeInformationReportingControl */
 };
 
 const char *f1ap_direction2String(int f1ap_dir) {

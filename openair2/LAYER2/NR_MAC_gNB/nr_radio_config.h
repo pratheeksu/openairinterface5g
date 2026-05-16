@@ -17,6 +17,8 @@
 #include "f1ap_messages_types.h"
 #include "common/platform_types.h"
 #include "openair2/LAYER2/nr_rlc/nr_rlc_configuration.h"
+#include "openair1/PHY/defs_nr_common.h"
+#include "openair2/LAYER2/NR_MAC_COMMON/nr_mac.h"
 struct NR_MeasurementTimingConfiguration;
 struct NR_PDSCH_TimeDomainResourceAllocationList;
 
@@ -127,4 +129,9 @@ measgap_config_t create_measgap_config(const NR_MeasurementTimingConfiguration_t
 int encode_measgap_config(const measgap_config_t *c, uint8_t *buf);
 long ue_supported_ul_layers(const NR_UE_NR_Capability_t *uecap);
 long ue_supported_dl_layers(const NR_ServingCellConfigCommon_t *scc, const NR_UE_NR_Capability_t *uecap);
+void encode_trp_info_item(const f1ap_trp_information_req_t *req,
+                          f1ap_trp_information_t *trp_info_item,
+                          positioning_config_t *positioning_config,
+                          int trp_idx);
+f1ap_srs_configuration_t cp_rrc_to_f1ap_srs_configuration(NR_UE_UL_BWP_t *current_UL_BWP, NR_ServingCellConfigCommon_t *scc);
 #endif
