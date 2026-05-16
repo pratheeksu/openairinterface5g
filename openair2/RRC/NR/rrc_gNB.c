@@ -799,6 +799,7 @@ NR_MeasConfig_t *nr_rrc_get_measconfig(const gNB_RRC_INST *rrc, uint64_t nr_cell
           if (default_a3_added) {
             /* default A3 exists and is already added, use it for this neighbour */
             neigh_a3_id[i] = 3;
+            i++;
             continue;
           }
           /* try to get the default A3 config */
@@ -806,6 +807,7 @@ NR_MeasConfig_t *nr_rrc_get_measconfig(const gNB_RRC_INST *rrc, uint64_t nr_cell
           if (!a3Event) {
             /* no default A3 config found, so no A3 config for this neighbour */
             neigh_a3_id[i] = -1;
+            i++;
             continue;
           }
           default_a3_added = true;
