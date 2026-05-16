@@ -188,7 +188,7 @@ void schedule_nr_mib(module_id_t module_idP, frame_t frameP, slot_t slotP, nfapi
         if (is_ssb_configured(scc, i_ssb)) {
           uint16_t ssb_start_symbol = get_ssb_start_symbol(band, scs, i_ssb);
           // if start symbol is in current slot, schedule current SSB, fill VRB map and call get_type0_PDCCH_CSS_config_parameters
-          if ((ssb_start_symbol / 14) == rel_slot) {
+          if ((ssb_start_symbol / NR_SYMBOLS_PER_SLOT) == rel_slot) {
             NR_beam_alloc_t beam = beam_allocation_procedure(&gNB->beam_info,
                                                              frameP,
                                                              slotP,

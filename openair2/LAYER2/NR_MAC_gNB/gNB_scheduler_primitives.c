@@ -3597,9 +3597,14 @@ void nr_mac_release_ue(gNB_MAC_INST *mac, int rnti)
 
 void beam_switching_procedure(gNB_MAC_INST *mac, NR_UE_info_t *UE, int new_beam_index)
 {
-  LOG_I(NR_MAC, "[UE %x] Switching to beam with ID %d (from %d)\n", UE->rnti, new_beam_index, UE->UE_beam_index);
-  UE->UE_beam_index = new_beam_index;
-  nr_mac_trigger_reconfiguration(mac, UE, -1, true);
+  // currently we only need to reconfigure if CSI-RS is enabled
+  // if we reconfigure we need to wait to switch the comfirmation of context modification
+  if (mac->radio_config.do_CSIRS)
+    nr_mac_trigger_reconfiguration(mac, UE, -1, new_beam_index);
+  else {
+    LOG_I(NR_MAC, "[UE %x] Switching to beam with ID %d (from %d)\n", UE->rnti, new_beam_index, UE->UE_beam_index);
+    UE->UE_beam_index = new_beam_index;
+  }
 }
 
 void nr_mac_update_timers(module_id_t module_id)
@@ -3802,7 +3807,7 @@ int beam_selection_procedures(gNB_MAC_INST *mac, NR_UE_info_t *UE)
   tci->is_scheduled = true;
   tci->coresetId = sched_ctrl->coreset->controlResourceSetId;
   tci->tciStateId = new_bf_index; // assumption: this correspond to the TCI index
-  return new_bf_index;
+  return -1;  // no beam change now in case of TCI
 }
 
 void send_initial_ul_rrc_message(int rnti, const uint8_t *sdu, sdu_size_t sdu_len, void *data)
@@ -3983,42 +3988,41 @@ static bool verify_bwp_switch(const NR_UE_info_t *UE, const nr_mac_config_t *con
   return false;
 }
 
-void nr_mac_trigger_reconfiguration(const gNB_MAC_INST *nrmac, NR_UE_info_t *UE, int new_bwp_id, bool new_beam)
+void nr_mac_trigger_reconfiguration(gNB_MAC_INST *nrmac, NR_UE_info_t *UE, int new_bwp_id, int new_beam)
 {
   DevAssert(UE->CellGroup != NULL);
   NR_CellGroupConfig_t *cellGroup_for_UE = NULL;
-  if (new_beam) {
-      UE->sc_info.csi_MeasConfig = NULL;  // to avoid segfault when freeing csi_MeasConfig in configDedicated
-      NR_UE_UL_BWP_t *current_BWP = &UE->current_UL_BWP;
-      current_BWP->srs_Config = NULL;
-      int ssb_index = nrmac->common_channels[0].ssb_index[UE->UE_beam_index];
-      cellGroup_for_UE = update_cellGroupConfig_for_beam_switch(UE->CellGroup,
-                                                               &nrmac->radio_config,
-                                                               UE->capability,
-                                                               nrmac->common_channels[0].ServingCellConfigCommon,
-                                                               UE->uid,
-                                                               UE->current_DL_BWP.bwp_id,
-                                                               ssb_index);
-  } else {
-    if (new_bwp_id >= 0) {
-      AssertFatal(UE->current_DL_BWP.bwp_id == UE->current_UL_BWP.bwp_id, "We only support same BWP for UL and DL\n");
-      if (!verify_bwp_switch(UE, &nrmac->radio_config, new_bwp_id))
-        return;
-      else {
-        UE->sc_info.csi_MeasConfig = NULL;  // to avoid segfault when freeing csi_MeasConfig in configDedicated
-        UE->local_bwp_id = new_bwp_id;
-        int ssb_index = nrmac->common_channels[0].ssb_index[UE->UE_beam_index];
-        cellGroup_for_UE = update_cellGroupConfig_for_BWP_switch(UE->CellGroup,
-                                                                &nrmac->radio_config,
-                                                                UE->capability,
-                                                                nrmac->common_channels[0].ServingCellConfigCommon,
-                                                                UE->uid,
-                                                                UE->current_DL_BWP.bwp_id,
-                                                                new_bwp_id,
-                                                                ssb_index);
-      }
+  int ssb_index = get_ssbidx_from_beam(nrmac, UE->UE_beam_index);
+  if (new_beam >= 0) {
+    UE->cm_info.trigger_info = BEAM_SWITCH;
+    UE->cm_info.new_state = new_beam;
+    cellGroup_for_UE = update_cellGroupConfig_for_reconfig(UE->CellGroup,
+                                                           &nrmac->radio_config,
+                                                           UE->capability,
+                                                           nrmac->common_channels[0].ServingCellConfigCommon,
+                                                           UE->uid,
+                                                           UE->current_DL_BWP.bwp_id,
+                                                           -1,
+                                                           ssb_index);
+  } else if (new_bwp_id >= 0) {
+    AssertFatal(UE->current_DL_BWP.bwp_id == UE->current_UL_BWP.bwp_id, "We only support same BWP for UL and DL\n");
+    if (!verify_bwp_switch(UE, &nrmac->radio_config, new_bwp_id))
+      return;
+    else {
+      UE->cm_info.trigger_info = BWP_SWITCH;
+      UE->cm_info.new_state = new_bwp_id;
+      cellGroup_for_UE = update_cellGroupConfig_for_reconfig(UE->CellGroup,
+                                                             &nrmac->radio_config,
+                                                             UE->capability,
+                                                             nrmac->common_channels[0].ServingCellConfigCommon,
+                                                             UE->uid,
+                                                             UE->current_DL_BWP.bwp_id,
+                                                             new_bwp_id,
+                                                             ssb_index);
     }
-  }
+  } else
+    UE->cm_info.trigger_info = MSG3_CRNTI;
+
   uint8_t buf[2048];
   asn_enc_rval_t enc_rval = uper_encode_to_buffer(&asn_DEF_NR_CellGroupConfig,
                                                   NULL,

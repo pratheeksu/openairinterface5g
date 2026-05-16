@@ -364,13 +364,13 @@ static int set_ideal_period(bool is_csi)
 }
 
 static void set_csirs_periodicity(NR_NZP_CSI_RS_Resource_t *nzpcsi0,
-                                  int id,
+                                  int offset,
                                   int ideal_period,
                                   const frame_structure_t *fs)
 {
   nzpcsi0->periodicityAndOffset = calloc(1,sizeof(*nzpcsi0->periodicityAndOffset));
   // TODO ideal period to be set according to estimation by the gNB on how fast the channel changes
-  const int offset = id; // id = ssb_index/2, offset should be set to ssb_index/2.
+  AssertFatal(offset < ideal_period, "CSI-RS offset %d goes beyond the assumed period %d\n", offset, ideal_period);
   if (check_periodicity(4, ideal_period, fs)) {
     nzpcsi0->periodicityAndOffset->present = NR_CSI_ResourcePeriodicityAndOffset_PR_slots4;
     nzpcsi0->periodicityAndOffset->choice.slots4 = offset;
@@ -411,7 +411,7 @@ static void set_csirs_periodicity(NR_NZP_CSI_RS_Resource_t *nzpcsi0,
     nzpcsi0->periodicityAndOffset->present = NR_CSI_ResourcePeriodicityAndOffset_PR_slots320;
     const int nb_dl_slots_period = get_full_dl_slots_per_period(fs); // full DL slots
     // checked for validity in verify_radio_configuration
-    AssertFatal(offset / 320 < nb_dl_slots_period, "Cannot allocate CSI-RS for BWP %d. Not enough resources for CSI-RS\n", id);
+    AssertFatal(offset / 320 < nb_dl_slots_period, "Cannot allocate CSI-RS for BWP %d. Not enough resources for CSI-RS\n", offset);
     nzpcsi0->periodicityAndOffset->choice.slots320 = (offset % 320) + (offset / 320);
   }
 }
@@ -421,6 +421,7 @@ static void config_csirs(const NR_ServingCellConfigCommon_t *servingcellconfigco
                          int num_dl_antenna_ports,
                          int curr_bwp,
                          int do_csirs,
+                         int symbol_index,
                          int id)
 {
   if (do_csirs) {
@@ -491,7 +492,7 @@ static void config_csirs(const NR_ServingCellConfigCommon_t *servingcellconfigco
       default:
         AssertFatal(false, "Number of ports not yet supported\n");
     }
-    resourceMapping.firstOFDMSymbolInTimeDomain = 13;  // last symbol of slot
+    resourceMapping.firstOFDMSymbolInTimeDomain = 13 - symbol_index;
     resourceMapping.firstOFDMSymbolInTimeDomain2 = NULL;
     resourceMapping.density.present = NR_CSI_RS_ResourceMapping__density_PR_one;
     resourceMapping.density.choice.one = (NULL_t)0;
@@ -1004,9 +1005,25 @@ void prepare_sim_uecap(NR_UE_NR_Capability_t *cap,
   }
 }
 
+static int csi_symbols_in_slot(const NR_ServingCellConfigCommon_t *scc)
+{
+  uint64_t ssb_bitmap = get_ssb_bitmap(scc);
+  bool two_ssb_per_slot = false;
+  for (int i = 0; i < 64; i += 2) {
+    // check if both even ssb and subsequent odd ssb are configured
+    bool even_set = (ssb_bitmap >> (63 - i)) & 0x01;
+    bool odd_set = (ssb_bitmap >> (63 - (i + 1))) & 0x01;
+    if (even_set && odd_set) {
+        two_ssb_per_slot = true;
+        break;
+    }
+  }
+  return two_ssb_per_slot ? 2 : 1;
+}
+
 void nr_rrc_config_dl_tda(struct NR_PDSCH_TimeDomainResourceAllocationList *pdsch_TimeDomainAllocationList,
                           frame_type_t frame_type,
-                          NR_TDD_UL_DL_ConfigCommon_t *tdd_UL_DL_ConfigurationCommon,
+                          const NR_ServingCellConfigCommon_t *scc,
                           int curr_bwp)
 {
   // coreset duration setting to be improved in the framework of RRC harmonization, potentially using a common function
@@ -1014,7 +1031,7 @@ void nr_rrc_config_dl_tda(struct NR_PDSCH_TimeDomainResourceAllocationList *pdsc
   if (curr_bwp < 48)
     len_coreset = 2;
   // setting default TDA for DL with TDA index 0
-  struct NR_PDSCH_TimeDomainResourceAllocation *timedomainresourceallocation = CALLOC(1,sizeof(NR_PDSCH_TimeDomainResourceAllocation_t));
+  NR_PDSCH_TimeDomainResourceAllocation_t *timedomainresourceallocation = CALLOC(1,sizeof(NR_PDSCH_TimeDomainResourceAllocation_t));
   // k0: Slot offset between DCI and its scheduled PDSCH (see TS 38.214 clause 5.1.2.1) When the field is absent the UE applies the value 0.
   //timedomainresourceallocation->k0 = calloc(1,sizeof(*timedomainresourceallocation->k0));
   //*timedomainresourceallocation->k0 = 0;
@@ -1022,14 +1039,14 @@ void nr_rrc_config_dl_tda(struct NR_PDSCH_TimeDomainResourceAllocationList *pdsc
   timedomainresourceallocation->startSymbolAndLength = get_SLIV(len_coreset,14-len_coreset); // basic slot configuration starting in symbol 1 til the end of the slot
   asn1cSeqAdd(&pdsch_TimeDomainAllocationList->list, timedomainresourceallocation);
   // setting TDA for CSI-RS symbol with index 1
-  struct NR_PDSCH_TimeDomainResourceAllocation *timedomainresourceallocation1 = CALLOC(1,sizeof(NR_PDSCH_TimeDomainResourceAllocation_t));
+  NR_PDSCH_TimeDomainResourceAllocation_t *timedomainresourceallocation1 = CALLOC(1,sizeof(NR_PDSCH_TimeDomainResourceAllocation_t));
   timedomainresourceallocation1->mappingType = NR_PDSCH_TimeDomainResourceAllocation__mappingType_typeA;
-  timedomainresourceallocation1->startSymbolAndLength = get_SLIV(len_coreset,14-len_coreset-1); // 1 symbol CSI-RS
+  timedomainresourceallocation1->startSymbolAndLength = get_SLIV(len_coreset, 14 - len_coreset - csi_symbols_in_slot(scc)); // CSI-RS symbols
   asn1cSeqAdd(&pdsch_TimeDomainAllocationList->list, timedomainresourceallocation1);
-  if(frame_type==TDD) {
-    // TDD
-    if(tdd_UL_DL_ConfigurationCommon) {
+  if(frame_type == TDD) {
+    if(scc->tdd_UL_DL_ConfigurationCommon) {
       int dl_symb = 0;
+      NR_TDD_UL_DL_ConfigCommon_t *tdd_UL_DL_ConfigurationCommon = scc->tdd_UL_DL_ConfigurationCommon;
       if (tdd_UL_DL_ConfigurationCommon->pattern2 && tdd_UL_DL_ConfigurationCommon->pattern2->nrofDownlinkSymbols)
         AssertFatal(tdd_UL_DL_ConfigurationCommon->pattern2->nrofDownlinkSymbols == tdd_UL_DL_ConfigurationCommon->pattern1.nrofDownlinkSymbols,
                     "nrofDownlinkSymbols in pattern1 %ld and pattern2 %ld must be the same in current implementation\n",
@@ -1042,7 +1059,7 @@ void nr_rrc_config_dl_tda(struct NR_PDSCH_TimeDomainResourceAllocationList *pdsc
       }
       if(dl_symb > 1) {
         // mixed slot TDA with TDA index 2
-        struct NR_PDSCH_TimeDomainResourceAllocation *timedomainresourceallocation2 = CALLOC(1,sizeof(NR_PDSCH_TimeDomainResourceAllocation_t));
+        NR_PDSCH_TimeDomainResourceAllocation_t *timedomainresourceallocation2 = CALLOC(1,sizeof(NR_PDSCH_TimeDomainResourceAllocation_t));
         timedomainresourceallocation2->mappingType = NR_PDSCH_TimeDomainResourceAllocation__mappingType_typeA;
         timedomainresourceallocation2->startSymbolAndLength = get_SLIV(len_coreset,dl_symb-len_coreset); // mixed slot configuration starting in symbol 1 til the end of the dl allocation
         asn1cSeqAdd(&pdsch_TimeDomainAllocationList->list, timedomainresourceallocation2);
@@ -1811,7 +1828,7 @@ static NR_BWP_Downlink_t *config_downlinkBWP(const NR_ServingCellConfigCommon_t 
 
   nr_rrc_config_dl_tda(bwp->bwp_Common->pdsch_ConfigCommon->choice.setup->pdsch_TimeDomainAllocationList,
                        get_frame_type((int)*scc->downlinkConfigCommon->frequencyInfoDL->frequencyBandList.list.array[0], *scc->ssbSubcarrierSpacing),
-                       scc->tdd_UL_DL_ConfigurationCommon,
+                       scc,
                        bwp_size);
 
   if (!bwp->bwp_Dedicated) {
@@ -1899,7 +1916,6 @@ static NR_BWP_Uplink_t *config_uplinkBWP(bool is_SA,
   set_pucch_power_config(pucch_Config);
   scheduling_request_config(pucch_Config, ubwp->bwp_Common->genericParameters.subcarrierSpacing);
   set_dl_DataToUL_ACK(pucch_Config, configuration->minRXTXTIME);
-
   ubwp->bwp_Dedicated->pusch_Config = config_pusch(configuration, scc, uecap);
 
   ubwp->bwp_Dedicated->srs_Config = get_config_srs(NULL,
@@ -3400,7 +3416,7 @@ static NR_BWP_DownlinkDedicated_t *configure_initial_dl_bwp(const NR_ServingCell
 static NR_CSI_MeasConfig_t *get_csiMeasConfig(const NR_ServingCellConfig_t *configDedicated,
                                               const NR_UE_NR_Capability_t *uecap,
                                               const NR_ServingCellConfigCommon_t *scc,
-                                              const nr_mac_config_t *configuration,
+                                              const nr_mac_config_t *config,
                                               int uid,
                                               int bwp_id,
                                               uint64_t bitmap,
@@ -3442,10 +3458,15 @@ static NR_CSI_MeasConfig_t *get_csiMeasConfig(const NR_ServingCellConfig_t *conf
     curr_bwp = NRRIV2BW(bwp->bwp_Common->genericParameters.locationAndBandwidth, MAX_BWP_SIZE);
   }
 
-  const int pdsch_AntennaPorts =
-      configuration->pdsch_AntennaPorts.N1 * configuration->pdsch_AntennaPorts.N2 * configuration->pdsch_AntennaPorts.XP;
-  config_csirs(scc, csi_MeasConfig, pdsch_AntennaPorts, curr_bwp, configuration->do_CSIRS, ssb_index / 2);
-  config_csiim(configuration->do_CSIRS, pdsch_AntennaPorts, curr_bwp, csi_MeasConfig, ssb_index / 2);
+  int same_slot_index = (ssb_index % 2 == 0) ? (ssb_index + 1) : (ssb_index - 1);
+  bool has_companion = (bitmap >> (63 - same_slot_index)) & 0x01;
+  int symbol_index = has_companion ? ssb_index % 2 : 0;
+  int ssb_slot = get_ssb_start_symbol(*scc->downlinkConfigCommon->frequencyInfoDL->frequencyBandList.list.array[0],
+                                      *scc->ssbSubcarrierSpacing,
+                                      ssb_index) / NR_SYMBOLS_PER_SLOT;
+  const int pdsch_AntennaPorts = config->pdsch_AntennaPorts.N1 * config->pdsch_AntennaPorts.N2 * config->pdsch_AntennaPorts.XP;
+  config_csirs(scc, csi_MeasConfig, pdsch_AntennaPorts, curr_bwp, config->do_CSIRS, symbol_index, ssb_slot);
+  config_csiim(config->do_CSIRS, pdsch_AntennaPorts, curr_bwp, csi_MeasConfig, ssb_slot);
 
   NR_CSI_ResourceConfig_t *csires1 = calloc(1, sizeof(*csires1));
   csires1->csi_ResourceConfigId = bwp_id + 20;
@@ -3462,7 +3483,7 @@ static NR_CSI_MeasConfig_t *get_csiMeasConfig(const NR_ServingCellConfig_t *conf
   asn1cSeqAdd(&csi_MeasConfig->csi_ResourceConfigToAddModList->list, csires1);
 
   int pucch_Resource = 2;
-  if (configuration->do_CSIRS) {
+  if (config->do_CSIRS) {
     NR_CSI_ResourceConfig_t *csires0 = calloc(1, sizeof(*csires0));
     csires0->csi_ResourceConfigId = bwp_id;
     csires0->csi_RS_ResourceSetList.present = NR_CSI_ResourceConfig__csi_RS_ResourceSetList_PR_nzp_CSI_RS_SSB;
@@ -3471,21 +3492,21 @@ static NR_CSI_MeasConfig_t *get_csiMeasConfig(const NR_ServingCellConfig_t *conf
     csires0->csi_RS_ResourceSetList.choice.nzp_CSI_RS_SSB->nzp_CSI_RS_ResourceSetList =
         calloc(1, sizeof(*csires0->csi_RS_ResourceSetList.choice.nzp_CSI_RS_SSB->nzp_CSI_RS_ResourceSetList));
     NR_NZP_CSI_RS_ResourceSetId_t *nzp0 = calloc(1, sizeof(*nzp0));
-    *nzp0 = ssb_index / 2;
+    *nzp0 = ssb_index;
     asn1cSeqAdd(&csires0->csi_RS_ResourceSetList.choice.nzp_CSI_RS_SSB->nzp_CSI_RS_ResourceSetList->list, nzp0);
     csires0->bwp_Id = bwp_id;
     csires0->resourceType = NR_CSI_ResourceConfig__resourceType_periodic;
     asn1cSeqAdd(&csi_MeasConfig->csi_ResourceConfigToAddModList->list, csires0);
   }
 
-  if (configuration->do_CSIRS && pdsch_AntennaPorts > 1) {
+  if (config->do_CSIRS && pdsch_AntennaPorts > 1) {
     NR_CSI_ResourceConfig_t *csires2 = calloc(1, sizeof(*csires2));
     csires2->csi_ResourceConfigId = bwp_id + 10;
     csires2->csi_RS_ResourceSetList.present = NR_CSI_ResourceConfig__csi_RS_ResourceSetList_PR_csi_IM_ResourceSetList;
     csires2->csi_RS_ResourceSetList.choice.csi_IM_ResourceSetList =
         calloc(1, sizeof(*csires2->csi_RS_ResourceSetList.choice.csi_IM_ResourceSetList));
     NR_CSI_IM_ResourceSetId_t *csiim00 = calloc(1, sizeof(*csiim00));
-    *csiim00 = ssb_index / 2;
+    *csiim00 = ssb_index;
     asn1cSeqAdd(&csires2->csi_RS_ResourceSetList.choice.csi_IM_ResourceSetList->list, csiim00);
     csires2->bwp_Id = bwp_id;
     csires2->resourceType = NR_CSI_ResourceConfig__resourceType_periodic;
@@ -3498,7 +3519,7 @@ static NR_CSI_MeasConfig_t *get_csiMeasConfig(const NR_ServingCellConfig_t *conf
                            scc,
                            pucchcsi,
                            pdsch_Config,
-                           &configuration->pdsch_AntennaPorts,
+                           &config->pdsch_AntennaPorts,
                            *configDedicated->pdsch_ServingCellConfig->choice.setup->ext1->maxMIMO_Layers,
                            bwp_id,
                            uid,
@@ -3511,7 +3532,7 @@ static NR_CSI_MeasConfig_t *get_csiMeasConfig(const NR_ServingCellConfig_t *conf
                           uecap,
                           scc,
                           pucchrsrp,
-                          configuration,
+                          config,
                           bwp_id + 10,
                           uid,
                           curr_bwp,
@@ -3791,89 +3812,61 @@ NR_CellGroupConfig_t *get_initial_cellGroupConfig(int uid,
   return cellGroupConfig;
 }
 
-NR_CellGroupConfig_t *update_cellGroupConfig_for_BWP_switch(NR_CellGroupConfig_t *cellGroupConfig,
-                                                            const nr_mac_config_t *configuration,
-                                                            const NR_UE_NR_Capability_t *uecap,
-                                                            const NR_ServingCellConfigCommon_t *scc,
-                                                            int uid,
-                                                            int old_bwp,
-                                                            int new_bwp,
-                                                            int ssb_index)
+NR_CellGroupConfig_t *update_cellGroupConfig_for_reconfig(NR_CellGroupConfig_t *cellGroupConfig,
+                                                          const nr_mac_config_t *configuration,
+                                                          const NR_UE_NR_Capability_t *uecap,
+                                                          const NR_ServingCellConfigCommon_t *scc,
+                                                          int uid,
+                                                          int old_bwp,
+                                                          int new_bwp,
+                                                          int ssb_index)
 {
   NR_SpCellConfig_t *spCellConfig = cellGroupConfig->spCellConfig;
   NR_ServingCellConfig_t *configDedicated = spCellConfig->spCellConfigDedicated;
-  *configDedicated->firstActiveDownlinkBWP_Id = new_bwp != 0;  // 1 for any BWP != 0
   NR_UplinkConfig_t *uplinkConfig = configDedicated->uplinkConfig;
-  *uplinkConfig->firstActiveUplinkBWP_Id = new_bwp != 0;  // 1 for any BWP != 0
-  nr_mac_config_t local_config = *configuration;
-  long ul_maxMIMO_Layers = set_ul_max_layers(configuration, uecap);
-  local_config.first_active_bwp = new_bwp;
   uint64_t bitmap = get_ssb_bitmap(scc);
-  // add new BWP
-  if (new_bwp == 0) {
-    if (!configDedicated->initialDownlinkBWP)
-      configDedicated->initialDownlinkBWP = calloc_or_fail(1, sizeof(*configDedicated->initialDownlinkBWP));
-    if (!uplinkConfig->initialUplinkBWP)
-      uplinkConfig->initialUplinkBWP = calloc_or_fail(1, sizeof(*uplinkConfig->initialUplinkBWP));
-    uplinkConfig->initialUplinkBWP = configure_initial_ul_bwp(scc, &local_config, ul_maxMIMO_Layers, uecap, uid);
-    configDedicated->initialDownlinkBWP = configure_initial_dl_bwp(scc, bitmap, uecap, &local_config);
-  } else {
-    if (!configDedicated->downlinkBWP_ToAddModList)
-      configDedicated->downlinkBWP_ToAddModList = calloc_or_fail(1, sizeof(*configDedicated->downlinkBWP_ToAddModList));
-    NR_BWP_Downlink_t *dl_bwp = config_downlinkBWP(scc, uecap, local_config.force_256qam_off, true, &local_config);
-    asn1cSeqAdd(&configDedicated->downlinkBWP_ToAddModList->list, dl_bwp);
-
-    if (!uplinkConfig->uplinkBWP_ToAddModList)
-      uplinkConfig->uplinkBWP_ToAddModList = calloc_or_fail(1, sizeof(*uplinkConfig->uplinkBWP_ToAddModList));
-    NR_BWP_Uplink_t *ul_bwp = config_uplinkBWP(true, uid, ul_maxMIMO_Layers, &local_config, scc, uecap);
-    asn1cSeqAdd(&uplinkConfig->uplinkBWP_ToAddModList->list, ul_bwp);
+  nr_mac_config_t local_config = *configuration;
+  if (new_bwp >= 0) {
+    *configDedicated->firstActiveDownlinkBWP_Id = new_bwp != 0;  // 1 for any BWP != 0
+    *uplinkConfig->firstActiveUplinkBWP_Id = new_bwp != 0;  // 1 for any BWP != 0
+    long ul_maxMIMO_Layers = set_ul_max_layers(configuration, uecap);
+    local_config.first_active_bwp = new_bwp;
+    // add new BWP
+    if (new_bwp == 0) {
+      if (!configDedicated->initialDownlinkBWP)
+        configDedicated->initialDownlinkBWP = calloc_or_fail(1, sizeof(*configDedicated->initialDownlinkBWP));
+      if (!uplinkConfig->initialUplinkBWP)
+        uplinkConfig->initialUplinkBWP = calloc_or_fail(1, sizeof(*uplinkConfig->initialUplinkBWP));
+      uplinkConfig->initialUplinkBWP = configure_initial_ul_bwp(scc, &local_config, ul_maxMIMO_Layers, uecap, uid);
+      configDedicated->initialDownlinkBWP = configure_initial_dl_bwp(scc, bitmap, uecap, &local_config);
+    } else {
+      if (!configDedicated->downlinkBWP_ToAddModList)
+        configDedicated->downlinkBWP_ToAddModList = calloc_or_fail(1, sizeof(*configDedicated->downlinkBWP_ToAddModList));
+      NR_BWP_Downlink_t *dl_bwp = config_downlinkBWP(scc, uecap, local_config.force_256qam_off, true, &local_config);
+      asn1cSeqAdd(&configDedicated->downlinkBWP_ToAddModList->list, dl_bwp);
+      if (!uplinkConfig->uplinkBWP_ToAddModList)
+        uplinkConfig->uplinkBWP_ToAddModList = calloc_or_fail(1, sizeof(*uplinkConfig->uplinkBWP_ToAddModList));
+      NR_BWP_Uplink_t *ul_bwp = config_uplinkBWP(true, uid, ul_maxMIMO_Layers, &local_config, scc, uecap);
+      asn1cSeqAdd(&uplinkConfig->uplinkBWP_ToAddModList->list, ul_bwp);
+    }
   }
-
-  ASN_STRUCT_FREE(asn_DEF_NR_CSI_MeasConfig, configDedicated->csi_MeasConfig->choice.setup);
-  configDedicated->csi_MeasConfig->choice.setup = get_csiMeasConfig(configDedicated,
-                                                                    uecap,
-                                                                    scc,
-                                                                    &local_config,
-                                                                    uid,
-                                                                    *uplinkConfig->firstActiveUplinkBWP_Id,
-                                                                    bitmap,
-                                                                    ssb_index);
-
   // we temporarily need to keep both the old and the new BWP in the CG used by the gNB
   // while removing the old from the CG sent to the UE
   NR_CellGroupConfig_t *clone_cg = NULL;
   const int copy_result = asn_copy(&asn_DEF_NR_CellGroupConfig, (void **)&clone_cg, cellGroupConfig);
   AssertFatal(copy_result == 0, "unable to copy NR_CellGroupConfig for cloning\n");
-  if (old_bwp > 0)
+  NR_ServingCellConfig_t *clone_configDedicated = clone_cg->spCellConfig->spCellConfigDedicated;
+  clone_configDedicated->csi_MeasConfig->choice.setup  = get_csiMeasConfig(configDedicated,
+                                                                           uecap,
+                                                                           scc,
+                                                                           &local_config,
+                                                                           uid,
+                                                                           *uplinkConfig->firstActiveUplinkBWP_Id,
+                                                                           bitmap,
+                                                                           ssb_index);
+
+  if (new_bwp >= 0 && old_bwp > 0)
     clean_bwp_structures(clone_cg->spCellConfig);
-  return clone_cg;
-}
-
-NR_CellGroupConfig_t *update_cellGroupConfig_for_beam_switch(NR_CellGroupConfig_t *cellGroupConfig,
-                                                            const nr_mac_config_t *configuration,
-                                                            const NR_UE_NR_Capability_t *uecap,
-                                                            const NR_ServingCellConfigCommon_t *scc,
-                                                            int uid,
-                                                            int bwp,
-                                                            int ssb_index)
-{
-  NR_SpCellConfig_t *spCellConfig = cellGroupConfig->spCellConfig;
-  NR_ServingCellConfig_t *configDedicated = spCellConfig->spCellConfigDedicated;
-
-  uint64_t bitmap = get_ssb_bitmap(scc);
-  ASN_STRUCT_FREE(asn_DEF_NR_CSI_MeasConfig, configDedicated->csi_MeasConfig->choice.setup);
-  configDedicated->csi_MeasConfig->choice.setup = get_csiMeasConfig(configDedicated,
-                                                                    uecap,
-                                                                    scc,
-                                                                    configuration,
-                                                                    uid,
-                                                                    bwp,
-                                                                    bitmap,
-                                                                    ssb_index);
-
-  NR_CellGroupConfig_t *clone_cg = NULL;
-  const int copy_result = asn_copy(&asn_DEF_NR_CellGroupConfig, (void **)&clone_cg, cellGroupConfig);
-  AssertFatal(copy_result == 0, "unable to copy NR_CellGroupConfig for cloning\n");
   return clone_cg;
 }
 

@@ -27,7 +27,7 @@ typedef struct measgap_config measgap_config_t;
 
 void nr_rrc_config_dl_tda(struct NR_PDSCH_TimeDomainResourceAllocationList *pdsch_TimeDomainAllocationList,
                           frame_type_t frame_type,
-                          NR_TDD_UL_DL_ConfigCommon_t *tdd_UL_DL_ConfigurationCommon,
+                          const NR_ServingCellConfigCommon_t *scc,
                           int curr_bwp);
 void nr_rrc_config_ul_tda(NR_ServingCellConfigCommon_t *scc, int min_fb_delay, int do_SRS);
 NR_SearchSpace_t *rrc_searchspace_config(bool is_common,
@@ -107,21 +107,14 @@ NR_RLC_BearerConfig_t *get_DRB_RLC_BearerConfig(long lcChannelId,
                                                 NR_RLC_Config_PR rlc_conf,
                                                 long priority,
                                                 const nr_rlc_configuration_t *default_rlc_config);
-NR_CellGroupConfig_t *update_cellGroupConfig_for_BWP_switch(NR_CellGroupConfig_t *cellGroupConfig,
-                                                            const nr_mac_config_t *configuration,
-                                                            const NR_UE_NR_Capability_t *uecap,
-                                                            const NR_ServingCellConfigCommon_t *scc,
-                                                            int uid,
-                                                            int old_bwp,
-                                                            int new_bwp,
-                                                            int ssb_index);
-NR_CellGroupConfig_t *update_cellGroupConfig_for_beam_switch(NR_CellGroupConfig_t *cellGroupConfig,
-                                                            const nr_mac_config_t *configuration,
-                                                            const NR_UE_NR_Capability_t *uecap,
-                                                            const NR_ServingCellConfigCommon_t *scc,
-                                                            int uid,
-                                                            int bwp,
-                                                            int ssb_index);
+NR_CellGroupConfig_t *update_cellGroupConfig_for_reconfig(NR_CellGroupConfig_t *cellGroupConfig,
+                                                          const nr_mac_config_t *configuration,
+                                                          const NR_UE_NR_Capability_t *uecap,
+                                                          const NR_ServingCellConfigCommon_t *scc,
+                                                          int uid,
+                                                          int old_bwp,
+                                                          int new_bwp,
+                                                          int ssb_index);
 NR_MeasurementTimingConfiguration_t *get_nr_mtc(uint8_t *buf, uint32_t len);
 measgap_config_t create_measgap_config(const NR_MeasurementTimingConfiguration_t *mtc, int scs, int min_rxtxtime);
 int encode_measgap_config(const measgap_config_t *c, uint8_t *buf);
