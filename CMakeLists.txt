@@ -377,6 +377,12 @@ endif()
 add_boolean_option(ENABLE_IMSCOPE OFF "Enable phy scope based on imgui" OFF)
 add_boolean_option(ENABLE_IMSCOPE_RECORD OFF "Enable recording IQ data for imscope" OFF)
 
+#########################
+##### E3 AGENT
+#########################
+set(E3_AGENT "OFF" CACHE STRING "O-RAN nGRG E3 Agent for dApps")
+set_property(CACHE E3_AGENT PROPERTY STRINGS "ON" "OFF")
+
 ##################################################
 # ASN.1 grammar C code generation & dependencies #
 ##################################################
@@ -729,6 +735,9 @@ set(SCHED_NR_SRC
 add_library(SCHED_NR_LIB ${SCHED_NR_SRC})
 target_link_libraries(SCHED_NR_LIB PRIVATE asn1_nr_rrc_hdrs UTIL)
 target_link_libraries(SCHED_NR_LIB PRIVATE NFAPI_LIB) # some FAPI messages pack "subPDUs"
+if(E3_AGENT)
+  target_compile_definitions(SCHED_NR_LIB PRIVATE E3_AGENT)
+endif()
 
 set(SCHED_SRC_RU
   ${OPENAIR1_DIR}/SCHED/ru_procedures.c
@@ -1347,6 +1356,7 @@ if(E2_AGENT)
   target_compile_definitions(L2 PRIVATE ${E2AP_VERSION} ${KPM_VERSION} E2_AGENT)
 endif()
 
+
 add_library(MAC_UE_NR ${MAC_NR_SRC_UE})
 target_link_libraries(MAC_UE_NR PRIVATE asn1_lte_rrc_hdrs asn1_nr_rrc_hdrs PUBLIC nr_ue_power_procedures nr_ue_ra_procedures)
 
@@ -1376,6 +1386,10 @@ target_link_libraries(L2_NR PRIVATE f1ap x2ap s1ap ngap nr_rrc e1ap nr_rlc nr_co
 target_compile_definitions(L2_NR PRIVATE PDCP_CUCP_CUUP)
 if(OAI_AERIAL)
     target_compile_definitions(L2_NR PRIVATE ENABLE_AERIAL)
+endif()
+
+if(E3_AGENT)
+  target_compile_definitions(L2_NR PRIVATE E3_AGENT)
 endif()
 
 add_library(L2_LTE_NR
@@ -1897,6 +1911,11 @@ if(E2_AGENT)
   target_compile_definitions(nr-softmodem PRIVATE ${E2AP_VERSION} ${KPM_VERSION} E2_AGENT)
 endif()
 
+if (E3_AGENT)
+    target_link_libraries(nr-softmodem PRIVATE e3ap)
+    target_compile_definitions(nr-softmodem PRIVATE E3_AGENT)
+endif()
+
 
 # force the generation of ASN.1 so that we don't need to wait during the build
 target_link_libraries(nr-softmodem PRIVATE
@@ -1920,6 +1939,10 @@ target_link_libraries(nr-cuup PRIVATE asn1_lte_rrc_hdrs asn1_nr_rrc_hdrs)
 target_compile_definitions(nr-cuup PRIVATE PDCP_CUCP_CUUP)
 if(E2_AGENT)
   target_link_libraries(nr-cuup PRIVATE e2_agent e2_agent_arg e2_ran_func_cuup)
+  if(E3_AGENT)
+    target_link_libraries(nr-cuup PRIVATE e3ap)
+    target_compile_definitions(nr-cuup PRIVATE E3_AGENT)
+  endif()
   target_compile_definitions(nr-cuup PRIVATE ${E2AP_VERSION} ${KPM_VERSION} E2_AGENT)
 endif()
 
