@@ -266,15 +266,24 @@ bool rx_sss_nr(const NR_DL_FRAME_PARMS *frame_parms,
     // we try progressively rotation between pss and sss
     // but pss and sss are in phase at emission
     // rotation means doppler variation, or very noisy pss detection
-    if (*tot_metric >= SSS_METRIC_FLOOR_NR)
-      break;
   }
 
-  if (*tot_metric < SSS_METRIC_FLOOR_NR) {
+  // CFAR detection: normalize metric against received SSS energy
+  // By Cauchy-Schwarz: M² ≤ LENGTH_SSS_NR * E_sss (gain-invariant upper bound)
+  // Require: M² ≥ (SSS_CFAR_ALPHA_NUM / SSS_CFAR_ALPHA_DEN) * LENGTH_SSS_NR * E_sss
+  int64_t sss_energy = 0;
+  for (int i = 0; i < LENGTH_SSS_NR; i++)
+    sss_energy += (int64_t)sss[i].r * sss[i].r + (int64_t)sss[i].i * sss[i].i;
+
+  const int64_t metric_sq = (int64_t)(*tot_metric) * (*tot_metric);
+  const int64_t cfar_threshold = SSS_CFAR_ALPHA_NUM * (int64_t)LENGTH_SSS_NR * sss_energy / SSS_CFAR_ALPHA_DEN;
+
+  if (metric_sq < cfar_threshold) {
     LOG_D(PHY,
-          "Failed to detect SSS after PSS, metric of SSS %d, threshold to consider SSS valid %d, detected PCI: %d\n",
-          *tot_metric,
-          SSS_METRIC_FLOOR_NR,
+          "SSS CFAR check failed: metric_sq=%lld, cfar_threshold=%lld (energy=%lld), detected PCI: %d\n",
+          (long long)metric_sq,
+          (long long)cfar_threshold,
+          (long long)sss_energy,
           *Nid_cell);
     return false;
   }

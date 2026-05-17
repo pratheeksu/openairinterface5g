@@ -41,7 +41,10 @@
 #define  SSS_START_IDX                (3)      /* [0:PSBCH 1:PSS0 2:PSS1 3:SSS0 4:SSS1] */
 #define  NUM_SSS_SYMBOLS              (2)
 
-#define SSS_METRIC_FLOOR_NR   (30000)
+// CFAR detection: metric² ≥ (ALPHA_NUM/ALPHA_DEN) * LENGTH_SSS_NR * sss_energy
+// α = 1/4 requires ≥50% correlation (gain-invariant, see Cauchy-Schwarz bound)
+#define SSS_CFAR_ALPHA_NUM    (1)
+#define SSS_CFAR_ALPHA_DEN    (4)
 
 void init_context_sss_nr(int amp);
 void free_context_sss_nr(void);
