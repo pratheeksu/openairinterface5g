@@ -313,7 +313,7 @@ void nr_phy_config_request_sim(PHY_VARS_gNB *gNB,
 
   fp->ofdm_offset_divisor = UINT_MAX;
   init_symbol_rotation(fp);
-  init_timeshift_rotation(fp);
+  init_timeshift_rotation(fp->ofdm_symbol_size, fp->nb_prefix_samples, fp->ofdm_offset_divisor, fp->timeshift_symbol_rotation);
 
   gNB->configured = 1;
 }
@@ -365,7 +365,7 @@ void nr_phy_config_request(NR_PHY_Config_t *phy_config)
 
   fp->ofdm_offset_divisor = RC.gNB[Mod_id]->ofdm_offset_divisor;
   init_symbol_rotation(fp);
-  init_timeshift_rotation(fp);
+  init_timeshift_rotation(fp->ofdm_symbol_size, fp->nb_prefix_samples, fp->ofdm_offset_divisor, fp->timeshift_symbol_rotation);
 }
 
 static void init_DLSCH_struct(PHY_VARS_gNB *gNB)
