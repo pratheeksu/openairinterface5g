@@ -23,7 +23,10 @@
 
 #define  GET_NID2_SL(Nid_SL)          (Nid_SL/NUMBER_SSS_SEQUENCE)
 #define  GET_NID1_SL(Nid_SL)          (Nid_SL%NUMBER_SSS_SEQUENCE)
-#define SSS_METRIC_FLOOR_NR (3) // ratio signal sss sequence power against signal power
+// CFAR detection: metric² ≥ (ALPHA_NUM/ALPHA_DEN) * LENGTH_SSS_NR * sss_energy
+// α = 1/4 requires ≥50% correlation (gain-invariant, see Cauchy-Schwarz bound)
+#define SSS_CFAR_ALPHA_NUM    (1)
+#define SSS_CFAR_ALPHA_DEN    (4)
 
 typedef struct {
   int nb_antennas_rx;
