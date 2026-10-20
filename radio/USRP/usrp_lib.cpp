@@ -879,12 +879,12 @@ rx_gain_calib_table_t calib_table_x310[] = {
 
 /*! \brief USRPn3xf RX calibration table */
 rx_gain_calib_table_t calib_table_n310[] = {
-  {3500000000.0,0.0},
-  {2660000000.0,0.0},
-  {2300000000.0,0.0},
-  {1880000000.0,0.0},
+  {3500000000.0, 67.0},
+  {2660000000.0, 0.0},
+  {2300000000.0, 0.0},
+  {1880000000.0, 0.0},
   {816000000.0, 0.0},
-  {-1,0}
+  {-1, 0}
 };
 
 /*! \brief Empty RX calibration table */
